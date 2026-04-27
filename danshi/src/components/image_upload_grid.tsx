@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,6 +11,7 @@ import { Text, IconButton, useTheme as usePaperTheme, ActivityIndicator } from '
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { uploadService, type UploadSource } from '@/src/services/upload_service';
 import * as ImagePicker from 'expo-image-picker';
+import { isHttpOrHttpsUrl } from '@/src/lib/security/url';
 
 interface ImageUploadGridProps {
   images: string[];
@@ -43,7 +44,7 @@ export default function ImageUploadGrid({
 
   // 检查图片 URL 是否有效
   const isValidImageUrl = useCallback((url: string) => {
-    return /^https?:\/\//i.test(url.trim());
+    return isHttpOrHttpsUrl(url);
   }, []);
 
   // 获取有效的图片列表

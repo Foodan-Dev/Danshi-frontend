@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,6 +11,7 @@ import { Text, IconButton, useTheme as usePaperTheme, ActivityIndicator } from '
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { uploadService, type UploadSource } from '@/src/services/upload_service';
 import * as ImagePicker from 'expo-image-picker';
+import { isHttpOrHttpsUrl } from '@/src/lib/security/url';
 
 interface ImageDropZoneProps {
   images: string[];
@@ -36,16 +37,12 @@ export default function ImageDropZone({
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadingCount, setUploadingCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isWeb = Platform.OS === 'web';
-  
-  // Web 端由于 CORS 限制，暂不支持图片上传
-  const canUpload = !isWeb;
 
   // 检查图片 URL 是否有效
   const isValidImageUrl = useCallback((url: string) => {
-    return /^https?:\/\//i.test(url.trim());
+    return isHttpOrHttpsUrl(url);
   }, []);
 
   // 获取有效的图片列表
@@ -202,21 +199,6 @@ export default function ImageDropZone({
     [uploadFiles]
   );
 
-  // Web 端文件选择
-  const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files || []).filter((file) =>
-        file.type.startsWith('image/')
-      );
-      if (files.length > 0) {
-        uploadFiles(files);
-      }
-      // 清空 input 以便重复选择相同文件
-      e.target.value = '';
-    },
-    [uploadFiles]
-  );
-
   // 点击上传区域
   const handleClickUpload = useCallback(() => {
     if (isWeb) {
@@ -235,27 +217,6 @@ export default function ImageDropZone({
       input.click();
     }
   }, [isWeb, uploadFiles]);
-
-  // 粘贴处理 (支持粘贴图片)
-  const handlePaste = useCallback(
-    async (e: React.ClipboardEvent) => {
-      const items = Array.from(e.clipboardData.items);
-      const imageItems = items.filter((item) => item.type.startsWith('image/'));
-
-      if (imageItems.length > 0) {
-        e.preventDefault();
-        const files: File[] = [];
-        for (const item of imageItems) {
-          const file = item.getAsFile();
-          if (file) files.push(file);
-        }
-        if (files.length > 0) {
-          uploadFiles(files);
-        }
-      }
-    },
-    [uploadFiles]
-  );
 
   // Web 端渲染 - 支持拖拽上传和文件选择
   if (isWeb) {
@@ -470,7 +431,7 @@ export default function ImageDropZone({
 
       {/* 提示文字 */}
       <Text style={[styles.hintText, { color: theme.colors.outline }]}>
-        点击"从图库选择"上传本地图片，或粘贴图片链接
+        点击“从图库选择”上传本地图片，或粘贴图片链接
       </Text>
     </View>
   );

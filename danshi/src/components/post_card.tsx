@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import type { Post } from '@/src/models/Post';
 import { UserAvatar } from '@/src/components/user_avatar';
 import { SHARE_LABEL } from '@/src/constants/post_labels';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 // 莫兰迪色系背景色组（低饱和、高明度）
 const POSTER_COLORS = [
@@ -40,7 +41,10 @@ export const PostCard: React.FC<PostCardProps> = ({
 }) => {
   const theme = usePaperTheme();
   const [menuVisible, setMenuVisible] = useState(false);
-  const firstImage = post.images?.[0];
+  const firstImage = useMemo(
+    () => post.images?.map((item) => getSafeRemoteUrl(item)).find((item): item is string => !!item),
+    [post.images]
+  );
 
   // 使用伪随机比例保持瀑布流参差不齐效果
   const seed = useMemo(() => {
@@ -139,7 +143,7 @@ export const PostCard: React.FC<PostCardProps> = ({
           // 文字海报 - 莫兰迪色全填充 + 装饰引号水印
           <View style={[styles.textPoster, { backgroundColor: posterColor.bg }]}>
             {/* 左上角装饰引号水印 */}
-            <Text style={[styles.quoteWatermark, { color: posterColor.text }]}>"</Text>
+            <Text style={[styles.quoteWatermark, { color: posterColor.text }]}>{'"'}</Text>
             {/* 主体文字 */}
             <Text 
               style={[styles.posterText, { color: posterColor.text }]} 

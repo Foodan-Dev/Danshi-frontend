@@ -3,14 +3,14 @@ import { USE_MOCK } from '@/src/constants/app';
 import type { PostCreateInput, PostCreateResult, CompanionStatusUpdateRequest, SharePostCreateInput } from '@/src/models/Post';
 import type { PostListFilters, PostsListResponse } from '@/src/repositories/posts_repository';
 import { AppError } from '@/src/lib/errors/app_error';
+import { isHttpOrHttpsUrl } from '@/src/lib/security/url';
 
 function ensureHttpUrls(arr?: string[], label?: string) {
   if (!arr) return;
   for (const u of arr) {
     const s = (u ?? '').trim();
     if (!s) throw new AppError(`${label ?? '链接'} 不能为空`);
-    // 仅做基础校验，进一步规则留给后端
-    if (!/^https?:\/\//i.test(s)) throw new AppError(`${label ?? '链接'} 需为 http(s) URL`);
+    if (!isHttpOrHttpsUrl(s)) throw new AppError(`${label ?? '链接'} 需为 http(s) URL`);
   }
 }
 

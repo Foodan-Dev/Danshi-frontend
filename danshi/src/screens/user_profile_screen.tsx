@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Image, ScrollView, Pressable, RefreshControl } from 'react-native';
-import { Button, Text, useTheme as usePaperTheme, ActivityIndicator } from 'react-native-paper';
+import { Text, useTheme as usePaperTheme, ActivityIndicator } from 'react-native-paper';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
@@ -15,6 +15,7 @@ import { Masonry } from '@/src/components/md3/masonry';
 import { PostCard, estimatePostCardHeight } from '@/src/components/post_card';
 import { useWaterfallSettings } from '@/src/context/waterfall_context';
 import { HOMETOWN_OPTIONS, findOptionLabel } from '@/src/constants/selects';
+import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
 
 
 const formatCount = (value?: number | null) => {
@@ -92,35 +93,7 @@ export default function UserProfileScreen() {
         (!item.post_type || item.post_type === 'share' || item.post_type === 'seeking') &&
         (!item.status || item.status === 'approved')
       );
-      const converted: Post[] = supportedPosts.map((item) => {
-        const images = item.images?.length
-          ? item.images
-          : item.cover_image
-          ? [item.cover_image]
-          : [];
-        return {
-          id: item.id,
-          title: item.title,
-          content: '',
-          post_type: 'share' as const,
-          share_type: 'recommend' as const,
-          category: (item.category as 'food' | 'recipe') || 'food',
-          images,
-          tags: [],
-          canteen: '',
-          author: undefined,
-          created_at: item.created_at || new Date().toISOString(),
-          updated_at: item.created_at || new Date().toISOString(),
-          stats: {
-            like_count: item.like_count || 0,
-            view_count: item.view_count || 0,
-            comment_count: item.comment_count || 0,
-            favorite_count: 0,
-          },
-          is_liked: false,
-          is_favorited: false,
-        };
-      });
+      const converted: Post[] = supportedPosts.map((item) => mapUserPostListItemToPost(item));
       setPosts(converted);
     } catch (error: any) {
       // 忽略 companion 类型相关的验证错误

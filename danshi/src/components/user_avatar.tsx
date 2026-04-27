@@ -3,6 +3,7 @@ import { Pressable, View, Image, StyleSheet, ViewStyle } from 'react-native';
 import { Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { router, type Href } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 export type UserAvatarProps = {
   userId: string;
@@ -29,6 +30,7 @@ export function UserAvatar({
   disabled = false,
 }: UserAvatarProps) {
   const pTheme = usePaperTheme();
+  const safeAvatarUrl = getSafeRemoteUrl(avatar_url);
 
   const handlePress = () => {
     if (disabled) return;
@@ -43,9 +45,9 @@ export function UserAvatar({
       android_ripple={{ color: pTheme.colors.surfaceDisabled, borderless: true }}
     >
       <View style={[styles.avatarContainer, { width: size, height: size, borderRadius: size / 2 }]}>
-        {avatar_url ? (
+        {safeAvatarUrl ? (
           <Image
-            source={{ uri: avatar_url }}
+            source={{ uri: safeAvatarUrl }}
             style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}
             resizeMode="cover"
           />

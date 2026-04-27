@@ -34,6 +34,7 @@ import { usePostActions } from '@/src/hooks/use_post_actions';
 import { usePostComments, flattenReplies, REPLY_PREVIEW_COUNT } from '@/src/hooks/use_post_comments';
 import { breakpoints } from '@/src/constants/breakpoints';
 import { useExtendedTheme } from '@/src/constants/md3_theme';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 // 图片展示配置
 const IMAGE_CONFIG = {
@@ -124,14 +125,14 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     commentSheetVisible, threadVisible, threadRootComment,
     commentInput, setCommentInput, commentReplyTarget,
     threadRepliesList, threadReplyTotal, threadLoading, threadHasMore,
-    fetchComments, fetchRepliesForComment,
+    fetchComments,
     handleToggleCommentLike, handleReplyToComment, getCommentMoreActions,
     handleCancelReply, handleOpenCommentSheet, handleCloseCommentSheet,
     handleSubmitComment, handleCycleCommentSort,
     handleShowRepliesPanel, handleCloseThreadSheet,
     handleLoadMoreThreadReplies, handleReloadThreadReplies,
     handleDesktopToggleReplies,
-    findCommentTarget, commentsRef, fetchRepliesForCommentRef,
+    findCommentTarget, fetchRepliesForCommentRef,
   } = commentsHook;
 
   // ==================== 交互操作 Hook ====================
@@ -166,6 +167,13 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
       containerWidth: windowWidth,
     };
   }, [windowWidth, windowHeight, isDesktop, insets.top]);
+
+  const safePostImages = useMemo(
+    () => (post?.images ?? []).map((item) => getSafeRemoteUrl(item)).filter((item): item is string => !!item),
+    [post?.images]
+  );
+
+  const safeAuthorAvatarUrl = getSafeRemoteUrl(post?.author?.avatar_url);
 
   // ==================== 数据获取 ====================
   const fetchPost = useCallback(async (mode: LoaderState = 'initial') => {
@@ -258,6 +266,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     commentReplies,
     threadRootComment,
     handleShowRepliesPanel,
+    fetchRepliesForCommentRef,
   ]);
 
   const refreshing = loader === 'refresh';
@@ -275,7 +284,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   }, []);
 
   // ==================== 数据派生 ====================
-  const hasImages = !!post?.images?.length;
+  const hasImages = safePostImages.length > 0;
   const tags = post?.tags ?? [];
   const sharePostData = post?.post_type === 'share' ? (post as SharePost) : null;
   const seekingPostData = post?.post_type === 'seeking' ? (post as SeekingPost) : null;
@@ -397,7 +406,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const renderUnifiedHeroSection = () => {
     // 有图模式：渲染图片轮播
     if (hasImages) {
-      const images = post?.images ?? [];
+      const images = safePostImages;
       return (
         <View style={[styles.carouselContainer, { height: imageLayout.height }]}>
           <FlatList
@@ -471,8 +480,8 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const renderAuthorBar = () => (
     <View style={styles.authorBar}>
       <Pressable style={styles.authorInfo} onPress={() => post?.author?.id && router.push(`/user/${post.author.id}`)}>
-        {post?.author?.avatar_url ? (
-          <Avatar.Image size={44} source={{ uri: post.author.avatar_url }} />
+        {safeAuthorAvatarUrl ? (
+          <Avatar.Image size={44} source={{ uri: safeAuthorAvatarUrl }} />
         ) : (
           <Avatar.Text
             size={44}

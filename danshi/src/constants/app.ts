@@ -1,4 +1,5 @@
 import type { User } from '@/src/models/User';
+import { isHttpOrHttpsUrl } from '@/src/lib/security/url';
 
 // Storage keys used across the app
 export const STORAGE_KEYS = {
@@ -10,10 +11,24 @@ export const STORAGE_KEYS = {
 // Runtime config & feature switches (can be overridden via EXPO_PUBLIC_* envs)
 // 生产环境默认关闭 Mock
 export const USE_MOCK = (process.env.EXPO_PUBLIC_USE_MOCK ?? 'false').toLowerCase() === 'true';
-if (__DEV__ && !USE_MOCK && !process.env.EXPO_PUBLIC_API_URL) {
+const rawApiBaseUrl = (process.env.EXPO_PUBLIC_API_URL ?? '').trim();
+
+if (__DEV__ && !USE_MOCK && !rawApiBaseUrl) {
   console.warn('[config] USE_MOCK is false but EXPO_PUBLIC_API_URL is not set. Falling back to https://example.invalid');
 }
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://example.invalid';
+
+function resolveApiBaseUrl(value?: string) {
+  const fallback = 'https://example.invalid';
+  if (!value) return fallback;
+  if (!isHttpOrHttpsUrl(value)) {
+    throw new Error(
+      'EXPO_PUBLIC_API_URL must use http(s).'
+    );
+  }
+  return value.replace(/\/+$/, '');
+}
+
+export const API_BASE_URL = resolveApiBaseUrl(rawApiBaseUrl);
 export const REQUEST_TIMEOUT_MS = Number(process.env.EXPO_PUBLIC_REQUEST_TIMEOUT_MS ?? 10000);
 
 // API endpoints (path only, without /api/v1 prefix). 
@@ -115,4 +130,3 @@ export const REGEX = {
 
 // Convenience type to align with domain type if needed
 export type Role = User['role'];
-

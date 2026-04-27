@@ -11,17 +11,10 @@ import {
   type FollowActionResponse,
 } from '@/src/repositories/users_repository';
 import { AppError } from '@/src/lib/errors/app_error';
-import { USE_MOCK } from '@/src/constants/app';
+import { isHttpOrHttpsUrl } from '@/src/lib/security/url';
 
 const isNonEmpty = (v?: string | null) => !!v && v.trim().length > 0;
-// 头像 URL 校验：
-// - Mock ：允许 http(s) 以及本地预览 blob:/data:/file:
-// - 接口模式：仅允许 http(s)
-const isValidUrl = (v?: string | null) => {
-  if (!v) return true;
-  if (USE_MOCK) return /^(https?:|blob:|data:|file:)/i.test(v);
-  return /^https?:\/\//i.test(v);
-};
+const isValidUrl = (v?: string | null) => !v || isHttpOrHttpsUrl(v);
 
 export const usersService = {
   async getUser(userId: string): Promise<UserProfile> {
@@ -33,8 +26,7 @@ export const usersService = {
     if (!isNonEmpty(userId)) throw new AppError('缺少用户ID');
     if (input.name !== undefined && !isNonEmpty(input.name)) throw new AppError('用户名不能为空');
     if (input.avatar_url !== undefined && !isValidUrl(input.avatar_url)) {
-      if (USE_MOCK) throw new AppError('头像URL不合法');
-      throw new AppError('头像URL必须为 http(s) 地址，或实现上传后使用服务器返回的地址');
+      throw new AppError('头像URL必须为 http(s) 地址');
     }
     const { user } = await usersRepository.updateUser(userId, input);
     return user;
