@@ -25,21 +25,33 @@ export const ThemeColorPicker: React.FC<Props> = ({ visible, onDismiss }) => {
   const pickerRef = useRef<{ setColor: (color: string, duration?: number) => void } | null>(null);
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.98)).current;
-  
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const initialColorRef = useRef((accentColor || theme.colors.primary).toUpperCase());
+  const [mounted, setMounted] = useState(visible);
+  const [saving, setSaving] = useState(false);
+
   const initialColor = (accentColor || theme.colors.primary).toUpperCase();
   const [selectedColor, setSelectedColor] = useState(initialColor);
   const [hexInput, setHexInput] = useState(initialColor);
   const [hexError, setHexError] = useState('');
+  const [actionError, setActionError] = useState('');
+
+  useEffect(() => {
+    initialColorRef.current = (accentColor || theme.colors.primary).toUpperCase();
+  }, [accentColor, theme.colors.primary]);
 
   // 弹窗打开时重置状态
   useEffect(() => {
     if (visible) {
-      const current = (accentColor || theme.colors.primary).toUpperCase();
+      setMounted(true);
+      const current = initialColorRef.current;
       setSelectedColor(current);
       setHexInput(current);
       setHexError('');
+      setActionError('');
       pickerRef.current?.setColor(current, 0);
-      Animated.parallel([
+      animationRef.current?.stop();
+      animationRef.current = Animated.parallel([
         Animated.timing(opacity, {
           toValue: 1,
           duration: 140,
@@ -52,9 +64,10 @@ export const ThemeColorPicker: React.FC<Props> = ({ visible, onDismiss }) => {
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
     } else {
-      Animated.parallel([
+      animationRef.current?.stop();
+      animationRef.current = Animated.parallel([
         Animated.timing(opacity, {
           toValue: 0,
           duration: 110,
@@ -67,9 +80,18 @@ export const ThemeColorPicker: React.FC<Props> = ({ visible, onDismiss }) => {
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
     }
-  }, [visible, accentColor, theme.colors.primary, opacity, scale]);
+    animationRef.current?.start(({ finished }) => {
+      if (finished && !visible) {
+        setMounted(false);
+      }
+    });
+
+    return () => {
+      animationRef.current?.stop();
+    };
+  }, [visible, opacity, scale]);
 
   // 颜色改变回调（拖拽圆环或方块时触发）
   const onColorChange = useCallback((color: ColorFormatsObject) => {
@@ -114,19 +136,41 @@ export const ThemeColorPicker: React.FC<Props> = ({ visible, onDismiss }) => {
   }, [hexError]);
 
   const handleSave = async () => {
-    await setAccentColor(selectedColor);
-    onDismiss();
+    if (saving) return;
+    setActionError('');
+    setSaving(true);
+    try {
+      await setAccentColor(selectedColor);
+      onDismiss();
+    } catch (error) {
+      setActionError((error as Error)?.message ?? '主题色保存失败，请稍后重试');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleReset = async () => {
-    await resetAccentColor();
-    onDismiss();
+    if (saving) return;
+    setActionError('');
+    setSaving(true);
+    try {
+      await resetAccentColor();
+      onDismiss();
+    } catch (error) {
+      setActionError((error as Error)?.message ?? '恢复默认主题失败，请稍后重试');
+    } finally {
+      setSaving(false);
+    }
   };
 
+  if (!mounted) {
+    return null;
+  }
+
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
+    <Modal visible={mounted} transparent animationType="none" onRequestClose={onDismiss}>
       <View style={styles.modalOverlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={saving ? undefined : onDismiss}>
           <Animated.View
             style={[
               styles.backdrop,
@@ -143,13 +187,14 @@ export const ThemeColorPicker: React.FC<Props> = ({ visible, onDismiss }) => {
             { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow },
             { opacity, transform: [{ scale }] },
           ]}
+          pointerEvents={visible ? 'auto' : 'none'}
         >
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <ScrollView contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
             {/* 标题栏 */}
             <View style={styles.header}>
               <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>选择主题色</Text>
-              <IconButton icon="close" size={20} onPress={onDismiss} />
+              <IconButton icon="close" size={20} onPress={onDismiss} disabled={saving} />
             </View>
 
             {/* 核心选色器区域 */}
@@ -209,13 +254,18 @@ export const ThemeColorPicker: React.FC<Props> = ({ visible, onDismiss }) => {
                 {hexError}
               </Text>
             ) : null}
+            {actionError ? (
+              <Text style={{ color: theme.colors.error, fontSize: 12, marginTop: 8 }}>
+                {actionError}
+              </Text>
+            ) : null}
 
             {/* 底部按钮 */}
             <View style={styles.footer}>
-              <Button mode="text" onPress={handleReset} textColor={theme.colors.onSurfaceVariant}>
+              <Button mode="text" onPress={handleReset} textColor={theme.colors.onSurfaceVariant} disabled={saving}>
                 恢复默认
               </Button>
-              <Button mode="contained" onPress={handleSave}>
+              <Button mode="contained" onPress={handleSave} loading={saving} disabled={saving}>
                 确认修改
               </Button>
             </View>

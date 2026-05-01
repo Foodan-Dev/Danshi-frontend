@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, View, StyleSheet, Pressable, Animated, Easing, ScrollView, Dimensions } from 'react-native';
 import { Text, useTheme, IconButton } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -31,10 +31,17 @@ export const CenterPicker: React.FC<CenterPickerProps> = ({
   const theme = useTheme();
   const scale = useRef(new Animated.Value(0.9)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const [mounted, setMounted] = useState(visible);
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
+      setMounted(true);
+    }
+
+    animationRef.current?.stop();
+    if (visible) {
+      animationRef.current = Animated.parallel([
         Animated.timing(scale, {
           toValue: 1,
           duration: 140,
@@ -47,9 +54,9 @@ export const CenterPicker: React.FC<CenterPickerProps> = ({
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
     } else {
-      Animated.parallel([
+      animationRef.current = Animated.parallel([
         Animated.timing(scale, {
           toValue: 0.9,
           duration: 110,
@@ -62,8 +69,17 @@ export const CenterPicker: React.FC<CenterPickerProps> = ({
           easing: Easing.in(Easing.cubic),
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
     }
+    animationRef.current.start(({ finished }) => {
+      if (finished && !visible) {
+        setMounted(false);
+      }
+    });
+
+    return () => {
+      animationRef.current?.stop();
+    };
   }, [visible, scale, opacity]);
 
   const handleSelect = (value: string) => {
@@ -71,8 +87,12 @@ export const CenterPicker: React.FC<CenterPickerProps> = ({
     onClose();
   };
 
+  if (!mounted) {
+    return null;
+  }
+
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.container}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
           <Animated.View
@@ -86,6 +106,7 @@ export const CenterPicker: React.FC<CenterPickerProps> = ({
           />
         </Pressable>
         <Animated.View
+          pointerEvents={visible ? 'auto' : 'none'}
           style={[
             styles.picker,
             {
@@ -107,7 +128,13 @@ export const CenterPicker: React.FC<CenterPickerProps> = ({
             contentContainerStyle={styles.optionsContainer}
             showsVerticalScrollIndicator={true}
           >
-            {options.map((option) => {
+            {options.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                  暂无可选项
+                </Text>
+              </View>
+            ) : options.map((option) => {
               const isSelected = option.value === selectedValue;
               return (
                 <Pressable
@@ -178,6 +205,11 @@ const styles = StyleSheet.create({
   },
   optionsContainer: {
     paddingVertical: 8,
+  },
+  emptyState: {
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    alignItems: 'center',
   },
   option: {
     flexDirection: 'row',
