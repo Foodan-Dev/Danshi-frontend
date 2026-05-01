@@ -98,8 +98,20 @@ class FDUHoleUploadsRepository implements UploadsRepository {
       });
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => '未知错误');
-        throw new Error(`上传失败 (${response.status}): ${errorText}`);
+        const errorText = await response.text().catch(() => '');
+        if (__DEV__) {
+          console.error('[FDUHole Upload] Upload failed:', response.status, errorText);
+        }
+        if (response.status === 413) {
+          throw new Error('图片过大，请重新选择后再试');
+        }
+        if (response.status === 415) {
+          throw new Error('图片格式不受支持，请重新选择后再试');
+        }
+        if (response.status >= 500) {
+          throw new Error('上传服务暂时不可用，请稍后重试');
+        }
+        throw new Error('上传失败，请稍后重试');
       }
 
       const data: FDUHoleUploadResponse = await response.json();
@@ -117,7 +129,8 @@ class FDUHoleUploadsRepository implements UploadsRepository {
       if (!imageUrl) {
         // 如果有 success: false 或 error 字段
         if (data.success === false || data.error) {
-          throw new Error(data.error || '上传失败');
+          if (__DEV__) console.error('[FDUHole Upload] Upload rejected:', data.error || data);
+          throw new Error('上传失败，请稍后重试');
         }
         if (__DEV__) console.error('[FDUHole Upload] Unexpected response format:', data);
         throw new Error(`上传失败，服务器返回格式异常`);

@@ -95,7 +95,7 @@ export function createHttpClient(opts: HttpOptions = {}): HttpClient {
       // 原生 App 中 TypeError 通常表示网络不可达
       if (typeof e === 'object' && e instanceof TypeError) {
         throw new AppError(
-          `网络错误：无法连接到服务器 (${baseUrl})。请检查网络连接或服务器地址。`,
+          '网络连接失败，请检查网络后重试',
           { code: 'NETWORK_ERROR', cause: e }
         );
       }
