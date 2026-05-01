@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Pressable, StyleSheet, Image, Alert, type GestureResponderEvent } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +30,7 @@ export function NotificationItem({ notification, onReadStateChange, refreshKey }
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+  const followStatusRequestIdRef = useRef(0);
 
   const { id, type, sender, content, is_read, created_at, related_type } = notification;
   const safeSenderAvatarUrl = getSafeRemoteUrl(sender.avatar_url);
@@ -41,11 +42,12 @@ export function NotificationItem({ notification, onReadStateChange, refreshKey }
   // 对 follow 类型通知，检查是否已关注该用户
   const refreshFollowStatus = useCallback(() => {
     if (type !== 'follow') return;
+    const requestId = ++followStatusRequestIdRef.current;
     let cancelled = false;
     usersService.getUser(sender.id)
       .then((profile) => {
-        if (!cancelled) {
-          setIsFollowing(profile.is_following);
+        if (!cancelled && followStatusRequestIdRef.current === requestId) {
+          setIsFollowing(!!profile.is_following);
         }
       })
       .catch((e) => {
@@ -117,13 +119,18 @@ export function NotificationItem({ notification, onReadStateChange, refreshKey }
   const handleFollowPress = useCallback(async () => {
     if (followLoading) return;
     setFollowLoading(true);
+    const requestId = ++followStatusRequestIdRef.current;
     try {
       if (isFollowing) {
         await usersService.unfollowUser(sender.id);
-        setIsFollowing(false);
+        if (followStatusRequestIdRef.current === requestId) {
+          setIsFollowing(false);
+        }
       } else {
         await usersService.followUser(sender.id);
-        setIsFollowing(true);
+        if (followStatusRequestIdRef.current === requestId) {
+          setIsFollowing(true);
+        }
       }
     } catch (e) {
       if (__DEV__) console.warn('[NotificationItem] Failed to toggle follow:', e);

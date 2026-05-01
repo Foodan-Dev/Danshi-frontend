@@ -123,7 +123,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     comments, commentSort, commentPagination, commentLoading, commentError,
     commentReplies, commentRepliesLoading, commentRepliesPagination, commentRepliesExpanded,
     commentSheetVisible, threadVisible, threadRootComment,
-    commentInput, setCommentInput, commentReplyTarget,
+    commentInput, setCommentInput, commentReplyTarget, commentSubmitting,
     threadRepliesList, threadReplyTotal, threadLoading, threadHasMore,
     fetchComments,
     handleToggleCommentLike, handleReplyToComment, getCommentMoreActions,
@@ -1020,6 +1020,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
             replyTarget={commentReplyTarget?.author?.name}
             onCancelReply={handleCancelReply}
             currentUser={currentUser ? { id: currentUser.id, name: currentUser.name || '', avatar_url: currentUser.avatar_url } : undefined}
+            loading={commentSubmitting}
           />
         </BottomSheet>
 
@@ -1117,6 +1118,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           replyTarget={commentReplyTarget?.author?.name}
           onCancelReply={handleCancelReply}
           currentUser={currentUser ? { id: currentUser.id, name: currentUser.name || '', avatar_url: currentUser.avatar_url } : undefined}
+          loading={commentSubmitting}
         />
       </BottomSheet>
 

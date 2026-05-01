@@ -53,6 +53,7 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
     total_pages: 1,
   });
   const [commentLoading, setCommentLoading] = useState(false);
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [commentReplies, setCommentReplies] = useState<Record<string, CommentReply[]>>({});
   const [commentRepliesPagination, setCommentRepliesPagination] = useState<Record<string, CommentsPagination>>({});
@@ -380,11 +381,12 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
   // ==================== 提交评论 ====================
   const handleSubmitComment = useCallback(async () => {
     const content = commentInput.trim();
-    if (!content) return;
+    if (!content || commentSubmitting) return;
     if (!currentUser?.id) {
       showAlert('请先登录', '登录后才能发表评论');
       return;
     }
+    setCommentSubmitting(true);
     try {
       let parent_id: string | undefined;
       let reply_to_user_id: string | undefined;
@@ -482,8 +484,10 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
       onCommentCountChange(1);
     } catch (e) {
       showAlert('评论失败', (e as Error)?.message ?? '暂时无法发表评论');
+    } finally {
+      setCommentSubmitting(false);
     }
-  }, [commentInput, commentReplyTarget, postId, currentUser?.id, findCommentTarget, fetchComments, commentSort, fetchRepliesForComment, onCommentCountChange]);
+  }, [commentInput, commentReplyTarget, postId, currentUser?.id, findCommentTarget, fetchComments, commentSort, fetchRepliesForComment, onCommentCountChange, commentSubmitting]);
 
   // ==================== 排序切换 ====================
   const handleCycleCommentSort = useCallback(() => {
@@ -556,6 +560,7 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
     commentSort,
     commentPagination,
     commentLoading,
+    commentSubmitting,
     commentError,
     commentReplies,
     commentRepliesLoading,
