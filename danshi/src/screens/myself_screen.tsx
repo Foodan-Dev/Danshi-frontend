@@ -1,13 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
   Image,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
-  useWindowDimensions,
   RefreshControl,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -130,11 +128,10 @@ const AdminConsoleCard: React.FC<AdminConsoleCardProps> = ({ role }) => {
 };
 
 export default function MyselfScreen() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const { unreadCount } = useNotifications();
   const insets = useSafeAreaInsets();
   const theme = usePaperTheme();
-  const { width: windowWidth } = useWindowDimensions();
   const { minHeight, maxHeight } = useWaterfallSettings();
   const tabBarHeight = useBottomTabBarHeight();
   const bottomContentPadding = useMemo(() => tabBarHeight + 24, [tabBarHeight]);
@@ -154,8 +151,12 @@ export default function MyselfScreen() {
   const [favorites, setFavorites] = useState<Post[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [postsError, setPostsError] = useState('');
+  const [favoritesError, setFavoritesError] = useState('');
   const [isProfileExpanded, setIsProfileExpanded] = useState(false);
   const [avatarLoadError, setAvatarLoadError] = useState(false);
+  const favoritesInFlightRef = useRef(false);
 
   const displayName = useMemo(
     () => profile?.name ?? user?.name ?? '未登录',
@@ -180,6 +181,7 @@ export default function MyselfScreen() {
   const loadProfile = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
+    setProfileError('');
     try {
       const fetchedProfile = await usersService.getUser(user.id);
       setProfile(fetchedProfile);
@@ -193,8 +195,11 @@ export default function MyselfScreen() {
           total_views: 0,
           comment_count: 0,
         });
+      } else {
+        setStats(null);
       }
     } catch (error) {
+      setProfileError(error instanceof Error ? error.message : '加载个人资料失败，请稍后重试');
       if (__DEV__) console.warn('Load profile failed:', error);
     } finally {
       setLoading(false);
@@ -205,6 +210,7 @@ export default function MyselfScreen() {
   const loadPosts = useCallback(async () => {
     if (!user?.id) return;
     setPostsLoading(true);
+    setPostsError('');
     try {
       const res = await usersService.getUserPosts(user.id, { limit: 20 });
       // 过滤掉不支持的帖子类型（如 companion）
@@ -224,6 +230,7 @@ export default function MyselfScreen() {
         if (__DEV__) console.warn('后端返回了不支持的帖子类型，已忽略');
         setPosts([]);
       } else {
+        setPostsError(error?.message ?? '加载帖子失败，请稍后重试');
         if (__DEV__) console.warn('Load posts failed:', error);
       }
     } finally {
@@ -233,8 +240,10 @@ export default function MyselfScreen() {
 
   // 加载收藏的帖子
   const loadFavorites = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id || favoritesInFlightRef.current) return;
+    favoritesInFlightRef.current = true;
     setFavoritesLoading(true);
+    setFavoritesError('');
     try {
       const res = await usersService.getUserFavorites(user.id, { limit: 20 });
       // 过滤掉不支持的帖子类型（如 companion）
@@ -250,9 +259,11 @@ export default function MyselfScreen() {
         if (__DEV__) console.warn('后端返回了不支持的帖子类型，已忽略');
         setFavorites([]);
       } else {
+        setFavoritesError(error?.message ?? '加载收藏失败，请稍后重试');
         if (__DEV__) console.warn('Load favorites failed:', error);
       }
     } finally {
+      favoritesInFlightRef.current = false;
       setFavoritesLoading(false);
     }
   }, [user?.id]);
@@ -292,6 +303,7 @@ export default function MyselfScreen() {
 
   const currentPosts = activeTab === 'posts' ? posts : favorites;
   const currentLoading = activeTab === 'posts' ? postsLoading : favoritesLoading;
+  const currentError = activeTab === 'posts' ? postsError : favoritesError;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -324,6 +336,14 @@ export default function MyselfScreen() {
         </View>
 
         {/* ==================== 用户信息区 ==================== */}
+        {profileError && !profile && !loading ? (
+          <View style={[styles.errorBanner, { backgroundColor: theme.colors.errorContainer }]}>
+            <Text style={{ color: theme.colors.error, textAlign: 'center' }}>{profileError}</Text>
+            <Button mode="text" onPress={() => { void loadProfile(); }} textColor={theme.colors.error}>
+              重试
+            </Button>
+          </View>
+        ) : null}
         <View style={[styles.profileSectionSimple, { backgroundColor: theme.colors.surface }]}>
           {/* 悬浮头像 */}
           <View style={styles.profileHeaderRow}>
@@ -440,6 +460,26 @@ export default function MyselfScreen() {
               <ActivityIndicator size="small" color={theme.colors.primary} />
               <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>加载中...</Text>
             </View>
+          ) : currentError && currentPosts.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <Ionicons name="alert-circle-outline" size={48} color={theme.colors.error} />
+              <Text style={[styles.emptyText, { color: theme.colors.error }]}>
+                {currentError}
+              </Text>
+              <Button
+                mode="text"
+                onPress={() => {
+                  if (activeTab === 'posts') {
+                    void loadPosts();
+                  } else {
+                    void loadFavorites();
+                  }
+                }}
+                textColor={theme.colors.primary}
+              >
+                重试
+              </Button>
+            </View>
           ) : currentPosts.length === 0 ? (
             <View style={styles.emptyWrap}>
               <Ionicons
@@ -461,6 +501,11 @@ export default function MyselfScreen() {
             </View>
           ) : (
             <View style={[styles.postsGrid, { paddingHorizontal: horizontalPadding }]}>
+              {currentError ? (
+                <View style={[styles.errorBanner, { backgroundColor: theme.colors.errorContainer, marginBottom: 12 }]}>
+                  <Text style={{ color: theme.colors.error }}>{currentError}</Text>
+                </View>
+              ) : null}
               <Masonry
                 data={currentPosts}
                 columns={{ base: 2, md: 2, lg: 3, xl: 4 }}
@@ -525,6 +570,13 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  errorBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
 
   // ==================== Profile Section ====================
@@ -760,6 +812,4 @@ const styles = StyleSheet.create({
     // color is set dynamically
   },
 });
-
-
 

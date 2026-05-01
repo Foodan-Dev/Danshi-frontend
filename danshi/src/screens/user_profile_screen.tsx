@@ -44,7 +44,9 @@ export default function UserProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [profileError, setProfileError] = useState('');
+  const [followError, setFollowError] = useState('');
+  const [postsError, setPostsError] = useState('');
   const [posts, setPosts] = useState<Post[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [isProfileExpanded, setIsProfileExpanded] = useState(false);
@@ -52,6 +54,13 @@ export default function UserProfileScreen() {
   const safeAvatarUrl = useMemo(() => getSafeRemoteUrl(profile?.avatar_url), [profile?.avatar_url]);
 
   const isCurrentUser = currentUser?.id === userId;
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/explore');
+  }, []);
 
   // 当头像 URL 变化时重置加载错误状态
   useEffect(() => {
@@ -62,7 +71,7 @@ export default function UserProfileScreen() {
   const loadUserData = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
-    setError('');
+    setProfileError('');
     try {
       const profileData = await usersService.getUser(userId);
       setProfile(profileData);
@@ -76,9 +85,11 @@ export default function UserProfileScreen() {
           total_views: 0,
           comment_count: 0,
         });
+      } else {
+        setStats(null);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setProfileError(e instanceof Error ? e.message : '加载用户资料失败，请稍后重试');
     } finally {
       setLoading(false);
     }
@@ -88,6 +99,7 @@ export default function UserProfileScreen() {
   const loadPosts = useCallback(async () => {
     if (!userId) return;
     setPostsLoading(true);
+    setPostsError('');
     try {
       const res = await usersService.getUserPosts(userId, { limit: 20 });
       // 过滤掉不支持的帖子类型（如 companion）和未审核通过的帖子
@@ -103,6 +115,7 @@ export default function UserProfileScreen() {
         if (__DEV__) console.warn('后端返回了不支持的帖子类型，已忽略');
         setPosts([]);
       } else {
+        setPostsError(error?.message ?? '加载用户帖子失败，请稍后重试');
         if (__DEV__) console.warn('Load user posts failed:', error);
       }
     } finally {
@@ -118,35 +131,41 @@ export default function UserProfileScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
+    setFollowError('');
     await Promise.all([loadUserData(), loadPosts()]);
     setRefreshing(false);
   }, [loadUserData, loadPosts]);
 
-  const handleFollowToggle = async () => {
+  const handleFollowToggle = useCallback(async () => {
     if (!userId || !profile) return;
+    if (!currentUser) {
+      setFollowError('请先登录后再关注用户');
+      return;
+    }
     setFollowLoading(true);
+    setFollowError('');
     try {
       if (profile.is_following) {
-        await usersService.unfollowUser(userId);
-        setProfile({ 
-          ...profile, 
-          is_following: false, 
-          stats: { ...profile.stats, follower_count: profile.stats.follower_count - 1 }
-        });
+        const result = await usersService.unfollowUser(userId);
+        setProfile((prev) => prev ? {
+          ...prev,
+          is_following: result.is_following,
+          stats: { ...prev.stats, follower_count: Math.max(0, result.follower_count) },
+        } : prev);
       } else {
-        await usersService.followUser(userId);
-        setProfile({ 
-          ...profile, 
-          is_following: true, 
-          stats: { ...profile.stats, follower_count: profile.stats.follower_count + 1 }
-        });
+        const result = await usersService.followUser(userId);
+        setProfile((prev) => prev ? {
+          ...prev,
+          is_following: result.is_following,
+          stats: { ...prev.stats, follower_count: Math.max(0, result.follower_count) },
+        } : prev);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setFollowError(e instanceof Error ? e.message : '关注操作失败，请稍后重试');
     } finally {
       setFollowLoading(false);
     }
-  };
+  }, [currentUser, profile, userId]);
 
   const handlePostPress = useCallback((postId: string) => {
     router.push({ pathname: '/post/[postId]', params: { postId } });
@@ -161,7 +180,7 @@ export default function UserProfileScreen() {
     return (
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View style={[styles.headerBar, { paddingTop: insets.top + 8, backgroundColor: theme.colors.surface }]}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable style={styles.backBtn} onPress={handleBack}>
             <Ionicons name="chevron-back" size={24} color={theme.colors.onSurface} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: theme.colors.onSurface }]}>用户主页</Text>
@@ -186,7 +205,7 @@ export default function UserProfileScreen() {
       >
         {/* ==================== 顶部操作栏 ==================== */}
         <View style={[styles.headerBar, { paddingTop: insets.top + 8, backgroundColor: theme.colors.surface }]}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable style={styles.backBtn} onPress={handleBack}>
             <Ionicons name="chevron-back" size={24} color={theme.colors.onSurface} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: theme.colors.onSurface }]}>用户主页</Text>
@@ -198,17 +217,22 @@ export default function UserProfileScreen() {
             <ActivityIndicator size="large" color={theme.colors.primary} />
             <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>加载中...</Text>
           </View>
-        ) : error ? (
+        ) : profileError && !profile ? (
           <View style={styles.errorContainer}>
             <Ionicons name="alert-circle-outline" size={48} color={theme.colors.error} />
-            <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
-            <Pressable style={[styles.retryBtn, { backgroundColor: theme.colors.primaryContainer }]} onPress={loadUserData}>
+            <Text style={[styles.errorText, { color: theme.colors.error }]}>{profileError}</Text>
+            <Pressable style={[styles.retryBtn, { backgroundColor: theme.colors.primaryContainer }]} onPress={handleRefresh}>
               <Ionicons name="refresh" size={18} color={theme.colors.primary} />
               <Text style={[styles.retryText, { color: theme.colors.primary }]}>重新加载</Text>
             </Pressable>
           </View>
         ) : profile ? (
           <>
+            {followError || (profileError && profile) ? (
+              <View style={[styles.inlineError, { backgroundColor: theme.colors.errorContainer }]}>
+                <Text style={{ color: theme.colors.error }}>{followError || profileError}</Text>
+              </View>
+            ) : null}
             {/* ==================== 用户信息区 ==================== */}
             <View style={[styles.profileSection, { backgroundColor: theme.colors.surface }]}>
               {/* 头像和用户信息并排 */}
@@ -266,7 +290,7 @@ export default function UserProfileScreen() {
                         </View>
                       )}
                     </Pressable>
-                    {!isCurrentUser && (
+                    {currentUser && !isCurrentUser && (
                       <Pressable
                         style={[
                           styles.followBtn,
@@ -338,6 +362,17 @@ export default function UserProfileScreen() {
                   <ActivityIndicator size="small" color={theme.colors.primary} />
                   <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>加载中...</Text>
                 </View>
+              ) : postsError && posts.length === 0 ? (
+                <View style={styles.emptyWrap}>
+                  <Ionicons name="alert-circle-outline" size={48} color={theme.colors.error} />
+                  <Text style={[styles.emptyText, { color: theme.colors.error }]}>
+                    {postsError}
+                  </Text>
+                  <Pressable style={[styles.retryBtn, { backgroundColor: theme.colors.primaryContainer }]} onPress={loadPosts}>
+                    <Ionicons name="refresh" size={18} color={theme.colors.primary} />
+                    <Text style={[styles.retryText, { color: theme.colors.primary }]}>重试</Text>
+                  </Pressable>
+                </View>
               ) : posts.length === 0 ? (
                 <View style={styles.emptyWrap}>
                   <Ionicons name="document-text-outline" size={48} color={theme.colors.outlineVariant} />
@@ -347,6 +382,11 @@ export default function UserProfileScreen() {
                 </View>
               ) : (
                 <View style={[styles.postsGrid, { paddingHorizontal: horizontalPadding }]}>
+                  {postsError ? (
+                    <View style={[styles.inlineError, { backgroundColor: theme.colors.errorContainer, marginBottom: 12 }]}>
+                      <Text style={{ color: theme.colors.error }}>{postsError}</Text>
+                    </View>
+                  ) : null}
                   <Masonry
                     data={posts}
                     columns={{ base: 2, md: 2, lg: 3, xl: 4 }}
@@ -419,6 +459,13 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 15,
     textAlign: 'center',
+  },
+  inlineError: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
   retryBtn: {
     flexDirection: 'row',

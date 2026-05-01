@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useTheme } from '@/src/context/theme_context';
 import { Text, List, useTheme as usePaperTheme, ActivityIndicator, Button, Snackbar } from 'react-native-paper';
-import BottomSheet from '@/src/components/overlays/bottom_sheet';
+import BottomSheetOverlay from '@/src/components/overlays/bottom_sheet';
 import { CenterPicker } from '@/src/components/overlays/center_picker';
 import { ThemeColorPicker } from '@/src/components/theme_color_picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -35,9 +35,10 @@ export default function SettingsScreen() {
 
   // 编辑状态
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   // 表单字段
   const [name, setName] = useState('');
@@ -74,8 +75,13 @@ export default function SettingsScreen() {
 
   // 加载用户资料
   const loadProfile = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setLoadError('请先登录后再编辑资料');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setLoadError('');
     try {
       const fetchedProfile = await usersService.getUser(user.id);
       setProfile(fetchedProfile);
@@ -84,6 +90,8 @@ export default function SettingsScreen() {
       setHometown(fetchedProfile.hometown ?? '');
       setAvatarUrl(fetchedProfile.avatar_url ?? null);
     } catch (error) {
+      const message = error instanceof Error ? error.message : '加载资料失败，请稍后重试';
+      setLoadError(message);
       if (__DEV__) console.warn('Load profile failed:', error);
     } finally {
       setLoading(false);
@@ -95,24 +103,33 @@ export default function SettingsScreen() {
   }, [loadProfile]);
 
   // 保存个人资料
-  const handleSaveProfile = useCallback(async () => {
+  const handleSaveProfile = useCallback(async (shouldNavigate = true): Promise<boolean> => {
     if (!user?.id) {
       Alert.alert('错误', '用户未登录，无法保存');
-      return;
+      return false;
+    }
+    const trimmedName = name.trim();
+    const trimmedBio = bio.trim();
+    const trimmedHometown = hometown.trim();
+    if (!trimmedName) {
+      Alert.alert('保存失败', '昵称不能为空');
+      return false;
     }
     setSaving(true);
     try {
       const input: Parameters<typeof usersService.updateUser>[1] = {
-        name: name.trim() || undefined,
-        bio: bio.trim() || undefined,
-        hometown: hometown.trim() || undefined,
-        avatar_url: avatarUrl ?? undefined,
+        name: trimmedName,
+        bio: trimmedBio,
+        hometown: trimmedHometown,
+        avatar_url: avatarUrl ?? null,
       };
-      await usersService.updateUser(user.id, input);
-      // 更新 profile 状态，使 hasUnsavedChanges 变为 false
-      setProfile(prev => prev ? { ...prev, name: name.trim(), bio: bio.trim(), hometown: hometown.trim(), avatar_url: avatarUrl } : prev);
-      refreshUser?.();
-      // 显示成功提示，然后自动返回
+      const updatedProfile = await usersService.updateUser(user.id, input);
+      setProfile(updatedProfile);
+      setName(updatedProfile.name ?? '');
+      setBio(updatedProfile.bio ?? '');
+      setHometown(updatedProfile.hometown ?? '');
+      setAvatarUrl(updatedProfile.avatar_url ?? null);
+      await refreshUser?.();
       const goBack = () => {
         if (router.canGoBack()) {
           router.back();
@@ -120,18 +137,20 @@ export default function SettingsScreen() {
           router.replace('/myself');
         }
       };
-      if (Platform.OS === 'web') {
-        // Web 端使用 window.alert
-        window.alert('保存成功：个人资料已更新');
-        goBack();
-      } else {
-        Alert.alert('保存成功', '个人资料已更新', [
-          {
-            text: '确定',
-            onPress: goBack,
-          },
-        ]);
+      if (shouldNavigate) {
+        if (Platform.OS === 'web') {
+          window.alert('保存成功：个人资料已更新');
+          goBack();
+        } else {
+          Alert.alert('保存成功', '个人资料已更新', [
+            {
+              text: '确定',
+              onPress: goBack,
+            },
+          ]);
+        }
       }
+      return true;
     } catch (error: any) {
       if (__DEV__) console.error('[Settings] Save failed:', error);
       if (Platform.OS === 'web') {
@@ -139,6 +158,7 @@ export default function SettingsScreen() {
       } else {
         Alert.alert('保存失败', error?.message ?? '请稍后重试');
       }
+      return false;
     } finally {
       setSaving(false);
     }
@@ -297,8 +317,10 @@ export default function SettingsScreen() {
           {
             text: '保存并离开',
             onPress: async () => {
-              await handleSaveProfile();
-              doGoBack();
+              const saved = await handleSaveProfile(false);
+              if (saved) {
+                doGoBack();
+              }
             },
           },
         ]
@@ -363,7 +385,9 @@ export default function SettingsScreen() {
               justifyContent: 'center',
               opacity: saving ? 0.6 : 1,
             }}
-            onPress={handleSaveProfile}
+            onPress={() => {
+              void handleSaveProfile();
+            }}
             disabled={saving}
           >
             {saving ? (
@@ -386,6 +410,14 @@ export default function SettingsScreen() {
           {loading ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator size="large" color={pTheme.colors.primary} />
+            </View>
+          ) : loadError && !profile ? (
+            <View style={styles.errorWrap}>
+              <Ionicons name="alert-circle-outline" size={48} color={pTheme.colors.error} />
+              <Text style={{ color: pTheme.colors.error, textAlign: 'center' }}>{loadError}</Text>
+              <Pressable style={[styles.retryBtn, { backgroundColor: pTheme.colors.primaryContainer }]} onPress={() => { void loadProfile(); }}>
+                <Text style={[styles.retryText, { color: pTheme.colors.primary }]}>重新加载</Text>
+              </Pressable>
             </View>
           ) : (
             <>
@@ -494,7 +526,7 @@ export default function SettingsScreen() {
       </KeyboardAvoidingView>
 
       {/* 主题选择 */}
-      <BottomSheet visible={sheet === 'theme'} onClose={() => setSheet(null)}>
+      <BottomSheetOverlay visible={sheet === 'theme'} onClose={() => setSheet(null)}>
         <Text style={styles.sheetTitle}>选择主题模式</Text>
         {(['system', 'light', 'dark'] as const).map((m) => (
           <Pressable
@@ -515,10 +547,10 @@ export default function SettingsScreen() {
             {mode === m ? <Ionicons name="checkmark" size={18} color={pTheme.colors.primary} /> : null}
           </Pressable>
         ))}
-      </BottomSheet>
+      </BottomSheetOverlay>
 
       {/* 编辑昵称 */}
-      <BottomSheet visible={sheet === 'edit-name'} onClose={() => setSheet(null)} height={200}>
+      <BottomSheetOverlay visible={sheet === 'edit-name'} onClose={() => setSheet(null)} height={200}>
         <Text style={styles.sheetTitle}>编辑昵称</Text>
         <TextInput
           style={[
@@ -540,10 +572,10 @@ export default function SettingsScreen() {
             确认
           </Button>
         </View>
-      </BottomSheet>
+      </BottomSheetOverlay>
 
       {/* 编辑简介 */}
-      <BottomSheet visible={sheet === 'edit-bio'} onClose={() => setSheet(null)} height={280}>
+      <BottomSheetOverlay visible={sheet === 'edit-bio'} onClose={() => setSheet(null)} height={280}>
         <Text style={styles.sheetTitle}>编辑简介</Text>
         <TextInput
           style={[
@@ -571,7 +603,7 @@ export default function SettingsScreen() {
             确认
           </Button>
         </View>
-      </BottomSheet>
+      </BottomSheetOverlay>
 
       {/* 家乡选择 */}
       <CenterPicker
@@ -641,6 +673,21 @@ const styles = StyleSheet.create({
   loadingWrap: {
     paddingVertical: 80,
     alignItems: 'center',
+  },
+  errorWrap: {
+    paddingVertical: 80,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    gap: 12,
+  },
+  retryBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  retryText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   avatarSection: {
     alignItems: 'center',
