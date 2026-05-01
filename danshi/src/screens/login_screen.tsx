@@ -9,6 +9,7 @@ import { authService } from '@/src/services/auth_service';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { REGEX } from '../constants/app';
+import { ensureAppError } from '@/src/lib/errors/app_error';
 
 export default function LoginScreen() {
   const bp = useBreakpoint();
@@ -31,17 +32,22 @@ export default function LoginScreen() {
     }
   }, [sessionExpired, clearSessionExpired]);
 
-  const validate = () => {
-    if (!identifier) return '请输入邮箱或用户名';
-    const ok = REGEX.EMAIL.test(identifier) || REGEX.USERNAME.test(identifier);
+  const validate = (nextIdentifier: string, nextPassword: string) => {
+    if (!nextIdentifier) return '请输入邮箱或用户名';
+    const ok = REGEX.EMAIL.test(nextIdentifier) || REGEX.USERNAME.test(nextIdentifier);
     if (!ok) return '请输入有效的邮箱或用户名';
-    if (!password) return '请输入密码';
+    if (!nextPassword) return '请输入密码';
     return '';
   };
 
   const onSubmit = async () => {
+    if (loading) return;
     setError('');
-    const v = validate();
+    const normalizedIdentifier = identifier.trim();
+    if (normalizedIdentifier !== identifier) {
+      setIdentifier(normalizedIdentifier);
+    }
+    const v = validate(normalizedIdentifier, password);
     if (v) {
       setError(v);
       return;
@@ -49,13 +55,21 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      const { token } = await authService.login({ identifier, password });
+      const { token } = await authService.login({ identifier: normalizedIdentifier, password });
       await signIn(token);
       // 直接跳到 tabs 的探索页，避免在 (auth) 栈内 REPLACE('index') 报错
       router.replace('/explore');
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg || '登录失败，请重试');
+      const appError = ensureAppError(e, '登录失败，请重试');
+      if (appError.code === 'NETWORK_ERROR' || appError.code === 'TIMEOUT') {
+        setError(appError.message);
+      } else if (!appError.status && !appError.code) {
+        setError(appError.message);
+      } else if (appError.status === 401) {
+        setError('账号或密码错误');
+      } else {
+        setError('登录失败，请重试');
+      }
     } finally {
       setLoading(false);
     }
@@ -112,7 +126,7 @@ export default function LoginScreen() {
 
               <View style={{ gap: 20 }}>
                 <TextInput
-                  label="邮箱"
+                  label="邮箱或用户名"
                   mode="outlined"
                   autoCapitalize="none"
                   value={identifier}
@@ -142,6 +156,7 @@ export default function LoginScreen() {
                 contentStyle={{ height: 48 }}
                 onPress={onSubmit}
                 loading={loading}
+                disabled={loading}
                 buttonColor={colors.primary}
                 textColor={colors.onPrimary}
               >

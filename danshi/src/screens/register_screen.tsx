@@ -9,6 +9,7 @@ import { authService } from '@/src/services/auth_service';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { REGEX } from '../constants/app';
+import { ensureAppError } from '@/src/lib/errors/app_error';
 
 export default function RegisterScreen() {
   const bp = useBreakpoint();
@@ -21,23 +22,32 @@ export default function RegisterScreen() {
   const [error, setError] = useState('');
   const [username, setUsername] = useState('');
 
-  const validate = () => {
-    if (!username) return '请输入用户名';
-    if (username.trim().length < 3) return '用户名至少 3 个字符';
-    if (!email) return '请输入邮箱';
+  const validate = (nextUsername: string, nextEmail: string, nextPassword: string, nextConfirm: string) => {
+    if (!nextUsername) return '请输入用户名';
+    if (nextUsername.length < 3) return '用户名至少 3 个字符';
+    if (!nextEmail) return '请输入邮箱';
     const emailRegex = REGEX.EMAIL;
-    if (!emailRegex.test(email)) return '请输入有效的邮箱地址';
-    if (!password) return '请输入密码';
-    if (password.length < 8) return '密码长度至少 8 位';
-    if (password !== confirm) return '两次输入的密码不一致';
+    if (!emailRegex.test(nextEmail)) return '请输入有效的邮箱地址';
+    if (!nextPassword) return '请输入密码';
+    if (nextPassword.length < 8) return '密码长度至少 8 位';
+    if (nextPassword !== nextConfirm) return '两次输入的密码不一致';
     return '';
   };
 
   const { signIn } = useAuth();
 
   const onSubmit = async () => {
+    if (loading) return;
     setError('');
-    const v = validate();
+    const normalizedUsername = username.trim();
+    const normalizedEmail = email.trim();
+    if (normalizedUsername !== username) {
+      setUsername(normalizedUsername);
+    }
+    if (normalizedEmail !== email) {
+      setEmail(normalizedEmail);
+    }
+    const v = validate(normalizedUsername, normalizedEmail, password, confirm);
     if (v) {
       setError(v);
       return;
@@ -45,12 +55,22 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-  const { token } = await authService.register({ email, password, name: username });
-  await signIn(token);
-  router.replace('/explore');
+      const { token } = await authService.register({ email: normalizedEmail, password, name: normalizedUsername });
+      await signIn(token);
+      router.replace('/explore');
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg || '注册失败，请重试');
+      const appError = ensureAppError(e, '注册失败，请重试');
+      if (appError.code === 'NETWORK_ERROR' || appError.code === 'TIMEOUT') {
+        setError(appError.message);
+      } else if (!appError.status && !appError.code) {
+        setError(appError.message);
+      } else if (appError.status === 409) {
+        setError('该邮箱或用户名已被占用');
+      } else if (appError.status === 400) {
+        setError('注册信息有误，请检查后重试');
+      } else {
+        setError('注册失败，请重试');
+      }
     } finally {
       setLoading(false);
     }
@@ -143,6 +163,7 @@ export default function RegisterScreen() {
                 contentStyle={{ height: 48 }}
                 onPress={onSubmit}
                 loading={loading}
+                disabled={loading}
                 buttonColor={colors.primary}
                 textColor={colors.onPrimary}
               >
