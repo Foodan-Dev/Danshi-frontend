@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Image, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Text, useTheme as usePaperTheme } from 'react-native-paper';
+import { ActivityIndicator, Button, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -63,7 +63,12 @@ const UserListItem: React.FC<UserListItemProps> = ({
               ? { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }
               : { backgroundColor: theme.colors.primary },
           ]}
-          onPress={isFollowed ? undefined : onFollowBack}
+          onPress={(event) => {
+            event.stopPropagation();
+            if (!isFollowed) {
+              onFollowBack?.();
+            }
+          }}
           disabled={isProcessing || isFollowed}
         >
           {isProcessing ? (
@@ -93,7 +98,10 @@ const UserListItem: React.FC<UserListItemProps> = ({
             styles.actionBtn,
             { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline },
           ]}
-          onPress={onUnfollow}
+          onPress={(event) => {
+            event.stopPropagation();
+            onUnfollow?.();
+          }}
           disabled={isProcessing}
         >
           {isProcessing ? (
@@ -161,12 +169,14 @@ type UserFollowListScreenProps = {
 
 export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type }) => {
   const { userId } = useLocalSearchParams<{ userId: string }>();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, isLoading } = useAuth();
   const [items, setItems] = useState<FollowUserItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const requestSeqRef = useRef(0);
   const insets = useSafeAreaInsets();
   const theme = usePaperTheme();
   const router = useRouter();
@@ -188,35 +198,47 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
   const load = useCallback(
     async (isRefresh = false) => {
       if (!userId) return;
+      const requestId = ++requestSeqRef.current;
       if (isRefresh) {
         setRefreshing(true);
       } else {
         setLoading(true);
       }
-      setError(null);
+      setLoadError(null);
       try {
         const data =
           type === 'followers'
             ? await usersService.getUserFollowers(userId)
             : await usersService.getUserFollowing(userId);
+        if (requestSeqRef.current !== requestId) {
+          return;
+        }
         setItems(data.users);
       } catch (err) {
+        if (requestSeqRef.current !== requestId) {
+          return;
+        }
         const message = err instanceof AppError ? err.message : '读取数据失败，请稍后重试';
-        setError(message);
+        setLoadError(message);
       } finally {
-        if (isRefresh) {
-          setRefreshing(false);
-        } else {
-          setLoading(false);
+        if (requestSeqRef.current === requestId) {
+          if (isRefresh) {
+            setRefreshing(false);
+          } else {
+            setLoading(false);
+          }
         }
       }
     },
-    [userId, type],
+    [type, userId],
   );
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (isLoading) {
+      return;
+    }
+    void load();
+  }, [currentUser?.id, isLoading, load]);
 
   const navigateToProfile = useCallback(
     (targetId: string) => {
@@ -231,16 +253,27 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
 
   const handleFollowBack = useCallback(
     async (targetId: string) => {
-      setError(null);
+      setActionError(null);
       withActionLoading(targetId, true);
       try {
-        await usersService.followUser(targetId);
+        const result = await usersService.followUser(targetId);
         setItems((prev) =>
-          prev.map((item) => (item.id === targetId ? { ...item, is_following: true } : item)),
+          prev.map((item) =>
+            item.id === targetId
+              ? {
+                  ...item,
+                  is_following: result.is_following,
+                  stats: {
+                    ...item.stats,
+                    follower_count: result.follower_count,
+                  },
+                }
+              : item,
+          ),
         );
       } catch (err) {
         const message = err instanceof AppError ? err.message : '操作失败，请稍后重试';
-        setError(message);
+        setActionError(message);
       } finally {
         withActionLoading(targetId, false);
       }
@@ -250,14 +283,14 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
 
   const handleUnfollow = useCallback(
     async (targetId: string) => {
-      setError(null);
+      setActionError(null);
       withActionLoading(targetId, true);
       try {
         await usersService.unfollowUser(targetId);
         setItems((prev) => prev.filter((item) => item.id !== targetId));
       } catch (err) {
         const message = err instanceof AppError ? err.message : '操作失败，请稍后重试';
-        setError(message);
+        setActionError(message);
       } finally {
         withActionLoading(targetId, false);
       }
@@ -311,10 +344,24 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
         <View style={styles.headerPlaceholder} />
       </View>
 
-      {loading ? (
+      {isLoading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator animating size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>正在恢复登录状态...</Text>
+        </View>
+      ) : loading ? (
         <View style={styles.centered}>
           <ActivityIndicator animating size="large" color={theme.colors.primary} />
           <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>加载中...</Text>
+        </View>
+      ) : loadError && items.length === 0 ? (
+        <View style={styles.centered}>
+          <Ionicons name="alert-circle-outline" size={48} color={theme.colors.error} />
+          <Text style={[styles.emptyTitle, { color: theme.colors.error }]}>加载失败</Text>
+          <Text style={[styles.emptySubtitle, { color: theme.colors.onSurfaceVariant }]}>{loadError}</Text>
+          <Button mode="contained-tonal" onPress={() => void load()}>
+            重试
+          </Button>
         </View>
       ) : (
         <FlatList
@@ -325,7 +372,7 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => load(true)}
+              onRefresh={() => void load(true)}
               colors={[theme.colors.primary]}
               tintColor={theme.colors.primary}
               progressBackgroundColor={theme.colors.surface}
@@ -356,10 +403,10 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
           }
         />
       )}
-      {error ? (
+      {actionError || (loadError && items.length > 0) ? (
         <View style={[styles.errorContainer, { backgroundColor: theme.colors.errorContainer }]}>
           <Ionicons name="alert-circle" size={16} color={theme.colors.error} />
-          <Text style={[styles.errorText, { color: theme.colors.error }]}>{error}</Text>
+          <Text style={[styles.errorText, { color: theme.colors.error }]}>{actionError || loadError}</Text>
         </View>
       ) : null}
     </View>
