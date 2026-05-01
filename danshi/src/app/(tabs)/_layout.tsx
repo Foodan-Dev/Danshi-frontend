@@ -8,6 +8,7 @@ import { useAuth } from '@/src/context/auth_context';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { breakpoints } from '@/src/constants/breakpoints';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 // 侧边栏导航项
 const SIDEBAR_ITEMS = [
@@ -23,6 +24,7 @@ function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuth();
+  const safeUserAvatarUrl = getSafeRemoteUrl(user?.avatar_url);
 
   const getActiveTab = () => {
     if (pathname.includes('/explore')) return 'explore';
@@ -50,9 +52,9 @@ function Sidebar() {
         style={styles.sidebarAvatar}
         onPress={() => router.push('/(tabs)/myself')}
       >
-        {user?.avatar_url ? (
+        {safeUserAvatarUrl ? (
           <Image
-            source={{ uri: user.avatar_url }}
+            source={{ uri: safeUserAvatarUrl }}
             style={styles.avatarImage}
             resizeMode="cover"
           />

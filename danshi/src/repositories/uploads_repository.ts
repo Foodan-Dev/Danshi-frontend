@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { USE_MOCK } from '@/src/constants/app';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 // FDUHole 图片托管服务 Base URL
 const FDUHOLE_IMAGE_HOST = 'https://image.fduhole.com';
@@ -136,12 +137,18 @@ class FDUHoleUploadsRepository implements UploadsRepository {
         throw new Error(`上传失败，服务器返回格式异常`);
       }
 
+      const safeImageUrl = getSafeRemoteUrl(imageUrl);
+      if (!safeImageUrl) {
+        if (__DEV__) console.error('[FDUHole Upload] Invalid image url returned:', imageUrl);
+        throw new Error('上传失败，返回的图片地址无效');
+      }
+
       // 从返回的 URL 中提取文件名
-      const urlParts = imageUrl.split('/');
+      const urlParts = safeImageUrl.split('/');
       const filename = urlParts[urlParts.length - 1] || file.name;
 
       return {
-        url: imageUrl,
+        url: safeImageUrl,
         filename,
         size: 'blob' in file && file.blob ? file.blob.size : 0,
       };

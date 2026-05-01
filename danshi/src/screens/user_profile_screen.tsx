@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, Image, ScrollView, Pressable, RefreshControl } from 'react-native';
 import { Text, useTheme as usePaperTheme, ActivityIndicator } from 'react-native-paper';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
@@ -16,6 +16,7 @@ import { PostCard, estimatePostCardHeight } from '@/src/components/post_card';
 import { useWaterfallSettings } from '@/src/context/waterfall_context';
 import { HOMETOWN_OPTIONS, findOptionLabel } from '@/src/constants/selects';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 
 const formatCount = (value?: number | null) => {
@@ -48,13 +49,14 @@ export default function UserProfileScreen() {
   const [postsLoading, setPostsLoading] = useState(false);
   const [isProfileExpanded, setIsProfileExpanded] = useState(false);
   const [avatarLoadError, setAvatarLoadError] = useState(false);
+  const safeAvatarUrl = useMemo(() => getSafeRemoteUrl(profile?.avatar_url), [profile?.avatar_url]);
 
   const isCurrentUser = currentUser?.id === userId;
 
   // 当头像 URL 变化时重置加载错误状态
   useEffect(() => {
     setAvatarLoadError(false);
-  }, [profile?.avatar_url]);
+  }, [safeAvatarUrl]);
 
   // 加载用户资料
   const loadUserData = useCallback(async () => {
@@ -212,9 +214,9 @@ export default function UserProfileScreen() {
               {/* 头像和用户信息并排 */}
               <View style={styles.profileHeaderRow}>
                 <View style={[styles.avatarContainer, { backgroundColor: theme.colors.primaryContainer }]}>
-                  {profile.avatar_url && !avatarLoadError ? (
+                  {safeAvatarUrl && !avatarLoadError ? (
                     <Image 
-                      source={{ uri: profile.avatar_url }} 
+                      source={{ uri: safeAvatarUrl }}
                       style={styles.avatar}
                       onError={() => setAvatarLoadError(true)}
                     />
@@ -580,4 +582,3 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
 });
-

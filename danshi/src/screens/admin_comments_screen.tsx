@@ -10,6 +10,7 @@ import { isAdmin } from '@/src/lib/auth/roles';
 import { adminService } from '@/src/services/admin_service';
 import type { AdminCommentSummary } from '@/src/repositories/admin_repository';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 // 格式化时间：显示为 MM-DD HH:mm
 const formatTime = (dateStr: string) => {
@@ -189,97 +190,100 @@ export default function AdminCommentsScreen() {
             </Card.Content>
           </Card>
         ) : (
-          comments.map((comment) => (
-            <View key={comment.id} style={dynamicStyles.commentCard}>
-              {/* 区域 A：头部 - 用户信息 */}
-              <View style={styles.headerRow}>
-                {/* 左侧：头像 + 用户信息 */}
-                <View style={styles.userInfo}>
-                  {/* 头像 32dp */}
-                  <View style={[styles.avatar, { backgroundColor: pTheme.colors.surfaceVariant }]}>
-                    {(comment.author as any).avatar_url ? (
-                      <Image 
-                        source={{ uri: (comment.author as any).avatar_url }} 
-                        style={styles.avatarImage} 
+          comments.map((comment) => {
+            const safeAuthorAvatarUrl = getSafeRemoteUrl((comment.author as any).avatar_url);
+            return (
+              <View key={comment.id} style={dynamicStyles.commentCard}>
+                {/* 区域 A：头部 - 用户信息 */}
+                <View style={styles.headerRow}>
+                  {/* 左侧：头像 + 用户信息 */}
+                  <View style={styles.userInfo}>
+                    {/* 头像 32dp */}
+                    <View style={[styles.avatar, { backgroundColor: pTheme.colors.surfaceVariant }]}>
+                      {safeAuthorAvatarUrl ? (
+                        <Image
+                          source={{ uri: safeAuthorAvatarUrl }}
+                          style={styles.avatarImage}
+                        />
+                      ) : (
+                        <Ionicons name="person" size={16} color={pTheme.colors.onSurfaceVariant} />
+                      )}
+                    </View>
+                    {/* 用户名和邮箱 */}
+                    <View style={styles.userTextContainer}>
+                      <Text style={dynamicStyles.userName}>{comment.author.name}</Text>
+                      <Text style={dynamicStyles.userEmail} numberOfLines={1}>
+                        {comment.author.email || `ID: ${comment.author.id.slice(0, 8)}...`}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* 右侧：时间 + 菜单 */}
+                  <View style={styles.headerRight}>
+                    <Text style={dynamicStyles.timeText}>{formatTime(comment.created_at)}</Text>
+                    <Menu
+                      visible={menuVisible === comment.id}
+                      onDismiss={() => setMenuVisible(null)}
+                      anchor={
+                        <Pressable
+                          style={styles.menuBtn}
+                          onPress={() => setMenuVisible(comment.id)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="ellipsis-vertical" size={16} color={pTheme.colors.onSurfaceVariant} />
+                        </Pressable>
+                      }
+                    >
+                      <Menu.Item
+                        onPress={() => {
+                          setMenuVisible(null);
+                          router.push(`/post/${comment.post_id}`);
+                        }}
+                        title="查看帖子"
+                        leadingIcon="eye"
                       />
-                    ) : (
-                      <Ionicons name="person" size={16} color={pTheme.colors.onSurfaceVariant} />
-                    )}
+                      <Menu.Item
+                        onPress={() => {
+                          setMenuVisible(null);
+                          confirmDelete(comment.id);
+                        }}
+                        title="删除"
+                        leadingIcon="delete"
+                        titleStyle={{ color: pTheme.colors.error }}
+                      />
+                    </Menu>
                   </View>
-                  {/* 用户名和邮箱 */}
-                  <View style={styles.userTextContainer}>
-                    <Text style={dynamicStyles.userName}>{comment.author.name}</Text>
-                    <Text style={dynamicStyles.userEmail} numberOfLines={1}>
-                      {comment.author.email || `ID: ${comment.author.id.slice(0, 8)}...`}
+                </View>
+
+                {/* 区域 B：评论主体 */}
+                <View style={styles.contentSection}>
+                  {comment.parent_id ? (
+                    // 回复某人的评论
+                    <Text style={dynamicStyles.contentText}>
+                      <Text style={{ color: pTheme.colors.onSurfaceVariant }}>回复 </Text>
+                      <Text style={dynamicStyles.replyName}>@{(comment as any).parent_author_name || '用户'}</Text>
+                      <Text style={{ color: pTheme.colors.onSurfaceVariant }}> : </Text>
+                      {comment.content}
                     </Text>
-                  </View>
+                  ) : (
+                    <Text style={dynamicStyles.contentText}>{comment.content}</Text>
+                  )}
                 </View>
-                
-                {/* 右侧：时间 + 菜单 */}
-                <View style={styles.headerRight}>
-                  <Text style={dynamicStyles.timeText}>{formatTime(comment.created_at)}</Text>
-                  <Menu
-                    visible={menuVisible === comment.id}
-                    onDismiss={() => setMenuVisible(null)}
-                    anchor={
-                      <Pressable
-                        style={styles.menuBtn}
-                        onPress={() => setMenuVisible(comment.id)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Ionicons name="ellipsis-vertical" size={16} color={pTheme.colors.onSurfaceVariant} />
-                      </Pressable>
-                    }
-                  >
-                    <Menu.Item 
-                      onPress={() => {
-                        setMenuVisible(null);
-                        router.push(`/post/${comment.post_id}`);
-                      }} 
-                      title="查看帖子" 
-                      leadingIcon="eye"
-                    />
-                    <Menu.Item 
-                      onPress={() => {
-                        setMenuVisible(null);
-                        confirmDelete(comment.id);
-                      }} 
-                      title="删除" 
-                      leadingIcon="delete"
-                      titleStyle={{ color: pTheme.colors.error }}
-                    />
-                  </Menu>
-                </View>
-              </View>
 
-              {/* 区域 B：评论主体 */}
-              <View style={styles.contentSection}>
-                {comment.parent_id ? (
-                  // 回复某人的评论
-                  <Text style={dynamicStyles.contentText}>
-                    <Text style={{ color: pTheme.colors.onSurfaceVariant }}>回复 </Text>
-                    <Text style={dynamicStyles.replyName}>@{(comment as any).parent_author_name || '用户'}</Text>
-                    <Text style={{ color: pTheme.colors.onSurfaceVariant }}> : </Text>
-                    {comment.content}
+                {/* 区域 C：来源上下文 - 引用卡片 */}
+                <Pressable
+                  style={dynamicStyles.sourceCard}
+                  onPress={() => router.push(`/post/${comment.post_id}`)}
+                >
+                  <Ionicons name="document-text-outline" size={16} color={pTheme.colors.onSurfaceVariant} />
+                  <Text style={dynamicStyles.sourceText} numberOfLines={1}>
+                    来自帖子: {(comment as any).post_title || '查看原帖...'}
                   </Text>
-                ) : (
-                  <Text style={dynamicStyles.contentText}>{comment.content}</Text>
-                )}
+                  <Ionicons name="chevron-forward" size={14} color={pTheme.colors.outline} />
+                </Pressable>
               </View>
-
-              {/* 区域 C：来源上下文 - 引用卡片 */}
-              <Pressable 
-                style={dynamicStyles.sourceCard}
-                onPress={() => router.push(`/post/${comment.post_id}`)}
-              >
-                <Ionicons name="document-text-outline" size={16} color={pTheme.colors.onSurfaceVariant} />
-                <Text style={dynamicStyles.sourceText} numberOfLines={1}>
-                  来自帖子: {(comment as any).post_title || '查看原帖...'}
-                </Text>
-                <Ionicons name="chevron-forward" size={14} color={pTheme.colors.outline} />
-              </Pressable>
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </View>

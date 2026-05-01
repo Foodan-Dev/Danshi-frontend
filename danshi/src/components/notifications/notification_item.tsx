@@ -10,6 +10,7 @@ import { notificationsService } from '@/src/services/notifications_service';
 import { usersService } from '@/src/services/users_service';
 import { formatRelativeTime } from '@/src/utils/time_format';
 import { useNotifications } from '@/src/context/notifications_context';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 // ==================== Props ====================
 
@@ -30,6 +31,7 @@ export function NotificationItem({ notification, onMarkAsRead, refreshKey }: Not
   const [followLoading, setFollowLoading] = useState(false);
 
   const { id, type, sender, content, is_read, created_at, related_id, related_type } = notification;
+  const safeSenderAvatarUrl = getSafeRemoteUrl(sender.avatar_url);
 
   // 对 follow 类型通知，检查是否已关注该用户
   const refreshFollowStatus = useCallback(() => {
@@ -145,9 +147,9 @@ export function NotificationItem({ notification, onMarkAsRead, refreshKey }: Not
           <View style={[styles.unreadDot, { backgroundColor: theme.colors.primary }]} />
         )}
         <Pressable onPress={handleAvatarPress} style={styles.avatarContainer}>
-          {sender.avatar_url ? (
+          {safeSenderAvatarUrl ? (
             <Image
-              source={{ uri: sender.avatar_url }}
+              source={{ uri: safeSenderAvatarUrl }}
               style={[styles.avatar, { opacity: readOpacity }]}
             />
           ) : (
@@ -297,4 +299,3 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
-

@@ -9,6 +9,7 @@ import { useAuth } from '@/src/context/auth_context';
 import { usersService } from '@/src/services/users_service';
 import type { FollowUserItem } from '@/src/repositories/users_repository';
 import { AppError } from '@/src/lib/errors/app_error';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 const formatCount = (value?: number) => {
   if (value == null) return '0';
@@ -41,6 +42,7 @@ const UserListItem: React.FC<UserListItemProps> = ({
 }) => {
   const theme = usePaperTheme();
   const isFollowed = !!user.is_following;
+  const safeAvatarUrl = getSafeRemoteUrl(user.avatar_url);
   
   // 判断是否互关
   const isMutual = listType === 'followers' && isFollowed;
@@ -116,8 +118,8 @@ const UserListItem: React.FC<UserListItemProps> = ({
     >
       {/* 左侧：头像 */}
       <View style={styles.avatarContainer}>
-        {user.avatar_url ? (
-          <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
+        {safeAvatarUrl ? (
+          <Image source={{ uri: safeAvatarUrl }} style={styles.avatar} />
         ) : (
           <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.primaryContainer }]}>
             <Ionicons name="person" size={24} color={theme.colors.primary} />

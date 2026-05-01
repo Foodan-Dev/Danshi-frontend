@@ -34,6 +34,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '@/src/context/auth_context';
 import { formatCurrentDate } from '@/src/utils/time_format';
 import { WEB_NO_OUTLINE } from '@/src/utils';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 import type {
 	Category,
 	CommonCreateBase,
@@ -72,6 +73,7 @@ export default function PostScreen({
 	// 发帖页面隐藏了 Tab Bar，底部只需安全区域间距
 	const bottomContentPadding = useMemo(() => Math.max(insets.bottom, 16) + 16, [insets.bottom]);
 	const { user: currentUser } = useAuth();
+	const safeCurrentUserAvatarUrl = useMemo(() => getSafeRemoteUrl(currentUser?.avatar_url), [currentUser?.avatar_url]);
 
 	// 宽屏模式判断（宽度 >= xl 断点时显示左右分栏，隐藏返回按钮）
 	// iPad 等中等宽度设备使用窄屏模式，通过预览按钮切换
@@ -1370,8 +1372,8 @@ export default function PostScreen({
 					{/* 作者栏 */}
 					<View style={[styles.previewAuthorBar, { backgroundColor: theme.colors.surface }]}>
 						<View style={styles.previewAuthorInfo}>
-							{currentUser?.avatar_url ? (
-								<Image source={{ uri: currentUser.avatar_url }} style={styles.previewAuthorAvatar} />
+							{safeCurrentUserAvatarUrl ? (
+								<Image source={{ uri: safeCurrentUserAvatarUrl }} style={styles.previewAuthorAvatar} />
 							) : (
 								<View style={[styles.previewAuthorAvatarPlaceholder, { backgroundColor: theme.colors.primaryContainer }]}>
 									<Text style={{ color: theme.colors.primary, fontSize: 16, fontWeight: '600' }}>

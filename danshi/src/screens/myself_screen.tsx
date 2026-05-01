@@ -29,6 +29,7 @@ import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 
 
@@ -168,11 +169,12 @@ export default function MyselfScreen() {
     () => profile?.avatar_url ?? user?.avatar_url ?? null,
     [profile?.avatar_url, user?.avatar_url]
   );
+  const safeAvatarUrl = useMemo(() => getSafeRemoteUrl(avatarUrl), [avatarUrl]);
 
   // 当 avatarUrl 变化时重置加载错误状态
   useEffect(() => {
     setAvatarLoadError(false);
-  }, [avatarUrl]);
+  }, [safeAvatarUrl]);
 
   // 加载用户资料
   const loadProfile = useCallback(async () => {
@@ -329,9 +331,9 @@ export default function MyselfScreen() {
               style={[styles.avatarContainer, { backgroundColor: theme.colors.primaryContainer }]}
               onPress={() => router.push('/myself/settings')}
             >
-              {avatarUrl && !avatarLoadError ? (
+              {safeAvatarUrl && !avatarLoadError ? (
                 <Image 
-                  source={{ uri: avatarUrl }} 
+                  source={{ uri: safeAvatarUrl }}
                   style={styles.avatar}
                   onError={() => setAvatarLoadError(true)}
                 />
@@ -758,8 +760,6 @@ const styles = StyleSheet.create({
     // color is set dynamically
   },
 });
-
-
 
 
 

@@ -20,6 +20,7 @@ import { useWaterfallSettings } from '@/src/context/waterfall_context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WEB_NO_OUTLINE } from '@/src/utils';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 // 宽屏断点
 const WIDE_BREAKPOINT = 768;
@@ -447,65 +448,68 @@ export default function SearchScreen() {
             )
           ) : users.length ? (
             <View style={styles.userList}>
-              {users.map((user) => (
-                <Pressable 
-                  key={user.id} 
-                  style={styles.userItem}
-                  onPress={() => handleUserPress(user.id)}
-                >
-                  {/* 左侧：头像 */}
-                  <View style={styles.userAvatar}>
-                    {user.avatar_url ? (
-                      <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} />
-                    ) : (
-                      <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceVariant }]}>
-                        <Ionicons name="person" size={20} color={theme.colors.onSurfaceVariant} />
-                      </View>
-                    )}
-                  </View>
-
-                  {/* 中间：用户信息 */}
-                  <View style={styles.userInfo}>
-                    <Text style={[styles.userName, { color: theme.colors.onSurface }]} numberOfLines={1}>
-                      {user.name}
-                    </Text>
-                    <Text style={[styles.userMeta, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
-                      帖子 {user.stats?.post_count ?? 0} · 粉丝 {user.stats?.follower_count ?? 0}
-                    </Text>
-                  </View>
-
-                  {/* 右侧：关注按钮（不对自己显示） */}
-                  {currentUser?.id !== user.id && (
-                    <Pressable
-                      style={[
-                        styles.followBtn,
-                        user.is_following
-                          ? { backgroundColor: theme.colors.surfaceVariant }
-                          : { borderWidth: 1, borderColor: theme.colors.primary },
-                        followLoadingMap[user.id] && { opacity: 0.6 },
-                      ]}
-                      disabled={followLoadingMap[user.id]}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleToggleFollow(user.id, !!user.is_following);
-                      }}
-                    >
-                      {followLoadingMap[user.id] ? (
-                        <ActivityIndicator size={14} color={theme.colors.primary} />
+              {users.map((user) => {
+                const safeAvatarUrl = getSafeRemoteUrl(user.avatar_url);
+                return (
+                  <Pressable
+                    key={user.id}
+                    style={styles.userItem}
+                    onPress={() => handleUserPress(user.id)}
+                  >
+                    {/* 左侧：头像 */}
+                    <View style={styles.userAvatar}>
+                      {safeAvatarUrl ? (
+                        <Image source={{ uri: safeAvatarUrl }} style={styles.avatarImage} />
                       ) : (
-                        <Text
-                          style={[
-                            styles.followBtnText,
-                            { color: user.is_following ? theme.colors.onSurfaceVariant : theme.colors.primary }
-                          ]}
-                        >
-                          {user.is_following ? '已关注' : '关注'}
-                        </Text>
+                        <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceVariant }]}>
+                          <Ionicons name="person" size={20} color={theme.colors.onSurfaceVariant} />
+                        </View>
                       )}
-                    </Pressable>
-                  )}
-                </Pressable>
-              ))}
+                    </View>
+
+                    {/* 中间：用户信息 */}
+                    <View style={styles.userInfo}>
+                      <Text style={[styles.userName, { color: theme.colors.onSurface }]} numberOfLines={1}>
+                        {user.name}
+                      </Text>
+                      <Text style={[styles.userMeta, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
+                        帖子 {user.stats?.post_count ?? 0} · 粉丝 {user.stats?.follower_count ?? 0}
+                      </Text>
+                    </View>
+
+                    {/* 右侧：关注按钮（不对自己显示） */}
+                    {currentUser?.id !== user.id && (
+                      <Pressable
+                        style={[
+                          styles.followBtn,
+                          user.is_following
+                            ? { backgroundColor: theme.colors.surfaceVariant }
+                            : { borderWidth: 1, borderColor: theme.colors.primary },
+                          followLoadingMap[user.id] && { opacity: 0.6 },
+                        ]}
+                        disabled={followLoadingMap[user.id]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleToggleFollow(user.id, !!user.is_following);
+                        }}
+                      >
+                        {followLoadingMap[user.id] ? (
+                          <ActivityIndicator size={14} color={theme.colors.primary} />
+                        ) : (
+                          <Text
+                            style={[
+                              styles.followBtnText,
+                              { color: user.is_following ? theme.colors.onSurfaceVariant : theme.colors.primary }
+                            ]}
+                          >
+                            {user.is_following ? '已关注' : '关注'}
+                          </Text>
+                        )}
+                      </Pressable>
+                    )}
+                  </Pressable>
+                );
+              })}
             </View>
           ) : (
             <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>未找到相关用户</Text>

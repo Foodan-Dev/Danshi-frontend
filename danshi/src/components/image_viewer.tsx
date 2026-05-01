@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -24,6 +24,7 @@ import Animated, {
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -206,20 +207,25 @@ export default function ImageViewer({
   const insets = useSafeAreaInsets();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const flatListRef = useRef<FlatList>(null);
+  const safeImages = useMemo(
+    () => images.map((item) => getSafeRemoteUrl(item)).filter((item): item is string => !!item),
+    [images]
+  );
+  const normalizedInitialIndex = Math.min(Math.max(initialIndex, 0), Math.max(0, safeImages.length - 1));
 
   // 当 visible 变化时，重置到初始索引
   React.useEffect(() => {
-    if (visible) {
-      setCurrentIndex(initialIndex);
+    if (visible && safeImages.length) {
+      setCurrentIndex(normalizedInitialIndex);
       // 延迟滚动，确保 FlatList 已渲染
       setTimeout(() => {
         flatListRef.current?.scrollToIndex({
-          index: initialIndex,
+          index: normalizedInitialIndex,
           animated: false,
         });
       }, 50);
     }
-  }, [visible, initialIndex]);
+  }, [visible, normalizedInitialIndex, safeImages.length]);
 
   const handleViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
@@ -252,7 +258,7 @@ export default function ImageViewer({
     []
   );
 
-  if (!visible) return null;
+  if (!visible || !safeImages.length) return null;
 
   const content = (
     <View style={[styles.container, { backgroundColor: theme.colors.scrim }]}>
@@ -267,23 +273,23 @@ export default function ImageViewer({
           onPress={onClose}
           style={styles.closeButton}
         />
-        {images.length > 1 && (
+        {safeImages.length > 1 && (
           <Text style={[styles.counter, { color: theme.colors.inverseOnSurface }]}>
-            {currentIndex + 1} / {images.length}
+            {currentIndex + 1} / {safeImages.length}
           </Text>
         )}
         <View style={{ width: 48 }} />
       </View>
 
       {/* 图片列表 */}
-      {images.length === 1 ? (
+      {safeImages.length === 1 ? (
         <View style={styles.singleImageContainer}>
-          <ZoomableImage uri={images[0]} onSingleTap={onClose} />
+          <ZoomableImage uri={safeImages[0]} onSingleTap={onClose} />
         </View>
       ) : (
         <FlatList
           ref={flatListRef}
-          data={images}
+          data={safeImages}
           renderItem={renderItem}
           keyExtractor={(item, index) => `${item}-${index}`}
           horizontal
@@ -292,15 +298,15 @@ export default function ImageViewer({
           onViewableItemsChanged={handleViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           getItemLayout={getItemLayout}
-          initialScrollIndex={initialIndex}
+          initialScrollIndex={normalizedInitialIndex}
           removeClippedSubviews={Platform.OS !== 'web'}
         />
       )}
 
       {/* 底部指示器 */}
-      {images.length > 1 && (
+      {safeImages.length > 1 && (
         <View style={[styles.pagination, { paddingBottom: insets.bottom + 20 }]}>
-          {images.map((_, index) => (
+          {safeImages.map((_, index) => (
             <View
               key={index}
               style={[

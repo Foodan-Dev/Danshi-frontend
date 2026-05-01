@@ -11,6 +11,7 @@ import { adminService } from '@/src/services/admin_service';
 import type { AdminPendingPostSummary } from '@/src/repositories/admin_repository';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatDate } from '@/src/utils/time_format';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 export default function AdminPostsScreen() {
   const pTheme = usePaperTheme();
@@ -223,7 +224,8 @@ export default function AdminPostsScreen() {
         ) : (
           posts.map((post) => {
             const postStatus = (post as any).status || 'approved';
-            const hasImage = post.images && post.images.length > 0;
+            const safePreviewImage = post.images?.map((item) => getSafeRemoteUrl(item)).find((item): item is string => !!item);
+            const hasImage = !!safePreviewImage;
             const statusDotColor = getStatusDotColor(postStatus);
             const isPending = postStatus === 'pending';
 
@@ -307,7 +309,7 @@ export default function AdminPostsScreen() {
                   {hasImage && (
                     <View style={styles.thumbnailWrap}>
                       <Image
-                        source={{ uri: post.images![0] }}
+                        source={{ uri: safePreviewImage }}
                         style={styles.thumbnail}
                         resizeMode="cover"
                       />

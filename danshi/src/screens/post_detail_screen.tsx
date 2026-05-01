@@ -974,7 +974,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
 
         <ImageViewer
           visible={imageViewer.visible}
-          images={post?.images ?? []}
+          images={safePostImages}
           initialIndex={imageViewer.index}
           onClose={handleCloseImageViewer}
         />
@@ -1071,7 +1071,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
 
       <ImageViewer
         visible={imageViewer.visible}
-        images={post?.images ?? []}
+        images={safePostImages}
         initialIndex={imageViewer.index}
         onClose={handleCloseImageViewer}
       />

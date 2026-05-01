@@ -24,6 +24,7 @@ import { usersService } from '@/src/services/users_service';
 import { uploadService } from '@/src/services/upload_service';
 import { HOMETOWN_OPTIONS, findOptionLabel } from '@/src/constants/selects';
 import type { UserProfile } from '@/src/repositories/users_repository';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 
 export default function SettingsScreen() {
@@ -329,7 +330,8 @@ export default function SettingsScreen() {
     }
   };
 
-  const displayAvatarUri = localAvatarUri || avatarUrl;
+  const safeRemoteAvatarUrl = useMemo(() => getSafeRemoteUrl(avatarUrl), [avatarUrl]);
+  const displayAvatarUri = localAvatarUri || safeRemoteAvatarUrl;
 
   return (
     <View style={{ flex: 1, backgroundColor: pTheme.colors.background }}>
