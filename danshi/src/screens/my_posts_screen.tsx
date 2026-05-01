@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View, RefreshControl, ScrollView, Alert } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { StyleSheet, View, RefreshControl, ScrollView } from 'react-native';
 import { ActivityIndicator, Appbar, Text, useTheme as usePaperTheme, Chip, FAB, Dialog, Portal, Button } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { useAuth } from '@/src/context/auth_context';
 import { usersService } from '@/src/services/users_service';
@@ -17,14 +18,6 @@ import { PostCard, estimatePostCardHeight } from '@/src/components/post_card';
 import type { UserPostListItem } from '@/src/repositories/users_repository';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
 
-const formatCount = (value?: number) => {
-  if (value == null) return '--';
-  if (value < 1000) return String(value);
-  if (value < 10000) return `${(value / 1000).toFixed(1).replace(/\.0$/, '')}k`;
-  return `${(value / 10000).toFixed(1).replace(/\.0$/, '')}w`;
-};
-
-
 export const MyPostsScreen: React.FC = () => {
   const { user } = useAuth();
   const router = useRouter();
@@ -35,6 +28,7 @@ export const MyPostsScreen: React.FC = () => {
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [postToDelete, setPostToDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const requestSeqRef = useRef(0);
   const insets = useSafeAreaInsets();
   const theme = usePaperTheme();
   // 本页会隐藏 TabBar，因此只按安全区预留底部空间
@@ -50,6 +44,7 @@ export const MyPostsScreen: React.FC = () => {
   const loadPosts = useCallback(
     async (isRefresh = false) => {
       if (!user?.id) return;
+      const requestId = ++requestSeqRef.current;
       if (isRefresh) {
         setRefreshing(true);
       } else {
@@ -62,8 +57,14 @@ export const MyPostsScreen: React.FC = () => {
         const supportedPosts = data.posts.filter((item: any) => 
           !item.post_type || item.post_type === 'share' || item.post_type === 'seeking'
         );
+        if (requestSeqRef.current !== requestId) {
+          return;
+        }
         setPosts(supportedPosts.map(mapUserPostListItemToPost));
       } catch (err: any) {
+        if (requestSeqRef.current !== requestId) {
+          return;
+        }
         // 忽略 companion 类型相关的验证错误
         if (err?.message?.includes('companion') || err?.message?.includes('PostType')) {
           if (__DEV__) console.warn('后端返回了不支持的帖子类型，已忽略');
@@ -73,19 +74,26 @@ export const MyPostsScreen: React.FC = () => {
           setError(message);
         }
       } finally {
-        if (isRefresh) {
-          setRefreshing(false);
-        } else {
-          setLoading(false);
+        if (requestSeqRef.current === requestId) {
+          if (isRefresh) {
+            setRefreshing(false);
+          } else {
+            setLoading(false);
+          }
         }
       }
     },
     [user?.id],
   );
 
-  useEffect(() => {
-    loadPosts();
-  }, [loadPosts]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) {
+        return;
+      }
+      void loadPosts();
+    }, [loadPosts, user?.id])
+  );
 
   const estimateHeight = useCallback(
     (item: UserPostListItem) => {
@@ -227,13 +235,34 @@ export const MyPostsScreen: React.FC = () => {
         <View style={styles.centered}>
           <ActivityIndicator animating size="large" />
         </View>
+      ) : error && posts.length === 0 ? (
+        <ScrollView
+          contentContainerStyle={[styles.emptyContainer, { paddingBottom: bottomContentPadding }]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void loadPosts(true)}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
+              progressBackgroundColor={theme.colors.surface}
+              progressViewOffset={0}
+            />
+          }
+        >
+          <Text variant="bodyMedium" style={{ color: theme.colors.error, textAlign: 'center' }}>
+            {error}
+          </Text>
+          <Button mode="contained-tonal" onPress={() => void loadPosts()} style={{ marginTop: 12 }}>
+            重试
+          </Button>
+        </ScrollView>
       ) : posts.length === 0 ? (
         <ScrollView
           contentContainerStyle={[styles.emptyContainer, { paddingBottom: bottomContentPadding }]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => loadPosts(true)}
+              onRefresh={() => void loadPosts(true)}
               colors={[theme.colors.primary]}
               tintColor={theme.colors.primary}
               progressBackgroundColor={theme.colors.surface}
@@ -251,7 +280,7 @@ export const MyPostsScreen: React.FC = () => {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => loadPosts(true)}
+              onRefresh={() => void loadPosts(true)}
               colors={[theme.colors.primary]}
               tintColor={theme.colors.primary}
               progressBackgroundColor={theme.colors.surface}
