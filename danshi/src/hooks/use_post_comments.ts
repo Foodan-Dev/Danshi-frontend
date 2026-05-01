@@ -53,6 +53,7 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
     total_pages: 1,
   });
   const [commentLoading, setCommentLoading] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
   const [commentReplies, setCommentReplies] = useState<Record<string, CommentReply[]>>({});
   const [commentRepliesPagination, setCommentRepliesPagination] = useState<Record<string, CommentsPagination>>({});
   const [commentRepliesLoading, setCommentRepliesLoading] = useState<Record<string, boolean>>({});
@@ -95,6 +96,7 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
   // ==================== 数据获取 ====================
   const fetchComments = useCallback(async (postIdValue: string, sort: 'latest' | 'hot') => {
     setCommentLoading(true);
+    setCommentError(null);
     try {
       const res = await commentsService.listByPost(postIdValue, { sortBy: sort, limit: 10 });
       // 为 replies 数组中的每个回复添加 parent_id（后端不返回此字段）
@@ -138,6 +140,7 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
         return next;
       });
     } catch (e) {
+      setCommentError((e as Error)?.message ?? '加载评论失败');
       if (__DEV__) console.warn('load comments failed', e);
     } finally {
       setCommentLoading(false);
@@ -319,12 +322,22 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
   }, [handleDeleteCommentByEntity]);
 
   // ==================== 评论输入 & 回复 ====================
-  const handleOpenCommentSheet = useCallback(() => setCommentSheetVisible(true), []);
+  const handleOpenCommentSheet = useCallback(() => {
+    if (!currentUser?.id) {
+      showAlert('请先登录', '登录后才能发表评论');
+      return;
+    }
+    setCommentSheetVisible(true);
+  }, [currentUser?.id]);
 
   const handleReplyToComment = useCallback((entity: Comment | CommentReply) => {
+    if (!currentUser?.id) {
+      showAlert('请先登录', '登录后才能回复评论');
+      return;
+    }
     setCommentReplyTarget(entity);
     setCommentSheetVisible(true);
-  }, []);
+  }, [currentUser?.id]);
 
   const getCommentMoreActions = useCallback((entity: CommentEntity): CommentActionItem[] => {
     const canDeleteAsOwner = !!currentUser?.id && !!entity.author?.id && entity.author.id === currentUser.id;
@@ -360,6 +373,10 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
   const handleSubmitComment = useCallback(async () => {
     const content = commentInput.trim();
     if (!content) return;
+    if (!currentUser?.id) {
+      showAlert('请先登录', '登录后才能发表评论');
+      return;
+    }
     try {
       let parent_id: string | undefined;
       let reply_to_user_id: string | undefined;
@@ -458,7 +475,7 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
     } catch (e) {
       showAlert('评论失败', (e as Error)?.message ?? '暂时无法发表评论');
     }
-  }, [commentInput, commentReplyTarget, postId, findCommentTarget, fetchComments, commentSort, fetchRepliesForComment, onCommentCountChange]);
+  }, [commentInput, commentReplyTarget, postId, currentUser?.id, findCommentTarget, fetchComments, commentSort, fetchRepliesForComment, onCommentCountChange]);
 
   // ==================== 排序切换 ====================
   const handleCycleCommentSort = useCallback(() => {
@@ -530,6 +547,7 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
     commentSort,
     commentPagination,
     commentLoading,
+    commentError,
     commentReplies,
     commentRepliesLoading,
     commentRepliesPagination,
@@ -568,4 +586,3 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
     fetchRepliesForCommentRef,
   };
 }
-

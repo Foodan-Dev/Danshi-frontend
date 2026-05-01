@@ -27,7 +27,7 @@ import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { useExtendedTheme } from '@/src/constants/md3_theme';
 import { postsService } from '@/src/services/posts_service';
 import { CANTEEN_OPTIONS } from '@/src/constants/selects';
-import CenterPicker from '@/src/components/overlays/center_picker';
+import CanteenPicker from '@/src/components/overlays/center_picker';
 import ImageUploadGrid from '@/src/components/image_upload_grid';
 import ImageViewer from '@/src/components/image_viewer';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -118,9 +118,18 @@ export default function PostScreen({
 
 	// 标记草稿是否已恢复，避免恢复过程触发自动保存
 	const draftRestoredRef = useRef(false);
+	const normalizedEditPostId = editPostId?.trim() ?? '';
+	const editFallbackMessage = editMode
+		? !normalizedEditPostId
+			? '帖子ID缺失，无法进入编辑状态'
+			: !initialLoading && !initialData
+				? '帖子内容加载失败或你无权编辑该帖子'
+				: ''
+		: '';
 
 	// 进入页面时清除上一次的成功提示，并尝试恢复草稿
 	useEffect(() => {
+		draftRestoredRef.current = false;
 		setSuccess('');
 		setIsPendingReview(false);
 		setPublishedPostId(null);
@@ -179,14 +188,17 @@ export default function PostScreen({
 		}).catch(() => {
 			draftRestoredRef.current = true;
 		});
-	}, []);
+	}, [editMode]);
 
 	// 自动保存草稿（防抖 3 秒，仅新建模式）
 	useEffect(() => {
 		if (editMode || !draftRestoredRef.current) return;
 
 		const hasContent = title.trim() || content.trim() || images.length > 0;
-		if (!hasContent) return;
+		if (!hasContent) {
+			AsyncStorage.removeItem(POST_DRAFT_KEY).catch(() => {});
+			return;
+		}
 
 		const timer = setTimeout(() => {
 			const draft = {
@@ -210,35 +222,24 @@ export default function PostScreen({
 			setTitle(initialData.title || '');
 			setContent(initialData.content || '');
 			setPostType(initialData.post_type || 'share');
-			if (initialData.post_type === 'share') {
-				setShareType(initialData.share_type || 'recommend');
-				setCuisine(initialData.cuisine || '');
-				setFlavors(initialData.flavors || []);
-				setPrice(initialData.price?.toString() || '');
-			}
+			setShareType(initialData.post_type === 'share' ? initialData.share_type || 'recommend' : 'recommend');
+			setCuisine(initialData.post_type === 'share' ? initialData.cuisine || '' : '');
+			setFlavors(initialData.post_type === 'share' ? initialData.flavors || [] : []);
+			setPrice(initialData.post_type === 'share' ? initialData.price?.toString() || '' : '');
 			setCategory(initialData.category || 'food');
 			setCanteen(initialData.canteen || '');
 			setTags(initialData.tags || []);
 			setImages(initialData.images?.length ? initialData.images : []);
-			if (initialData.post_type === 'seeking') {
-				if (initialData.budget_range) {
-					setBudgetMin(initialData.budget_range.min?.toString() || '');
-					setBudgetMax(initialData.budget_range.max?.toString() || '');
-				}
-				if (initialData.preferences) {
-					setPreferFlavors(initialData.preferences.prefer_flavors || []);
-					setAvoidFlavors(initialData.preferences.avoid_flavors || []);
-				}
-			}
+			setBudgetMin(initialData.post_type === 'seeking' ? initialData.budget_range?.min?.toString() || '' : '');
+			setBudgetMax(initialData.post_type === 'seeking' ? initialData.budget_range?.max?.toString() || '' : '');
+			setPreferFlavors(initialData.post_type === 'seeking' ? initialData.preferences?.prefer_flavors || [] : []);
+			setAvoidFlavors(initialData.post_type === 'seeking' ? initialData.preferences?.avoid_flavors || [] : []);
+			setCurrentFlavorInput('');
+			setCurrentTagInput('');
+			setCurrentPreferFlavorInput('');
+			setCurrentAvoidFlavorInput('');
 		}
 	}, [editMode, initialData, initialLoading]);
-
-	// 解析列表
-	const parseList = (value: string) =>
-		value
-			.split(/[\n,，]/)
-			.map((item) => item.trim())
-			.filter(Boolean);
 
 	// 话题数组（去重，最多10个）
 	const parsedTags = useMemo(() => {
@@ -447,6 +448,21 @@ export default function PostScreen({
 	const onSubmit = async () => {
 		setError('');
 		setSuccess('');
+		if (!currentUser) {
+			setError(editMode ? '请先登录后再编辑帖子' : '请先登录后再发布帖子');
+			if (!isWideScreen) {
+				setIsPreviewMode(true);
+			}
+			return;
+		}
+		if (editMode && !normalizedEditPostId) {
+			setError('帖子ID缺失，无法保存修改');
+			return;
+		}
+		if (editMode && !initialLoading && !initialData) {
+			setError('帖子内容未加载完成，暂时无法保存修改');
+			return;
+		}
 		const errorMessage = validate();
 		if (errorMessage) {
 			setError(errorMessage);
@@ -506,13 +522,13 @@ export default function PostScreen({
 				};
 			}
 
-			if (editMode && editPostId) {
-				await postsService.update(editPostId, payload);
+			if (editMode && normalizedEditPostId) {
+				await postsService.update(normalizedEditPostId, payload);
 				setIsPendingReview(true);
 				setSuccess('更新成功！帖子已提交管理员审核，审核通过后将公开显示。');
 				onUpdateSuccess?.();
 			} else {
-				const result = await postsService.create(payload);
+				await postsService.create(payload);
 				// 发布成功后清除草稿并跳转到探索界面
 				await AsyncStorage.removeItem(POST_DRAFT_KEY).catch(() => {});
 				resetForm();
@@ -541,6 +557,21 @@ export default function PostScreen({
 					<Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>
 						正在加载...
 					</Text>
+				</View>
+			</View>
+		);
+	}
+
+	if (editFallbackMessage) {
+		return (
+			<View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+				<View style={styles.loadingWrapper}>
+					<Text style={{ color: theme.colors.onSurface, marginBottom: 12 }}>
+						{editFallbackMessage}
+					</Text>
+					<Button mode="contained-tonal" onPress={handleBack}>
+						返回
+					</Button>
 				</View>
 			</View>
 		);
@@ -1600,8 +1631,21 @@ export default function PostScreen({
 								</Text>
 							</Pressable>
 						) : (
-							// 宽屏模式下不显示返回按钮，用占位元素保持布局平衡
-							<View style={styles.topBarLeft} />
+							<Pressable style={styles.topBarLeft} onPress={handleBack}>
+								<Ionicons
+									name="chevron-back"
+									size={20}
+									color={theme.colors.onSurfaceVariant}
+								/>
+								<Text
+									style={[
+										styles.topBarLeftText,
+										{ color: theme.colors.onSurfaceVariant },
+									]}
+								>
+									返回
+								</Text>
+							</Pressable>
 						)}
 
 						{/* 中间：分段控制器（仅编辑模式显示）*/}
@@ -1772,7 +1816,7 @@ export default function PostScreen({
 			</View>
 
 			{/* 位置选择器 */}
-			<CenterPicker
+			<CanteenPicker
 				visible={canteenPickerOpen}
 				onClose={() => setCanteenPickerOpen(false)}
 				title="选择位置"

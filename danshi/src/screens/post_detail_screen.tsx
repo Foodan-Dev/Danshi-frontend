@@ -120,7 +120,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   });
 
   const {
-    comments, commentSort, commentPagination, commentLoading,
+    comments, commentSort, commentPagination, commentLoading, commentError,
     commentReplies, commentRepliesLoading, commentRepliesPagination, commentRepliesExpanded,
     commentSheetVisible, threadVisible, threadRootComment,
     commentInput, setCommentInput, commentReplyTarget,
@@ -149,6 +149,13 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const commentPositionsRef = useRef<Record<string, number>>({});
 
   const isDesktop = windowWidth >= breakpoints.md;
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/(tabs)/explore');
+  }, [router]);
 
   // 图片布局计算
   const imageLayout = useMemo(() => {
@@ -174,14 +181,15 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   );
 
   const safeAuthorAvatarUrl = getSafeRemoteUrl(post?.author?.avatar_url);
+  const shouldShowFollowButton = !!currentUser?.id && !!post?.author?.id && currentUser.id !== post.author.id;
+  const shouldShowBottomBar = !!post && !error;
 
   // ==================== 数据获取 ====================
   const fetchPost = useCallback(async (mode: LoaderState = 'initial') => {
     setLoader(mode);
-    if (mode !== 'refresh') setError(null);
+    setError(null);
     try {
       const data = await postsService.get(postId);
-      await fetchComments(data.id, commentSort);
       setPost({
         ...data,
         is_liked: data.is_liked ?? false,
@@ -193,11 +201,12 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
         syncFollowState(author.is_following);
       }
     } catch (e) {
+      setPost(null);
       setError((e as Error)?.message ?? '加载帖子失败');
     } finally {
       setLoader('idle');
     }
-  }, [postId, fetchComments, commentSort, syncFollowState]);
+  }, [postId, syncFollowState]);
 
   useEffect(() => {
     fetchPost('initial');
@@ -273,7 +282,13 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const isInitialLoading = loader === 'initial';
 
   // ==================== 交互处理 ====================
-  const handleRefresh = useCallback(() => fetchPost('refresh'), [fetchPost]);
+  const handleRefresh = useCallback(() => {
+    const refreshTasks = [fetchPost('refresh')];
+    if (postId) {
+      refreshTasks.push(fetchComments(postId, commentSort));
+    }
+    return Promise.all(refreshTasks).then(() => undefined);
+  }, [postId, fetchComments, commentSort, fetchPost]);
 
   const handleOpenImageViewer = useCallback((index: number) => {
     setImageViewer({ visible: true, index });
@@ -497,29 +512,31 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           </Text>
         </View>
       </Pressable>
-      <Pressable
-        style={[
-          styles.followBtn,
-          isFollowed
-            ? { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }
-            : { backgroundColor: theme.colors.primary },
-        ]}
-        onPress={handleToggleFollow}
-        disabled={actionLoading.follow}
-      >
-        {actionLoading.follow ? (
-          <ActivityIndicator size={14} color={isFollowed ? theme.colors.onSurfaceVariant : theme.colors.onPrimary} />
-        ) : (
-          <Text
-            style={[
-              styles.followBtnText,
-              { color: isFollowed ? theme.colors.onSurfaceVariant : theme.colors.onPrimary },
-            ]}
-          >
-            {isFollowed ? '已关注' : '+ 关注'}
-          </Text>
-        )}
-      </Pressable>
+      {shouldShowFollowButton ? (
+        <Pressable
+          style={[
+            styles.followBtn,
+            isFollowed
+              ? { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }
+              : { backgroundColor: theme.colors.primary },
+          ]}
+          onPress={handleToggleFollow}
+          disabled={actionLoading.follow}
+        >
+          {actionLoading.follow ? (
+            <ActivityIndicator size={14} color={isFollowed ? theme.colors.onSurfaceVariant : theme.colors.onPrimary} />
+          ) : (
+            <Text
+              style={[
+                styles.followBtnText,
+                { color: isFollowed ? theme.colors.onSurfaceVariant : theme.colors.onPrimary },
+              ]}
+            >
+              {isFollowed ? '已关注' : '+ 关注'}
+            </Text>
+          )}
+        </Pressable>
+      ) : null}
     </View>
   );
 
@@ -688,6 +705,16 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
             加载评论中...
           </Text>
         </View>
+      ) : commentError ? (
+        <View style={styles.emptyComments}>
+          <Ionicons name="alert-circle-outline" size={40} color={theme.colors.error} />
+          <Text style={[styles.emptyCommentsText, { color: theme.colors.error }]}>
+            {commentError}
+          </Text>
+          <Button mode="contained-tonal" onPress={() => fetchComments(postId, commentSort)}>
+            重新加载评论
+          </Button>
+        </View>
       ) : comments.length ? (
         <View
           style={[styles.commentsList, { paddingBottom: commentsBottomPadding }]}
@@ -788,16 +815,26 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     <View style={[styles.bottomBar, { paddingBottom: bottomBarPadding, backgroundColor: theme.colors.surface }]}>
       {/* 输入框 */}
       <Pressable
-        style={[styles.commentInput, { backgroundColor: theme.colors.surfaceVariant }]}
+        style={[
+          styles.commentInput,
+          { backgroundColor: theme.colors.surfaceVariant, opacity: currentUser?.id ? 1 : 0.72 },
+        ]}
         onPress={handleOpenCommentSheet}
+        disabled={!post}
       >
         <Ionicons name="chatbubble-outline" size={18} color={theme.colors.outline} />
-        <Text style={[styles.commentInputText, { color: theme.colors.outline }]}>说点什么...</Text>
+        <Text style={[styles.commentInputText, { color: theme.colors.outline }]}>
+          {currentUser?.id ? '说点什么...' : '登录后参与讨论'}
+        </Text>
       </Pressable>
 
       {/* 操作按钮 */}
       <View style={styles.bottomActions}>
-        <Pressable style={styles.actionBtn} onPress={handleToggleLike} disabled={actionLoading.like}>
+        <Pressable
+          style={[styles.actionBtn, !currentUser?.id && { opacity: 0.6 }]}
+          onPress={handleToggleLike}
+          disabled={actionLoading.like || !post}
+        >
           <Ionicons
             name={post?.is_liked ? 'heart' : 'heart-outline'}
             size={22}
@@ -808,7 +845,11 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           </Text>
         </Pressable>
 
-        <Pressable style={styles.actionBtn} onPress={handleToggleFavorite} disabled={actionLoading.favorite}>
+        <Pressable
+          style={[styles.actionBtn, !currentUser?.id && { opacity: 0.6 }]}
+          onPress={handleToggleFavorite}
+          disabled={actionLoading.favorite || !post}
+        >
           <Ionicons
             name={post?.is_favorited ? 'bookmark' : 'bookmark-outline'}
             size={22}
@@ -819,7 +860,11 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           </Text>
         </Pressable>
 
-        <Pressable style={styles.actionBtn} onPress={handleOpenCommentSheet}>
+        <Pressable
+          style={[styles.actionBtn, !currentUser?.id && { opacity: 0.6 }]}
+          onPress={handleOpenCommentSheet}
+          disabled={!post}
+        >
           <Ionicons name="chatbubble-outline" size={22} color={theme.colors.onSurfaceVariant} />
           <Text style={[styles.actionCount, { color: theme.colors.onSurfaceVariant }]}>{commentCount}</Text>
         </Pressable>
@@ -836,7 +881,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
         {/* 返回按钮 */}
         <Pressable
           style={[styles.desktopBackBtn, { top: insets.top + 12 }]}
-          onPress={() => router.back()}
+          onPress={handleBack}
         >
           <Ionicons name="arrow-back" size={22} color={theme.colors.onPrimary} />
         </Pressable>
@@ -857,7 +902,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
             ) : hasImages ? (
               <>
                 <FlatList
-                  data={post?.images ?? []}
+                  data={safePostImages}
                   horizontal
                   pagingEnabled
                   showsHorizontalScrollIndicator={false}
@@ -868,18 +913,18 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
                   }}
                   renderItem={({ item, index }) => (
                     <Pressable onPress={() => handleOpenImageViewer(index)}>
-                      <Image
-                        source={{ uri: item }}
-                        style={{ width: leftPanelWidth, height: windowHeight - insets.top }}
+                        <Image
+                          source={{ uri: item }}
+                          style={{ width: leftPanelWidth, height: windowHeight - insets.top }}
                         resizeMode="cover"
                       />
                     </Pressable>
                   )}
                 />
-                {(post?.images?.length ?? 0) > 1 && (
+                {safePostImages.length > 1 && (
                   <View style={styles.desktopImageIndicator}>
                     <Text style={styles.imageIndicatorText}>
-                      {currentImageIndex + 1}/{post?.images?.length}
+                      {currentImageIndex + 1}/{safePostImages.length}
                     </Text>
                   </View>
                 )}
@@ -907,9 +952,11 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           {/* 右侧内容区 */}
           <View style={styles.desktopRight}>
             {/* 作者栏 */}
-            <View style={[styles.desktopHeader, { borderBottomColor: theme.colors.outlineVariant }]}>
-              {renderAuthorBar()}
-            </View>
+            {post ? (
+              <View style={[styles.desktopHeader, { borderBottomColor: theme.colors.outlineVariant }]}>
+                {renderAuthorBar()}
+              </View>
+            ) : null}
 
             {/* 滚动内容 */}
             <ScrollView
@@ -934,13 +981,19 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
                   <View style={[styles.divider, { backgroundColor: theme.colors.surfaceVariant }]} />
                   {renderCommentsSection()}
                 </>
-              ) : null}
+              ) : (
+                <View style={styles.errorWrap}>
+                  <Text style={{ color: theme.colors.onSurfaceVariant }}>帖子不存在或已被删除</Text>
+                </View>
+              )}
             </ScrollView>
 
             {/* 底部操作 */}
-            <View style={[styles.desktopFooter, { borderTopColor: theme.colors.outlineVariant }]}>
-              {renderBottomBar()}
-            </View>
+            {shouldShowBottomBar ? (
+              <View style={[styles.desktopFooter, { borderTopColor: theme.colors.outlineVariant }]}>
+                {renderBottomBar()}
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -987,7 +1040,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* 顶部导航 - 悬浮在图片/Hero上 */}
       <View style={[styles.mobileHeader, { paddingTop: insets.top }]}>
-        <Pressable style={[styles.headerBtn, !hasImages && styles.headerBtnLight]} onPress={() => router.back()}>
+        <Pressable style={[styles.headerBtn, !hasImages && styles.headerBtnLight]} onPress={handleBack}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.onPrimary} />
         </Pressable>
         <Pressable style={[styles.headerBtn, !hasImages && styles.headerBtnLight]} onPress={() => setShareSheetVisible(true)}>
@@ -1039,7 +1092,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
       </ScrollView>
 
       {/* 底部栏 */}
-      {renderBottomBar()}
+      {shouldShowBottomBar ? renderBottomBar() : null}
 
       {/* Sheets */}
       <BottomSheet visible={shareSheetVisible} onClose={() => setShareSheetVisible(false)} height={200}>
