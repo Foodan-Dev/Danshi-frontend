@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { StyleSheet, View, ScrollView, RefreshControl, Pressable, useWindowDimensions, TextInput } from 'react-native';
+import { StyleSheet, View, ScrollView, RefreshControl, Pressable, useWindowDimensions } from 'react-native';
 import { Masonry } from '@/src/components/md3/masonry';
 import { useWaterfallSettings } from '@/src/context/waterfall_context';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
@@ -16,8 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { postsService } from '@/src/services/posts_service';
 import type { PostListFilters, SortBy } from '@/src/repositories/posts_repository';
-import type { Post } from '@/src/models/Post';
-import type { ShareType } from '@/src/models/Post';
+import type { Post, ShareType } from '@/src/models/Post';
 import { configService, type ExploreConfig, type PostTypeSubType } from '@/src/services/config_service';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
@@ -51,7 +50,7 @@ const INITIAL_FILTERS: ExploreFilters = {
   sortBy: 'latest',
 };
 
-const SORT_OPTIONS: Array<{ value: SortValue; label: string; description: string }> = [
+const SORT_OPTIONS: { value: SortValue; label: string; description: string }[] = [
   { value: 'trending', label: '趋势', description: '综合热度并考虑时间衰减' },
   { value: 'hot', label: '热度', description: '按互动热度排序' },
   { value: 'latest', label: '最新', description: '按发布时间倒序' },
@@ -85,6 +84,7 @@ export default function ExploreScreen() {
   const [configError, setConfigError] = useState<string | null>(null);
   const [filtersSheetVisible, setFiltersSheetVisible] = useState(false);
   const hasFocusedOnceRef = useRef(false);
+  const postsRequestSeqRef = useRef(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -108,6 +108,12 @@ export default function ExploreScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      postsRequestSeqRef.current += 1;
+    };
+  }, []);
+
   const requestFilters = useMemo(() => {
     const payload: Record<string, unknown> = {
       limit: 20,
@@ -120,25 +126,33 @@ export default function ExploreScreen() {
 
   const fetchPosts = useCallback(
     async (mode: LoaderState = 'initial', overrides?: Record<string, unknown>) => {
+      const requestId = ++postsRequestSeqRef.current;
       setLoaderState(mode);
-      if (mode !== 'refresh') setError(null);
+      setError(null);
       try {
         const params = { ...requestFilters, ...(overrides ?? {}) };
         const listFilters = { ...(params as Record<string, unknown>) } as PostListFilters;
         const { posts: result } = await postsService.list(listFilters);
+        if (postsRequestSeqRef.current !== requestId) {
+          return;
+        }
         // 前端过滤：只显示已审核通过的帖子（后端应该已经过滤，这里是额外保护）
-        const approvedPosts = result.filter((post: any) => 
-          !post.status || post.status === 'approved'
-        );
+        const approvedPosts = result.filter((post: any) => post.status === 'approved');
         setPosts(approvedPosts);
+        setError(null);
       } catch (e) {
+        if (postsRequestSeqRef.current !== requestId) {
+          return;
+        }
         const message = (e as Error)?.message ?? '加载帖子失败';
         setError(message);
       } finally {
-        setLoaderState('idle');
+        if (postsRequestSeqRef.current === requestId) {
+          setLoaderState('idle');
+        }
       }
     },
-    [filters.sortBy, requestFilters]
+    [requestFilters]
   );
 
   useEffect(() => {
