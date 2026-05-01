@@ -5,7 +5,6 @@ import {
   TextInput as RNTextInput,
   Pressable,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { WEB_NO_OUTLINE } from '@/src/utils';
@@ -30,13 +29,18 @@ export const CommentComposer: React.FC<CommentComposerProps> = ({
   onSubmit,
   replyTarget,
   onCancelReply,
+  minRows = 5,
   maxLength = 500,
   currentUser,
   loading,
 }) => {
   const theme = usePaperTheme();
+  const resolvedMaxLength = Number.isFinite(maxLength) ? Math.max(1, Math.floor(maxLength)) : 500;
+  const resolvedMinRows = Number.isFinite(minRows) ? Math.max(3, Math.floor(minRows)) : 5;
+  const currentUserName = currentUser?.name?.trim();
+  const inputMinHeight = Math.max(120, resolvedMinRows * 26);
   const hasContent = value.trim().length > 0;
-  const disabled = !hasContent || loading;
+  const disabled = !hasContent || !!loading;
   const headerText = replyTarget ? `回复 @${replyTarget}` : '发表评论';
 
   return (
@@ -71,13 +75,16 @@ export const CommentComposer: React.FC<CommentComposerProps> = ({
         onChangeText={onChange}
         placeholder="写下你的想法..."
         placeholderTextColor={theme.colors.outline}
+        accessibilityLabel={currentUserName ? `${currentUserName}的评论输入框` : '评论输入框'}
         multiline
-        maxLength={maxLength}
+        maxLength={resolvedMaxLength}
+        numberOfLines={resolvedMinRows}
         textAlignVertical="top"
         style={[
           styles.input,
           {
             color: theme.colors.onSurface,
+            minHeight: inputMinHeight,
           },
           WEB_NO_OUTLINE,
         ]}
@@ -89,7 +96,7 @@ export const CommentComposer: React.FC<CommentComposerProps> = ({
       {/* 底部操作栏 */}
       <View style={styles.footer}>
         <Text style={[styles.charCount, { color: theme.colors.onSurfaceVariant }]}>
-          {value.length}/{maxLength}
+          {value.length}/{resolvedMaxLength}
         </Text>
         <Pressable
           onPress={onSubmit}

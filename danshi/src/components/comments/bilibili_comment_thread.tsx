@@ -1,10 +1,5 @@
 import React, { useMemo, useState } from "react";
-import {
-	ChevronRight,
-	Heart,
-	MessageCircle,
-	MoreHorizontal,
-} from "lucide-react";
+import { getSafeRemoteUrl } from "@/src/lib/security/url";
 
 type CommentAuthor = {
 	id: string;
@@ -39,6 +34,80 @@ export type BilibiliCommentThreadProps = {
 	onLike?: (payload: { commentId: string; replyId?: string }) => void;
 };
 
+type IconProps = React.ComponentProps<"svg">;
+
+const ChevronRightIcon: React.FC<IconProps> = (props) => (
+	<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true" {...props}>
+		<path d="M6 3.5 10.5 8 6 12.5" strokeLinecap="round" strokeLinejoin="round" />
+	</svg>
+);
+
+const HeartIcon: React.FC<IconProps> = (props) => (
+	<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" {...props}>
+		<path
+			d="M8 13.4 2.9 8.7a3.3 3.3 0 0 1 4.7-4.7L8 4.7l.4-.7a3.3 3.3 0 0 1 4.7 4.7L8 13.4Z"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		/>
+	</svg>
+);
+
+const MessageCircleIcon: React.FC<IconProps> = (props) => (
+	<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" {...props}>
+		<path
+			d="M4 11.5 1.8 14v-3.4A5.7 5.7 0 0 1 1 8c0-3.3 3.1-6 7-6s7 2.7 7 6-3.1 6-7 6c-1.4 0-2.7-.3-4-.9Z"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		/>
+	</svg>
+);
+
+const MoreHorizontalIcon: React.FC<IconProps> = (props) => (
+	<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" {...props}>
+		<circle cx="3" cy="8" r="1.2" />
+		<circle cx="8" cy="8" r="1.2" />
+		<circle cx="13" cy="8" r="1.2" />
+	</svg>
+);
+
+function getAvatarInitial(name: string) {
+	const trimmed = name.trim();
+	return trimmed ? trimmed.slice(0, 1).toUpperCase() : "?";
+}
+
+const SafeAvatar: React.FC<{ src?: string; name: string; className: string }> = ({
+	src,
+	name,
+	className,
+}) => {
+	const safeSrc = useMemo(() => getSafeRemoteUrl(src), [src]);
+	const [loadFailed, setLoadFailed] = useState(false);
+
+	React.useEffect(() => {
+		setLoadFailed(false);
+	}, [safeSrc]);
+
+	if (!safeSrc || loadFailed) {
+		return (
+			<div
+				aria-hidden="true"
+				className={`${className} flex items-center justify-center bg-[#2a2a2a] text-xs font-semibold text-[#d9d9d9]`}
+			>
+				{getAvatarInitial(name)}
+			</div>
+		);
+	}
+
+	return (
+		<img
+			src={safeSrc}
+			alt={name}
+			className={`${className} object-cover`}
+			onError={() => setLoadFailed(true)}
+		/>
+	);
+};
+
 const LevelBadge: React.FC<{ level: number }> = ({ level }) => (
 	<span className="rounded-sm bg-[#2d2d2d] px-1.5 text-[10px] font-semibold text-[#7fd2ff]">
 		LV{level}
@@ -71,11 +140,7 @@ const RootCommentItem: React.FC<{
 	return (
 		<article className="rounded-[10px] bg-[#111] p-4 text-white">
 			<div className="flex gap-3">
-				<img
-					src={comment.author.avatarUrl}
-					alt={comment.author.name}
-					className="h-10 w-10 rounded-full object-cover"
-				/>
+				<SafeAvatar src={comment.author.avatarUrl} name={comment.author.name} className="h-10 w-10 rounded-full" />
 
 				<div className="flex-1">
 					<header className="flex items-start gap-2">
@@ -101,7 +166,7 @@ const RootCommentItem: React.FC<{
 							aria-label="更多操作"
 							className="text-[#6c6c6c] transition-colors hover:text-white"
 						>
-							<MoreHorizontal className="h-4 w-4" />
+							<MoreHorizontalIcon className="h-4 w-4" />
 						</button>
 					</header>
 
@@ -112,14 +177,14 @@ const RootCommentItem: React.FC<{
 							className="flex items-center gap-1 text-[#6e9bff]"
 							onClick={() => onReply?.({ commentId: comment.id })}
 						>
-							<MessageCircle className="h-3.5 w-3.5" /> 回复
+							<MessageCircleIcon className="h-3.5 w-3.5" /> 回复
 						</button>
 						<button
 							type="button"
 							className="flex items-center gap-1 text-[#7c7c7c] transition-colors hover:text-white"
 							onClick={() => onLike?.({ commentId: comment.id })}
 						>
-							<Heart className="h-3.5 w-3.5" />
+							<HeartIcon className="h-3.5 w-3.5" />
 							{comment.likes}
 						</button>
 					</footer>
@@ -129,10 +194,10 @@ const RootCommentItem: React.FC<{
 							<div className="flex flex-col gap-2">
 								{visibleReplies.map((reply) => (
 									<div className="flex gap-2" key={reply.id}>
-										<img
+										<SafeAvatar
 											src={reply.author.avatarUrl}
-											alt={reply.author.name}
-											className="mt-0.5 h-6 w-6 rounded-full object-cover"
+											name={reply.author.name}
+											className="mt-0.5 h-6 w-6 rounded-full"
 										/>
 										<div className="flex-1">
 											<div className="flex items-center gap-2">
@@ -167,7 +232,7 @@ const RootCommentItem: React.FC<{
 														onLike?.({ commentId: comment.id, replyId: reply.id })
 													}
 												>
-													<Heart className="h-3 w-3" />
+													<HeartIcon className="h-3 w-3" />
 													{reply.likes ?? 0}
 												</button>
 											</div>
@@ -182,7 +247,7 @@ const RootCommentItem: React.FC<{
 									className="ml-8 mt-2 flex items-center gap-1 text-xs font-medium text-[#6e9bff]"
 									onClick={() => onToggleReplies(comment.id)}
 								>
-									<ChevronRight className="h-3 w-3" /> 共
+									<ChevronRightIcon className="h-3 w-3" /> 共
 									{comment.replies.length}
 									条回复 &gt;
 								</button>
@@ -194,7 +259,7 @@ const RootCommentItem: React.FC<{
 									className="ml-8 mt-2 flex items-center gap-1 text-xs font-medium text-[#6e9bff]"
 									onClick={() => onToggleReplies(comment.id)}
 								>
-									<ChevronRight className="h-3 w-3 rotate-90" /> 收起回复
+									<ChevronRightIcon className="h-3 w-3 rotate-90" /> 收起回复
 								</button>
 							)}
 						</section>
@@ -212,6 +277,7 @@ export const BilibiliCommentThread: React.FC<BilibiliCommentThreadProps> = ({
 	onLike,
 }) => {
 	const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+	const resolvedPreviewCount = Number.isFinite(previewCount) ? Math.max(0, Math.floor(previewCount)) : 2;
 
 	const handleToggle = (commentId: string) => {
 		setExpandedComments((state) => ({
@@ -222,17 +288,23 @@ export const BilibiliCommentThread: React.FC<BilibiliCommentThreadProps> = ({
 
 	return (
 		<div className="space-y-4 bg-[#0d0d0d] p-4">
-			{comments.map((comment) => (
-				<RootCommentItem
-					key={comment.id}
-					comment={comment}
-					previewCount={previewCount}
-					expanded={!!expandedComments[comment.id]}
-					onToggleReplies={handleToggle}
-					onReply={onReply}
-					onLike={onLike}
-				/>
-			))}
+			{comments.length ? (
+				comments.map((comment) => (
+					<RootCommentItem
+						key={comment.id}
+						comment={comment}
+						previewCount={resolvedPreviewCount}
+						expanded={!!expandedComments[comment.id]}
+						onToggleReplies={handleToggle}
+						onReply={onReply}
+						onLike={onLike}
+					/>
+				))
+			) : (
+				<div className="rounded-[10px] border border-dashed border-[#2b2b2b] bg-[#111] px-4 py-8 text-center text-sm text-[#8b8b8b]">
+					暂无评论，来抢沙发吧
+				</div>
+			)}
 		</div>
 	);
 };

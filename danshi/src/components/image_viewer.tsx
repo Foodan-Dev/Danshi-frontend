@@ -4,7 +4,6 @@ import {
   StyleSheet,
   Modal,
   Pressable,
-  Image,
   Dimensions,
   Platform,
   FlatList,
@@ -52,7 +51,6 @@ function ZoomableImage({ uri, onSingleTap }: ZoomableImageProps) {
   const translateY = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
-  const lastTapTime = useSharedValue(0);
 
   // 重置缩放和位移
   const resetTransform = useCallback(() => {
@@ -63,7 +61,7 @@ function ZoomableImage({ uri, onSingleTap }: ZoomableImageProps) {
     translateY.value = withSpring(0);
     savedTranslateX.value = 0;
     savedTranslateY.value = 0;
-  }, []);
+  }, [savedScale, savedTranslateX, savedTranslateY, scale, translateX, translateY]);
 
   // 限制位移范围
   const clampTranslate = useCallback((value: number, maxValue: number) => {
@@ -107,30 +105,29 @@ function ZoomableImage({ uri, onSingleTap }: ZoomableImageProps) {
     });
 
   // 点击手势（双击缩放，单击关闭）
-  const tapGesture = Gesture.Tap()
-    .numberOfTaps(1)
-    .onEnd(() => {
-      const now = Date.now();
-      const timeDiff = now - lastTapTime.value;
-      lastTapTime.value = now;
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd((_event, success) => {
+      if (!success) return;
 
-      if (timeDiff < 300) {
-        // 双击
-        if (scale.value > 1) {
-          resetTransform();
-        } else {
-          scale.value = withSpring(2.5);
-          savedScale.value = 2.5;
-        }
+      if (scale.value > 1) {
+        resetTransform();
       } else {
-        // 单击 - 延迟执行以检测是否是双击
-        setTimeout(() => {
-          if (Date.now() - lastTapTime.value >= 300) {
-            runOnJS(onSingleTap)();
-          }
-        }, 300);
+        scale.value = withSpring(2.5);
+        savedScale.value = 2.5;
       }
     });
+
+  const singleTapGesture = Gesture.Tap()
+    .numberOfTaps(1)
+    .maxDelay(250)
+    .onEnd((_event, success) => {
+      if (!success) return;
+
+      runOnJS(onSingleTap)();
+    });
+
+  const tapGesture = Gesture.Exclusive(doubleTapGesture, singleTapGesture);
 
   // 组合手势
   const composedGesture = Gesture.Simultaneous(
@@ -161,11 +158,11 @@ function ZoomableImage({ uri, onSingleTap }: ZoomableImageProps) {
       savedTranslateX.value = 0;
       savedTranslateY.value = 0;
     }
-  }, []);
+  }, [savedScale, savedTranslateX, savedTranslateY, scale, translateX, translateY]);
 
   if (Platform.OS === 'web') {
     return (
-      <View 
+      <View
         style={styles.imageContainer}
         // @ts-ignore - Web only
         onWheel={handleWheel}
@@ -207,28 +204,43 @@ export default function ImageViewer({
   const insets = useSafeAreaInsets();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const flatListRef = useRef<FlatList>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const safeImages = useMemo(
     () => images.map((item) => getSafeRemoteUrl(item)).filter((item): item is string => !!item),
     [images]
   );
   const normalizedInitialIndex = Math.min(Math.max(initialIndex, 0), Math.max(0, safeImages.length - 1));
 
+  const clearPendingScroll = useCallback(() => {
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = null;
+    }
+  }, []);
+
   // 当 visible 变化时，重置到初始索引
   React.useEffect(() => {
-    if (visible && safeImages.length) {
-      setCurrentIndex(normalizedInitialIndex);
-      // 延迟滚动，确保 FlatList 已渲染
-      setTimeout(() => {
-        flatListRef.current?.scrollToIndex({
-          index: normalizedInitialIndex,
-          animated: false,
-        });
-      }, 50);
-    }
-  }, [visible, normalizedInitialIndex, safeImages.length]);
+    clearPendingScroll();
+
+    if (!visible || !safeImages.length) return clearPendingScroll;
+
+    setCurrentIndex(normalizedInitialIndex);
+    // 延迟滚动，确保 FlatList 已渲染
+    scrollTimeoutRef.current = setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index: normalizedInitialIndex,
+        animated: false,
+      });
+      scrollTimeoutRef.current = null;
+    }, 50);
+
+    return clearPendingScroll;
+  }, [clearPendingScroll, visible, normalizedInitialIndex, safeImages.length]);
+
+  React.useEffect(() => clearPendingScroll, [clearPendingScroll]);
 
   const handleViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
+    ({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].index !== null) {
         setCurrentIndex(viewableItems[0].index);
       }
@@ -258,12 +270,12 @@ export default function ImageViewer({
     []
   );
 
-  if (!visible || !safeImages.length) return null;
+  if (!visible) return null;
 
   const content = (
     <View style={[styles.container, { backgroundColor: theme.colors.scrim }]}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.scrim} />
-      
+
       {/* 顶部栏 */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <IconButton
@@ -282,7 +294,13 @@ export default function ImageViewer({
       </View>
 
       {/* 图片列表 */}
-      {safeImages.length === 1 ? (
+      {!safeImages.length ? (
+        <View style={styles.emptyState}>
+          <Text style={[styles.emptyText, { color: theme.colors.inverseOnSurface }]}>
+            图片暂时不可用
+          </Text>
+        </View>
+      ) : safeImages.length === 1 ? (
         <View style={styles.singleImageContainer}>
           <ZoomableImage uri={safeImages[0]} onSingleTap={onClose} />
         </View>
@@ -311,9 +329,9 @@ export default function ImageViewer({
               key={index}
               style={[
                 styles.dot,
-                { 
-                  backgroundColor: index === currentIndex 
-                    ? theme.colors.inverseOnSurface 
+                {
+                  backgroundColor: index === currentIndex
+                    ? theme.colors.inverseOnSurface
                     : `${theme.colors.inverseOnSurface}66` // 40% opacity
                 },
               ]}
@@ -378,6 +396,17 @@ const styles = StyleSheet.create({
     height: SCREEN_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   imageContainer: {
     width: SCREEN_WIDTH,
