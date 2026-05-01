@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useCall
 import type { User } from '@/src/models/User';
 import { AuthStorage } from '@/src/lib/auth/auth_storage';
 import { authService } from '@/src/services/auth_service';
+import { AppError } from '@/src/lib/errors/app_error';
 import { decodeJwtPayload } from '../lib/auth/jwt';
 
 export type AuthContextValue = {
@@ -28,6 +29,11 @@ const computePreview = (token: string | null): Pick<User, 'name' | 'avatar_url'>
   return { name: name ?? '', avatar_url: avatarUrl ?? null };
 };
 
+const isSessionExpiredError = (error: unknown) => {
+  const appError = AppError.from(error);
+  return appError.status === 401 || appError.status === 403;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [userToken, setUserToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -46,7 +52,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const me = await authService.me();
           setUser(me);
           setSessionExpired(false);
-        } catch {
+        } catch (error) {
+          if (!isSessionExpiredError(error)) {
+            if (__DEV__) console.warn('[auth] restore user profile failed:', error);
+            return;
+          }
           // Token 可能已过期，清除本地状态并标记会话过期
           await AuthStorage.clearToken();
           await AuthStorage.clearRefreshToken();
@@ -73,7 +83,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const me = await authService.me();
       setUser(me);
       setSessionExpired(false);
-    } catch {
+    } catch (error) {
+      if (!isSessionExpiredError(error)) {
+        if (__DEV__) console.warn('[auth] refreshUser failed:', error);
+        return;
+      }
       // Token 过期，清除状态并标记
       await AuthStorage.clearToken();
       await AuthStorage.clearRefreshToken();

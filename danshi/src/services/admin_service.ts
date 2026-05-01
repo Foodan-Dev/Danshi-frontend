@@ -114,10 +114,11 @@ export const adminService = {
       await adminRepository.listAdmins({ limit: 1 });
       // 成功 → 是超级管理员
       return ROLES.SUPER_ADMIN;
-    } catch (e: any) {
+    } catch (error) {
+      const appError = AppError.from(error, '角色检测失败');
       // 403 说明没有超级管理员权限，继续检测
-      if (e?.status !== 403 && e?.code !== 403 && !e?.message?.includes('403')) {
-        // 其他错误（如网络错误）可能需要重试或忽略
+      if (appError.status !== 403) {
+        throw appError;
       }
     }
 
@@ -126,8 +127,12 @@ export const adminService = {
       await adminRepository.listPendingPosts({ limit: 1 });
       // 成功 → 是普通管理员
       return ROLES.ADMIN;
-    } catch (e: any) {
+    } catch (error) {
+      const appError = AppError.from(error, '角色检测失败');
       // 403 说明没有管理员权限
+      if (appError.status !== 403) {
+        throw appError;
+      }
     }
 
     // 3. 都失败 → 普通用户
