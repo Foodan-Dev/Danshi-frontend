@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Platform, useWindowDimensions, Pressable, Text as RNText, Image } from 'react-native';
+import { View, StyleSheet, Platform, useWindowDimensions, Pressable, Text as RNText, Image, ActivityIndicator } from 'react-native';
 import { Tabs, Redirect, usePathname, useRouter, type Href } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/context/theme_context';
@@ -28,8 +28,8 @@ function Sidebar() {
 
   const getActiveTab = () => {
     if (pathname.includes('/explore')) return 'explore';
-    if (pathname.includes('/post')) return 'post';
     if (pathname.includes('/myself')) return 'myself';
+    if (/(^|\/)post(\/|$)/.test(pathname)) return 'post';
     return 'explore';
   };
 
@@ -173,10 +173,16 @@ export default function TabsLayout() {
       lazy: true,
       freezeOnBlur: true,
     }),
-    [theme, tabBarPadding, tabBarTotalHeight, shouldHideTabBar]
+    [theme, tabBarTotalHeight, shouldHideTabBar, showSidebar, isInAdminRoute]
   );
 
-  if (isLoading) return null;
+  if (isLoading) {
+    return (
+      <View style={[styles.loaderWrap, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
   if (!userToken) {
     return <Redirect href="/login" />;
   }
@@ -284,6 +290,11 @@ const styles = StyleSheet.create({
   },
   wideContent: {
     flex: 1,
+  },
+  loaderWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // 侧边栏

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, Platform, View, StyleSheet } from 'react-native';
 import { Stack, Redirect } from 'expo-router';
 import { useTheme } from '@/src/context/theme_context';
 import { useAuth } from '@/src/context/auth_context';
@@ -7,7 +7,13 @@ import { useAuth } from '@/src/context/auth_context';
 export default function AuthLayout() {
   const theme = useTheme();
   const { userToken, isLoading } = useAuth();
-  if (isLoading) return null;
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.loadingWrap, { backgroundColor: theme.background as string }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
   if (userToken) {
     return <Redirect href="/explore" />;
   }
@@ -34,5 +40,9 @@ export default function AuthLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
