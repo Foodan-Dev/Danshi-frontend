@@ -155,10 +155,11 @@ export class ApiNotificationsRepository implements NotificationsRepository {
 
   async markAsRead(notificationId: string): Promise<MarkReadResponse> {
     const url = API_ENDPOINTS.NOTIFICATIONS.MARK_READ.replace(
-      ':notificationId', 
+      ':notificationId',
       encodeURIComponent(notificationId)
     );
-    await httpAuth.put<ApiResponse<null>>(url, {});
+    const res = await httpAuth.put<ApiResponse<null>>(url, {});
+    unwrapApiResponse<null>(res);
   }
 
   async markAllAsRead(): Promise<MarkAllReadResponse> {

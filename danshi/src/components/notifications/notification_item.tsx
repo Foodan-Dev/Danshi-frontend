@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Pressable, StyleSheet, Image, Alert } from 'react-native';
+import { View, Pressable, StyleSheet, Image, Alert, type GestureResponderEvent } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
@@ -16,22 +16,27 @@ import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 interface NotificationItemProps {
   notification: Notification;
-  /** 乐观更新回调：将该通知标记为已读 */
-  onMarkAsRead?: (notificationId: string) => void;
+  /** 乐观更新回调：同步通知已读状态 */
+  onReadStateChange?: (notificationId: string, isRead: boolean) => void;
   /** 刷新标记：父组件下拉刷新时递增 */
   refreshKey?: number;
 }
 
 // ==================== Component ====================
 
-export function NotificationItem({ notification, onMarkAsRead, refreshKey }: NotificationItemProps) {
+export function NotificationItem({ notification, onReadStateChange, refreshKey }: NotificationItemProps) {
   const theme = useTheme();
-  const { decrementUnreadCount } = useNotifications();
+  const { decrementUnreadCount, refreshUnreadCount } = useNotifications();
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
 
-  const { id, type, sender, content, is_read, created_at, related_id, related_type } = notification;
+  const { id, type, sender, content, is_read, created_at, related_type } = notification;
   const safeSenderAvatarUrl = getSafeRemoteUrl(sender.avatar_url);
+
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [safeSenderAvatarUrl]);
 
   // 对 follow 类型通知，检查是否已关注该用户
   const refreshFollowStatus = useCallback(() => {
@@ -64,9 +69,11 @@ export function NotificationItem({ notification, onMarkAsRead, refreshKey }: Not
   const handlePress = useCallback(() => {
     // 乐观更新：立即标记为已读
     if (!is_read) {
-      onMarkAsRead?.(id);
+      onReadStateChange?.(id, true);
       decrementUnreadCount();
       notificationsService.markAsRead(id).catch((e) => {
+        onReadStateChange?.(id, false);
+        refreshUnreadCount().catch(() => {});
         if (__DEV__) console.warn('[NotificationItem] Failed to mark as read:', e);
       });
     }
@@ -98,10 +105,11 @@ export function NotificationItem({ notification, onMarkAsRead, refreshKey }: Not
     if (notification.related_type === 'comment') {
       Alert.alert('无法跳转', '该通知未包含帖子信息');
     }
-  }, [id, type, is_read, sender.id, related_id, onMarkAsRead, decrementUnreadCount, notification]);
+  }, [id, is_read, onReadStateChange, decrementUnreadCount, refreshUnreadCount, notification]);
 
   // 处理头像点击
-  const handleAvatarPress = useCallback(() => {
+  const handleAvatarPress = useCallback((event: GestureResponderEvent) => {
+    event.stopPropagation();
     router.push(`/user/${sender.id}`);
   }, [sender.id]);
 
@@ -123,6 +131,11 @@ export function NotificationItem({ notification, onMarkAsRead, refreshKey }: Not
       setFollowLoading(false);
     }
   }, [sender.id, isFollowing, followLoading]);
+
+  const handleFollowButtonPress = useCallback((event: GestureResponderEvent) => {
+    event.stopPropagation();
+    void handleFollowPress();
+  }, [handleFollowPress]);
 
   // 未读/已读样式
   const readOpacity = is_read ? 0.7 : 1;
@@ -147,10 +160,11 @@ export function NotificationItem({ notification, onMarkAsRead, refreshKey }: Not
           <View style={[styles.unreadDot, { backgroundColor: theme.colors.primary }]} />
         )}
         <Pressable onPress={handleAvatarPress} style={styles.avatarContainer}>
-          {safeSenderAvatarUrl ? (
+          {safeSenderAvatarUrl && !avatarLoadFailed ? (
             <Image
               source={{ uri: safeSenderAvatarUrl }}
               style={[styles.avatar, { opacity: readOpacity }]}
+              onError={() => setAvatarLoadFailed(true)}
             />
           ) : (
             <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceVariant, opacity: readOpacity }]}>
@@ -174,7 +188,9 @@ export function NotificationItem({ notification, onMarkAsRead, refreshKey }: Not
             style={[styles.contentPreview, { color: theme.colors.onSurfaceVariant }]}
             numberOfLines={2}
           >
-            "{content}"
+            {'"'}
+            {content}
+            {'"'}
           </Text>
         )}
 
@@ -195,7 +211,7 @@ export function NotificationItem({ notification, onMarkAsRead, refreshKey }: Not
                 ? { backgroundColor: theme.colors.surfaceVariant, borderWidth: 1, borderColor: theme.colors.outline }
                 : { borderWidth: 1, borderColor: theme.colors.primary },
             ]}
-            onPress={handleFollowPress}
+            onPress={handleFollowButtonPress}
             disabled={followLoading}
           >
             <Text

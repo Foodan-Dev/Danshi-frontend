@@ -18,23 +18,22 @@ export type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const computePreview = (token: string | null): Pick<User, 'name' | 'avatar_url'> | null => {
+  if (!token) return null;
+  const payload = decodeJwtPayload<Record<string, any>>(token);
+  if (!payload || typeof payload !== 'object') return null;
+  const name = (payload.nickname ?? payload.name ?? null) as string | null;
+  const avatarUrl = (payload.avatarUrl ?? payload.avatar ?? null) as string | null;
+  if (!name && !avatarUrl) return null;
+  return { name: name ?? '', avatar_url: avatarUrl ?? null };
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [userToken, setUserToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [preview, setPreview] = useState<Pick<User, 'name' | 'avatar_url'> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
-
-  // from token get name and avtarUrl
-  const computePreview = (token: string | null): Pick<User, 'name' | 'avatar_url'> | null => {
-    if (!token) return null;
-    const payload = decodeJwtPayload<Record<string, any>>(token);
-    if (!payload || typeof payload !== 'object') return null;
-    const name = (payload.nickname ?? payload.name ?? null) as string | null;
-    const avatarUrl = (payload.avatarUrl ?? payload.avatar ?? null) as string | null;
-    if (!name && !avatarUrl) return null;
-    return { name: name ?? '', avatar_url: avatarUrl ?? null };
-  };
 
   const restore = async () => {
     try {
@@ -46,7 +45,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const me = await authService.me();
           setUser(me);
-        } catch (err) {
+          setSessionExpired(false);
+        } catch {
           // Token 可能已过期，清除本地状态并标记会话过期
           await AuthStorage.clearToken();
           await AuthStorage.clearRefreshToken();
@@ -64,15 +64,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     restore();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const refreshUser = async (tokenOverride?: string) => {
+  const refreshUser = useCallback(async (tokenOverride?: string) => {
     const token = tokenOverride ?? userToken ?? (await AuthStorage.getToken());
     if (!token) return;
     try {
       const me = await authService.me();
       setUser(me);
+      setSessionExpired(false);
     } catch {
       // Token 过期，清除状态并标记
       await AuthStorage.clearToken();
@@ -82,37 +82,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setSessionExpired(true);
     }
-  };
+  }, [userToken]);
 
   const clearSessionExpired = useCallback(() => {
     setSessionExpired(false);
   }, []);
 
-  const signIn = async (token: string) => {
+  const signIn = useCallback(async (token: string) => {
     setIsLoading(true);
     try {
+      setSessionExpired(false);
       await AuthStorage.setToken(token);
       setUserToken(token);
-      setPreview(computePreview(token)); 
+      setPreview(computePreview(token));
       setUser(null);
       await refreshUser(token);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [refreshUser]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     setIsLoading(true);
     try {
       // Call API to logout (best-effort), then clear local state
       await authService.logout();
+    } finally {
+      setSessionExpired(false);
       setUserToken(null);
       setUser(null);
       setPreview(null);
-    } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const value = useMemo<AuthContextValue>(() => ({
     userToken,
@@ -124,7 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut,
     refreshUser,
     clearSessionExpired,
-  }), [userToken, user, preview, isLoading, sessionExpired, clearSessionExpired]);
+  }), [userToken, user, preview, isLoading, sessionExpired, signIn, signOut, refreshUser, clearSessionExpired]);
 
   return (
     <AuthContext.Provider value={value}>

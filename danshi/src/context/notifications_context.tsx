@@ -31,23 +31,53 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeUserIdRef = useRef<string | null>(user?.id ?? null);
+  const requestSeqRef = useRef(0);
+  const activeRequestRef = useRef<Promise<void> | null>(null);
 
   const refreshUnreadCount = useCallback(async () => {
-    if (!user) {
+    const currentUserId = activeUserIdRef.current;
+    if (!currentUserId) {
+      requestSeqRef.current += 1;
       setUnreadCount(0);
+      setLoading(false);
       return;
     }
-    
-    setLoading(true);
-    try {
-      const { unread_count } = await notificationsService.getUnreadCount();
-      setUnreadCount(unread_count);
-    } catch (error) {
-      if (__DEV__) console.warn('[NotificationsContext] Failed to fetch unread count:', error);
-    } finally {
-      setLoading(false);
+
+    if (activeRequestRef.current) {
+      await activeRequestRef.current;
+      if (activeUserIdRef.current !== currentUserId) {
+        return;
+      }
     }
-  }, [user]);
+
+    const requestId = ++requestSeqRef.current;
+    let request: Promise<void> | null = null;
+    request = (async () => {
+      setLoading(true);
+      try {
+        const { unread_count } = await notificationsService.getUnreadCount();
+        if (requestSeqRef.current !== requestId || activeUserIdRef.current !== currentUserId) {
+          return;
+        }
+        setUnreadCount(unread_count);
+      } catch (error) {
+        if (requestSeqRef.current !== requestId || activeUserIdRef.current !== currentUserId) {
+          return;
+        }
+        if (__DEV__) console.warn('[NotificationsContext] Failed to fetch unread count:', error);
+      } finally {
+        if (requestSeqRef.current === requestId) {
+          setLoading(false);
+        }
+        if (activeRequestRef.current === request) {
+          activeRequestRef.current = null;
+        }
+      }
+    })();
+    activeRequestRef.current = request;
+    await request;
+  }, []);
 
   const decrementUnreadCount = useCallback(() => {
     setUnreadCount((prev) => Math.max(0, prev - 1));
@@ -59,15 +89,19 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
 
   // 登录后立即获取未读数量，并启动轮询
   useEffect(() => {
-    if (user) {
-      refreshUnreadCount();
+    activeUserIdRef.current = user?.id ?? null;
+    if (user?.id) {
+      void refreshUnreadCount();
       
       // 启动轮询
       intervalRef.current = setInterval(() => {
-        refreshUnreadCount();
+        void refreshUnreadCount();
       }, POLL_INTERVAL);
     } else {
+      requestSeqRef.current += 1;
+      activeRequestRef.current = null;
       setUnreadCount(0);
+      setLoading(false);
     }
 
     return () => {
@@ -76,7 +110,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
         intervalRef.current = null;
       }
     };
-  }, [user, refreshUnreadCount]);
+  }, [user?.id, refreshUnreadCount]);
 
   const value: NotificationsContextValue = {
     unreadCount,
@@ -110,4 +144,3 @@ export function formatUnreadCount(count: number): string | null {
   if (count > 99) return '99+';
   return String(count);
 }
-

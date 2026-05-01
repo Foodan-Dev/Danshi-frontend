@@ -7,14 +7,19 @@ import {
   RefreshControl,
   Animated,
 } from 'react-native';
-import { Text, useTheme, ActivityIndicator } from 'react-native-paper';
+import { Text, useTheme, ActivityIndicator, type MD3Theme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
-import type { Notification, NotificationType, ListNotificationsParams } from '@/src/repositories/notifications_repository';
+import type {
+  Notification,
+  NotificationType,
+  ListNotificationsParams,
+  ListNotificationsResponse,
+} from '@/src/repositories/notifications_repository';
 import { notificationsService } from '@/src/services/notifications_service';
 import { NotificationItem } from '@/src/components/notifications/notification_item';
 import { useNotifications } from '@/src/context/notifications_context';
@@ -40,7 +45,7 @@ const INTERACTION_TYPES: NotificationType[] = ['like_post', 'like_comment', 'com
 
 // ==================== 骨架屏组件 ====================
 
-function SkeletonItem({ theme }: { theme: ReturnType<typeof useTheme> }) {
+function SkeletonItem({ theme }: { theme: MD3Theme }) {
   const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -79,7 +84,7 @@ function SkeletonItem({ theme }: { theme: ReturnType<typeof useTheme> }) {
   );
 }
 
-function SkeletonList({ theme }: { theme: ReturnType<typeof useTheme> }) {
+function SkeletonList({ theme }: { theme: MD3Theme }) {
   return (
     <View>
       {Array.from({ length: 6 }).map((_, i) => (
@@ -91,7 +96,7 @@ function SkeletonList({ theme }: { theme: ReturnType<typeof useTheme> }) {
 
 // ==================== 空状态组件 ====================
 
-function EmptyState({ theme }: { theme: ReturnType<typeof useTheme> }) {
+function EmptyState({ theme }: { theme: MD3Theme }) {
   return (
     <View style={styles.emptyContainer}>
       <Ionicons name="notifications-off-outline" size={64} color={theme.colors.outline} />
@@ -264,9 +269,9 @@ export default function NotificationsScreen() {
   }, [markAllLoading, clearUnreadCount, dotsOpacity]);
 
   // 单条标记已读（乐观更新）
-  const handleMarkAsRead = useCallback((notificationId: string) => {
+  const handleReadStateChange = useCallback((notificationId: string, isRead: boolean) => {
     setNotifications((prev) =>
-      prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n))
+      prev.map((n) => (n.id === notificationId ? { ...n, is_read: isRead } : n))
     );
   }, []);
 
@@ -312,9 +317,9 @@ export default function NotificationsScreen() {
   // 渲染列表项
   const renderItem = useCallback(
     ({ item }: { item: Notification }) => (
-      <NotificationItem notification={item} onMarkAsRead={handleMarkAsRead} refreshKey={refreshSeq} />
+      <NotificationItem notification={item} onReadStateChange={handleReadStateChange} refreshKey={refreshSeq} />
     ),
-    [handleMarkAsRead, refreshSeq]
+    [handleReadStateChange, refreshSeq]
   );
 
   // 列表底部
