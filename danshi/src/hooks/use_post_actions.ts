@@ -4,7 +4,7 @@
  * 封装帖子详情页中的点赞、收藏、关注、分享等交互逻辑，
  * 从 post_detail_screen 中提取以降低单文件复杂度。
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Share } from 'react-native';
 import { postsService } from '@/src/services/posts_service';
 import { usersService } from '@/src/services/users_service';
@@ -23,12 +23,35 @@ export function usePostActions({ post, setPost, currentUserId }: UsePostActionsP
   const [actionLoading, setActionLoading] = useState({ like: false, favorite: false, follow: false });
   const [isFollowed, setIsFollowed] = useState(false);
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
+  const actionLoadingRef = useRef({ like: false, favorite: false, follow: false });
+  const postRef = useRef(post);
 
   const requireAuth = useCallback((actionLabel: string) => {
     if (currentUserId) return true;
     showAlert('请先登录', `登录后才能${actionLabel}`);
     return false;
   }, [currentUserId]);
+
+  const beginAction = useCallback((key: keyof typeof actionLoadingRef.current) => {
+    if (actionLoadingRef.current[key]) return false;
+    actionLoadingRef.current[key] = true;
+    setActionLoading((prev) => ({ ...prev, [key]: true }));
+    return true;
+  }, []);
+
+  const endAction = useCallback((key: keyof typeof actionLoadingRef.current) => {
+    actionLoadingRef.current[key] = false;
+    setActionLoading((prev) => ({ ...prev, [key]: false }));
+  }, []);
+
+  useEffect(() => {
+    postRef.current = post;
+  }, [post]);
+
+  useEffect(() => {
+    const author = post?.author as ({ is_following?: boolean } & NonNullable<Post['author']>) | undefined;
+    setIsFollowed(author?.is_following ?? false);
+  }, [post]);
 
   /** 同步关注状态（通常在 fetchPost 后调用） */
   const syncFollowState = useCallback((following: boolean) => {
@@ -37,12 +60,13 @@ export function usePostActions({ post, setPost, currentUserId }: UsePostActionsP
 
   // ==================== 点赞 ====================
   const handleToggleLike = useCallback(async () => {
-    if (!post) return;
+    const currentPost = postRef.current;
+    if (!currentPost) return;
     if (!requireAuth('点赞帖子')) return;
-    const currentlyLiked = post.is_liked;
-    const currentLikeCount = post.stats?.like_count ?? 0;
+    if (!beginAction('like')) return;
+    const currentlyLiked = currentPost.is_liked;
+    const currentLikeCount = currentPost.stats?.like_count ?? 0;
 
-    setActionLoading((prev) => ({ ...prev, like: true }));
     // 乐观更新
     setPost((prev) =>
       prev ? {
@@ -54,8 +78,8 @@ export function usePostActions({ post, setPost, currentUserId }: UsePostActionsP
 
     try {
       const result = currentlyLiked
-        ? await postsService.unlike(post.id)
-        : await postsService.like(post.id);
+        ? await postsService.unlike(currentPost.id)
+        : await postsService.like(currentPost.id);
       setPost((prev) =>
         prev ? {
           ...prev,
@@ -73,18 +97,19 @@ export function usePostActions({ post, setPost, currentUserId }: UsePostActionsP
         } : prev
       );
     } finally {
-      setActionLoading((prev) => ({ ...prev, like: false }));
+      endAction('like');
     }
-  }, [post, setPost, requireAuth]);
+  }, [setPost, requireAuth, beginAction, endAction]);
 
   // ==================== 收藏 ====================
   const handleToggleFavorite = useCallback(async () => {
-    if (!post) return;
+    const currentPost = postRef.current;
+    if (!currentPost) return;
     if (!requireAuth('收藏帖子')) return;
-    const currentlyFavorited = post.is_favorited;
-    const currentFavoriteCount = post.stats?.favorite_count ?? 0;
+    if (!beginAction('favorite')) return;
+    const currentlyFavorited = currentPost.is_favorited;
+    const currentFavoriteCount = currentPost.stats?.favorite_count ?? 0;
 
-    setActionLoading((prev) => ({ ...prev, favorite: true }));
     setPost((prev) =>
       prev ? {
         ...prev,
@@ -95,8 +120,8 @@ export function usePostActions({ post, setPost, currentUserId }: UsePostActionsP
 
     try {
       const result = currentlyFavorited
-        ? await postsService.unfavorite(post.id)
-        : await postsService.favorite(post.id);
+        ? await postsService.unfavorite(currentPost.id)
+        : await postsService.favorite(currentPost.id);
       setPost((prev) =>
         prev ? {
           ...prev,
@@ -113,30 +138,31 @@ export function usePostActions({ post, setPost, currentUserId }: UsePostActionsP
         } : prev
       );
     } finally {
-      setActionLoading((prev) => ({ ...prev, favorite: false }));
+      endAction('favorite');
     }
-  }, [post, setPost, requireAuth]);
+  }, [setPost, requireAuth, beginAction, endAction]);
 
   // ==================== 关注 ====================
   const handleToggleFollow = useCallback(async () => {
-    if (!post?.author?.id) return;
+    const currentPost = postRef.current;
+    if (!currentPost?.author?.id) return;
     if (!requireAuth('关注作者')) return;
-    if (currentUserId === post.author.id) {
+    if (currentUserId === currentPost.author.id) {
       showAlert('提示', '不能关注自己');
       return;
     }
-    setActionLoading((prev) => ({ ...prev, follow: true }));
+    if (!beginAction('follow')) return;
     try {
       const { is_following } = isFollowed
-        ? await usersService.unfollowUser(post.author.id)
-        : await usersService.followUser(post.author.id);
+        ? await usersService.unfollowUser(currentPost.author.id)
+        : await usersService.followUser(currentPost.author.id);
       setIsFollowed(is_following);
     } catch (e) {
       showAlert('操作失败', (e as Error)?.message ?? '请稍后重试');
     } finally {
-      setActionLoading((prev) => ({ ...prev, follow: false }));
+      endAction('follow');
     }
-  }, [post?.author?.id, isFollowed, currentUserId, requireAuth]);
+  }, [isFollowed, currentUserId, requireAuth, beginAction, endAction]);
 
   // ==================== 分享 ====================
   const handleShareToPlatform = useCallback(async () => {

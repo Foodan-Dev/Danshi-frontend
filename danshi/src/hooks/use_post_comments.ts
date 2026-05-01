@@ -68,6 +68,7 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
   const commentSortRef = useRef<'latest' | 'hot'>(commentSort);
   const commentLikeLoadingRef = useRef<Set<string>>(new Set());
   const commentDeleteLoadingRef = useRef<Set<string>>(new Set());
+  const replyRequestKeysRef = useRef<Set<string>>(new Set());
   const commentsRef = useRef<Comment[]>(comments);
   const commentRepliesRef = useRef<Record<string, CommentReply[]>>(commentReplies);
   const threadRootCommentRef = useRef<Comment | null>(threadRootComment);
@@ -148,6 +149,11 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
   }, []);
 
   const fetchRepliesForComment = useCallback(async (commentId: string, page = 1, append = false) => {
+    const requestKey = `${commentId}:${page}:${append ? 'append' : 'replace'}`;
+    if (replyRequestKeysRef.current.has(requestKey)) {
+      return;
+    }
+    replyRequestKeysRef.current.add(requestKey);
     setCommentRepliesLoading((prev) => ({ ...prev, [commentId]: true }));
     try {
       const res = await commentsService.listReplies(commentId, { limit: 20, page });
@@ -159,13 +165,15 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
       setCommentReplies((prev) => {
         const existing = append ? prev[commentId] ?? [] : [];
         const merged = append ? [...existing, ...flattened] : flattened;
-        return { ...prev, [commentId]: merged };
+        const deduped = Array.from(new Map(merged.map((reply) => [reply.id, reply])).values());
+        return { ...prev, [commentId]: deduped };
       });
       setCommentRepliesPagination((prev) => ({ ...prev, [commentId]: res.pagination }));
     } catch (e) {
       if (__DEV__) console.error('[fetchRepliesForComment] error:', e);
       showAlert('加载失败', (e as Error)?.message ?? '暂时无法加载更多回复');
     } finally {
+      replyRequestKeysRef.current.delete(requestKey);
       setCommentRepliesLoading((prev) => ({ ...prev, [commentId]: false }));
     }
   }, []);
@@ -510,11 +518,12 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
 
   const handleLoadMoreThreadReplies = useCallback(() => {
     if (!threadRootComment) return;
+    if (commentRepliesLoading[threadRootComment.id]) return;
     const pagination = commentRepliesPagination[threadRootComment.id];
     const nextPage = (pagination?.page ?? 1) + 1;
     if (pagination && nextPage > (pagination.total_pages ?? Infinity)) return;
     fetchRepliesForComment(threadRootComment.id, nextPage, true).catch(() => {});
-  }, [threadRootComment, commentRepliesPagination, fetchRepliesForComment]);
+  }, [threadRootComment, commentRepliesLoading, commentRepliesPagination, fetchRepliesForComment]);
 
   const handleReloadThreadReplies = useCallback(() => {
     if (!threadRootComment) return;
