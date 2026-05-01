@@ -39,6 +39,7 @@ function MentionedText({ mentions }: { mentions?: MentionedUser[] }) {
             name={`@${mention.name}`}
             size={16}
             show_name
+            disabled
           />
           {idx < mentions.length - 1 ? <Text> </Text> : null}
         </React.Fragment>
@@ -51,6 +52,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
   comment,
   isReply = false,
   depth = 0,
+  showMentionHighlight = false,
   maxContentLines,
   replyCount,
   showReplySummary = true,
@@ -66,8 +68,10 @@ export const CommentItem: React.FC<CommentItemProps> = ({
   const handleReply = () => onReply?.(comment);
   const handleShowReplies = () => onShowReplies?.(comment);
   const moreActions = getMoreActions?.(comment) ?? [];
-  const totalReplyCount = replyCount ?? 0;
+  const totalReplyCount = replyCount ?? ('reply_count' in comment ? comment.reply_count : 0);
   const showReplySummaryButton = showReplySummary && totalReplyCount > 0 && !!onShowReplies;
+  const canReply = !!onReply;
+  const canLike = !!onLike;
 
   const isNested = isReply || depth > 0;
   const avatarSize = 40;
@@ -78,9 +82,26 @@ export const CommentItem: React.FC<CommentItemProps> = ({
     containerStyles.push(depth === 1 ? styles.replyFirstLevel : styles.replySubsequent);
   }
 
-  const bodyStyles = [styles.body];
+  const bodyStyles: ViewStyle[] = [styles.body];
+  if (showMentionHighlight && (comment.mentioned_users?.length ?? 0) > 0) {
+    bodyStyles.push({
+      backgroundColor: theme.colors.secondaryContainer,
+      borderRadius: 12,
+      padding: 8,
+    });
+  }
 
   const relativeTime = formatRelativeTime(comment.created_at);
+
+  React.useEffect(() => {
+    if (!moreActions.length && menuVisible) {
+      setMenuVisible(false);
+    }
+  }, [menuVisible, moreActions.length]);
+
+  React.useEffect(() => {
+    setMenuVisible(false);
+  }, [comment.id]);
 
   return (
     <View style={containerStyles}>
@@ -138,7 +159,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
           </Menu>
         </View>
 
-        <Pressable style={styles.bodyPressable} onPress={handleReply}>
+        <Pressable style={styles.bodyPressable} onPress={handleReply} disabled={!canReply}>
           <MentionedText mentions={comment.mentioned_users} />
           {comment.reply_to ? (
             <Text style={[styles.replyingText, { color: theme.colors.primary }]}>Replying to @{comment.reply_to.name}</Text>
@@ -163,14 +184,17 @@ export const CommentItem: React.FC<CommentItemProps> = ({
               onPress={handleReply}
               textColor={theme.colors.onSurfaceVariant}
               uppercase={false}
+              disabled={!canReply}
             >
               回复
             </Button>
-            <Pressable style={styles.likeButton} onPress={handleLike}>
+            <Pressable style={styles.likeButton} onPress={handleLike} disabled={!canLike}>
               <IconButton
                 size={18}
                 icon={comment.is_liked ? 'heart' : 'heart-outline'}
                 iconColor={comment.is_liked ? theme.colors.error : theme.colors.onSurfaceVariant}
+                style={styles.likeIcon}
+                disabled
               />
               <Text variant="bodySmall" style={styles.actionCount}>
                 {comment.like_count}
@@ -270,6 +294,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+  },
+  likeIcon: {
+    margin: 0,
   },
   actionCount: {
     minWidth: 20,

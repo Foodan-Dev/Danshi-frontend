@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, View, Image, StyleSheet, ViewStyle } from 'react-native';
 import { Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { router, type Href } from 'expo-router';
@@ -31,10 +31,20 @@ export function UserAvatar({
 }: UserAvatarProps) {
   const pTheme = usePaperTheme();
   const safeAvatarUrl = getSafeRemoteUrl(avatar_url);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+  const normalizedUserId = useMemo(() => userId.trim(), [userId]);
+  const resolvedSize = useMemo(
+    () => (Number.isFinite(size) ? Math.max(16, Math.min(96, Math.floor(size))) : 32),
+    [size]
+  );
+
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [safeAvatarUrl]);
 
   const handlePress = () => {
-    if (disabled) return;
-    router.push(`/user/${userId}` as Href);
+    if (disabled || !normalizedUserId) return;
+    router.push(`/user/${normalizedUserId}` as Href);
   };
 
   return (
@@ -44,16 +54,17 @@ export function UserAvatar({
       style={[styles.container, style]}
       android_ripple={{ color: pTheme.colors.surfaceDisabled, borderless: true }}
     >
-      <View style={[styles.avatarContainer, { width: size, height: size, borderRadius: size / 2 }]}>
-        {safeAvatarUrl ? (
+      <View style={[styles.avatarContainer, { width: resolvedSize, height: resolvedSize, borderRadius: resolvedSize / 2 }]}>
+        {safeAvatarUrl && !avatarLoadFailed ? (
           <Image
             source={{ uri: safeAvatarUrl }}
-            style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}
+            style={[styles.avatar, { width: resolvedSize, height: resolvedSize, borderRadius: resolvedSize / 2 }]}
             resizeMode="cover"
+            onError={() => setAvatarLoadFailed(true)}
           />
         ) : (
-          <View style={[styles.avatarPlaceholder, { backgroundColor: pTheme.colors.surfaceVariant, width: size, height: size, borderRadius: size / 2 }]}>
-            <Ionicons name="person" size={size * 0.6} color={pTheme.colors.onSurfaceVariant} />
+          <View style={[styles.avatarPlaceholder, { backgroundColor: pTheme.colors.surfaceVariant, width: resolvedSize, height: resolvedSize, borderRadius: resolvedSize / 2 }]}>
+            <Ionicons name="person" size={resolvedSize * 0.6} color={pTheme.colors.onSurfaceVariant} />
           </View>
         )}
       </View>

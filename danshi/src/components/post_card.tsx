@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { StyleSheet, View, StyleProp, ViewStyle, Image, Pressable, Alert, Platform } from 'react-native';
 import { Text, useTheme as usePaperTheme, IconButton, Menu } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -45,6 +45,32 @@ export const PostCard: React.FC<PostCardProps> = ({
     () => post.images?.map((item) => getSafeRemoteUrl(item)).find((item): item is string => !!item),
     [post.images]
   );
+  const displayTitle = useMemo(
+    () => post.title?.trim() || post.content?.trim().slice(0, 60) || '分享美食',
+    [post.content, post.title]
+  );
+  const canShowActionsMenu = showActions && (!!onEdit || !!onDelete);
+  const appearanceStyle = useMemo(() => {
+    switch (appearance) {
+      case 'outlined':
+        return { borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.outlineVariant };
+      case 'elevated':
+        return {
+          shadowColor: '#000',
+          shadowOpacity: 0.08,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 2,
+        };
+      case 'flat':
+      default:
+        return null;
+    }
+  }, [appearance, theme.colors.outlineVariant]);
+
+  useEffect(() => {
+    setMenuVisible(false);
+  }, [post.id]);
 
   // 使用伪随机比例保持瀑布流参差不齐效果
   const seed = useMemo(() => {
@@ -119,13 +145,15 @@ export const PostCard: React.FC<PostCardProps> = ({
   return (
     <Pressable
       onPress={handlePress}
+      disabled={!onPress}
       style={({ pressed }) => [
         styles.card,
         { backgroundColor: theme.colors.surface },
-        pressed && { opacity: 0.95, transform: [{ scale: 0.98 }] },
+        appearanceStyle,
+        onPress && pressed && { opacity: 0.95, transform: [{ scale: 0.98 }] },
         style,
       ]}
-      accessibilityLabel={`查看帖子 ${post.title}`}
+      accessibilityLabel={`查看帖子 ${displayTitle}`}
       accessibilityRole={onPress ? 'button' : undefined}
     >
       {/* 封面图片区域 */}
@@ -149,7 +177,7 @@ export const PostCard: React.FC<PostCardProps> = ({
               style={[styles.posterText, { color: posterColor.text }]} 
               numberOfLines={4}
             >
-              {post.title || post.content?.slice(0, 60) || '分享美食'}
+              {displayTitle}
             </Text>
           </View>
         )}
@@ -176,9 +204,9 @@ export const PostCard: React.FC<PostCardProps> = ({
         {/* 标题 - 最多2行 */}
         <View style={styles.titleRow}>
           <Text numberOfLines={2} style={[styles.title, { color: theme.colors.onSurface }]}>
-            {post.title}
+            {displayTitle}
           </Text>
-          {showActions && (
+          {canShowActionsMenu && (
             <Menu
               visible={menuVisible}
               onDismiss={() => setMenuVisible(false)}
@@ -186,38 +214,45 @@ export const PostCard: React.FC<PostCardProps> = ({
                 <IconButton
                   icon="dots-vertical"
                   size={16}
-                  onPress={() => setMenuVisible(true)}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    setMenuVisible(true);
+                  }}
                   style={styles.actionBtn}
                 />
               }
             >
-              <Menu.Item
-                onPress={() => {
-                  setMenuVisible(false);
-                  onEdit?.(post.id);
-                }}
-                title="编辑"
-                leadingIcon="pencil"
-              />
-              <Menu.Item
-                onPress={() => {
-                  setMenuVisible(false);
-                  const doDelete = () => onDelete?.(post.id);
-                  if (Platform.OS === 'web') {
-                    if (window.confirm('删除后无法恢复，确定要删除这篇帖子吗？')) {
-                      doDelete();
+              {onEdit ? (
+                <Menu.Item
+                  onPress={() => {
+                    setMenuVisible(false);
+                    onEdit(post.id);
+                  }}
+                  title="编辑"
+                  leadingIcon="pencil"
+                />
+              ) : null}
+              {onDelete ? (
+                <Menu.Item
+                  onPress={() => {
+                    setMenuVisible(false);
+                    const doDelete = () => onDelete(post.id);
+                    if (Platform.OS === 'web') {
+                      if (window.confirm('删除后无法恢复，确定要删除这篇帖子吗？')) {
+                        doDelete();
+                      }
+                    } else {
+                      Alert.alert('确认删除', '删除后无法恢复，确定要删除这篇帖子吗？', [
+                        { text: '取消', style: 'cancel' },
+                        { text: '删除', style: 'destructive', onPress: doDelete },
+                      ]);
                     }
-                  } else {
-                    Alert.alert('确认删除', '删除后无法恢复，确定要删除这篇帖子吗？', [
-                      { text: '取消', style: 'cancel' },
-                      { text: '删除', style: 'destructive', onPress: doDelete },
-                    ]);
-                  }
-                }}
-                title="删除"
-                leadingIcon="delete"
-                titleStyle={{ color: theme.colors.error }}
-              />
+                  }}
+                  title="删除"
+                  leadingIcon="delete"
+                  titleStyle={{ color: theme.colors.error }}
+                />
+              ) : null}
             </Menu>
           )}
         </View>
