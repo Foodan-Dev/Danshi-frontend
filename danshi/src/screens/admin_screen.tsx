@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { Appbar, Text, useTheme as usePaperTheme } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Button, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { router, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use_responsive';
@@ -9,13 +9,14 @@ import { useAuth } from '@/src/context/auth_context';
 import { isAdmin, isSuperAdmin } from '@/src/lib/auth/roles';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 
 
 export default function AdminScreen() {
   const pTheme = usePaperTheme();
   const insets = useSafeAreaInsets();
   const { current, width: windowWidth } = useResponsive();
-  const { user } = useAuth();
+  const { user, isLoading, refreshUser } = useAuth();
 
   // 是否为三列布局
   const isThreeCol = windowWidth >= breakpoints.md;
@@ -33,6 +34,14 @@ export default function AdminScreen() {
     else if (hour < 18) setGreeting('下午好');
     else setGreeting('晚上好');
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        void refreshUser();
+      }
+    }, [refreshUser, user])
+  );
 
   // 动态样式 - 基于主题
   const dynamicStyles = useMemo(() => ({
@@ -78,11 +87,42 @@ export default function AdminScreen() {
     },
   }), [pTheme.colors, isDark]);
 
-  // 检查权限
-  if (!user || !isAdmin(user.role)) {
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/myself');
+  }, []);
+
+  if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
-        <Text>无权访问</Text>
+        <ActivityIndicator animating size="large" color={pTheme.colors.primary} />
+        <Text style={{ marginTop: 12, color: pTheme.colors.onSurfaceVariant }}>正在校验管理员权限...</Text>
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
+        <Text style={{ color: pTheme.colors.onSurface, marginBottom: 12 }}>请先登录后再访问管理中心</Text>
+        <Button mode="contained" onPress={() => router.replace('/login')} style={{ borderRadius: 10 }}>
+          去登录
+        </Button>
+      </View>
+    );
+  }
+
+  if (!isAdmin(user.role)) {
+    return (
+      <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
+        <Text style={{ color: pTheme.colors.onSurface, marginBottom: 8 }}>当前账号没有管理权限</Text>
+        <Text style={{ color: pTheme.colors.onSurfaceVariant, marginBottom: 12 }}>如需继续，请返回个人页或切换管理员账号</Text>
+        <Button mode="contained-tonal" onPress={handleBack} style={{ borderRadius: 10 }}>
+          返回
+        </Button>
       </View>
     );
   }
@@ -119,7 +159,7 @@ export default function AdminScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: pTheme.colors.background }}>
       <Appbar.Header mode="center-aligned" statusBarHeight={insets.top}>
-        <Appbar.BackAction onPress={() => router.back()} />
+        <Appbar.BackAction onPress={handleBack} />
         <Appbar.Content title="管理中心" />
       </Appbar.Header>
 

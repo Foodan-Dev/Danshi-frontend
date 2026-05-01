@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
-import { Appbar, Card, Text, useTheme as usePaperTheme, Button, Menu, IconButton, Divider } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Card, Text, useTheme as usePaperTheme, Button, Menu, IconButton, Divider } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use_responsive';
@@ -23,7 +23,7 @@ type RoleBadgeProps = {
 
 const RoleBadge: React.FC<RoleBadgeProps> = ({ role }) => {
   const pTheme = usePaperTheme();
-  
+
   if (role === ROLES.SUPER_ADMIN) {
     return (
       <LinearGradient
@@ -37,7 +37,7 @@ const RoleBadge: React.FC<RoleBadgeProps> = ({ role }) => {
       </LinearGradient>
     );
   }
-  
+
   if (role === ROLES.ADMIN) {
     return (
       <View style={[styles.roleBadge, { backgroundColor: pTheme.colors.primaryContainer }]}>
@@ -46,7 +46,7 @@ const RoleBadge: React.FC<RoleBadgeProps> = ({ role }) => {
       </View>
     );
   }
-  
+
   // 普通用户不显示标签
   return null;
 };
@@ -55,13 +55,15 @@ export default function AdminUsersScreen() {
   const pTheme = usePaperTheme();
   const insets = useSafeAreaInsets();
   const { current } = useResponsive();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
 
   const [users, setUsers] = useState<AdminUserSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [menuVisible, setMenuVisible] = useState<string | null>(null);
+  const requestSeqRef = useRef(0);
 
   const contentHorizontalPadding = pickByBreakpoint(current, { base: 12, sm: 16, md: 20, lg: 24, xl: 24 });
 
@@ -71,76 +73,122 @@ export default function AdminUsersScreen() {
     surfaceContainerHigh: string;
   };
 
-  // 权限检查
-  if (!user || !isAdmin(user.role)) {
-    return (
-      <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
-        <Text>无权访问</Text>
-      </View>
-    );
-  }
-
-  const canManageRole = isSuperAdmin(user.role);
-
-  const loadUsers = async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError('');
-    
-    try {
-      const result = await adminService.getUsers({});
-      setUsers(result.users);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
     }
-  };
-
-  useEffect(() => {
-    loadUsers();
+    router.replace('/myself/admin');
   }, []);
 
+  const loadUsers = useCallback(async (isRefresh = false) => {
+    if (!user || !isAdmin(user.role)) return;
+    const requestId = ++requestSeqRef.current;
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setLoadError('');
+
+    try {
+      const result = await adminService.getUsers({});
+      if (requestSeqRef.current !== requestId) {
+        return;
+      }
+      setUsers(result.users);
+    } catch (e) {
+      if (requestSeqRef.current !== requestId) {
+        return;
+      }
+      setLoadError(e instanceof Error ? e.message : '读取用户失败，请稍后重试');
+    } finally {
+      if (requestSeqRef.current === requestId) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (isLoading || !user || !isAdmin(user.role)) {
+      return;
+    }
+    void loadUsers();
+  }, [isLoading, loadUsers, user]);
+
+  const canManageRole = !!user && isSuperAdmin(user.role);
+
   const handleUpdateRole = async (userId: string, role: Role) => {
+    setActionError('');
     try {
       await adminService.updateUserRole(userId, { role });
       await loadUsers();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setActionError(e instanceof Error ? e.message : '修改用户身份失败，请稍后重试');
     }
   };
 
   const handleUpdateStatus = async (userId: string, isActive: boolean) => {
+    setActionError('');
     try {
       await adminService.updateUserStatus(userId, { is_active: isActive });
-      setUsers(users.map(u => u.id === userId ? { ...u, is_active: isActive } : u));
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, is_active: isActive } : u));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setActionError(e instanceof Error ? e.message : '修改用户状态失败，请稍后重试');
     }
   };
 
   const formatFullDate = (dateStr: string) => formatDate(dateStr, 'full');
 
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator animating size="large" color={pTheme.colors.primary} />
+        <Text style={{ marginTop: 12, color: pTheme.colors.onSurfaceVariant }}>正在校验管理员权限...</Text>
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
+        <Text style={{ color: pTheme.colors.onSurface, marginBottom: 12 }}>请先登录后再访问用户管理</Text>
+        <Button mode="contained" onPress={() => router.replace('/login')} style={{ borderRadius: 10 }}>
+          去登录
+        </Button>
+      </View>
+    );
+  }
+
+  if (!isAdmin(user.role)) {
+    return (
+      <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
+        <Text style={{ color: pTheme.colors.onSurface, marginBottom: 8 }}>当前账号没有用户管理权限</Text>
+        <Text style={{ color: pTheme.colors.onSurfaceVariant, marginBottom: 12 }}>请返回管理中心或切换为管理员账号</Text>
+        <Button mode="contained-tonal" onPress={handleBack} style={{ borderRadius: 10 }}>
+          返回
+        </Button>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: pTheme.colors.background }}>
       <Appbar.Header mode="center-aligned" statusBarHeight={insets.top}>
-        <Appbar.BackAction onPress={() => router.back()} />
+        <Appbar.BackAction onPress={handleBack} />
         <Appbar.Content title="用户管理" />
       </Appbar.Header>
 
       <ScrollView
         style={{ backgroundColor: pTheme.colors.background }}
-        contentContainerStyle={{ 
-          paddingTop: 12, 
-          paddingBottom: 24, 
+        contentContainerStyle={{
+          paddingTop: 12,
+          paddingBottom: 24,
           paddingHorizontal: contentHorizontalPadding,
-          gap: 8 
+          gap: 8
         }}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={() => loadUsers(true)}
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void loadUsers(true)}
             colors={[pTheme.colors.primary]}
             tintColor={pTheme.colors.primary}
             progressBackgroundColor={pTheme.colors.surface}
@@ -153,11 +201,11 @@ export default function AdminUsersScreen() {
               <Text>加载中...</Text>
             </Card.Content>
           </Card>
-        ) : error ? (
+        ) : loadError && users.length === 0 ? (
           <Card mode="contained">
             <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <Text style={{ color: pTheme.colors.error }}>{error}</Text>
-              <Button mode="text" onPress={() => loadUsers()} style={{ marginTop: 8 }}>
+              <Text style={{ color: pTheme.colors.error }}>{loadError}</Text>
+              <Button mode="text" onPress={() => void loadUsers()} style={{ marginTop: 8 }}>
                 重试
               </Button>
             </Card.Content>
@@ -170,115 +218,125 @@ export default function AdminUsersScreen() {
             </Card.Content>
           </Card>
         ) : (
-          users.map((u) => (
-            <Pressable
-              key={u.id}
-              style={[styles.userTile, { backgroundColor: colors.surfaceContainer }]}
-            >
-              {/* 左侧头像 */}
-              <UserAvatar
-                userId={u.id}
-                name={u.name}
-                avatar_url={u.avatar_url}
-                size={44}
-              />
-              
-              {/* 中间用户信息 */}
-              <View style={styles.userInfo}>
-                {/* 第一行：用户名 + 身份标签 + 状态标签 */}
-                <View style={styles.userNameRow}>
-                  <Text style={[styles.userName, { color: pTheme.colors.onSurface }]} numberOfLines={1}>
-                    {u.name}
-                  </Text>
-                  <RoleBadge role={u.role} />
-                  {!u.is_active && (
-                    <View style={[styles.statusBadge, { backgroundColor: pTheme.colors.errorContainer }]}>
-                      <Text style={[styles.statusBadgeText, { color: pTheme.colors.error }]}>已禁用</Text>
-                    </View>
-                  )}
-                </View>
-                
-                {/* 第二行：邮箱 */}
-                <Text style={[styles.userEmail, { color: pTheme.colors.onSurfaceVariant }]} numberOfLines={1}>
-                  {u.email}
-                </Text>
-                
-                {/* 第三行：数据 + 时间 */}
-                <View style={styles.userMeta}>
-                  <Ionicons name="document-text-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
-                  <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
-                    {u.stats?.post_count || 0}
-                  </Text>
-                  <Text style={[styles.metaSeparator, { color: pTheme.colors.outline }]}>·</Text>
-                  <Ionicons name="people-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
-                  <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
-                    {u.stats?.follower_count || 0}
-                  </Text>
-                  <Text style={[styles.metaSeparator, { color: pTheme.colors.outline }]}>·</Text>
-                  <Ionicons name="time-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
-                  <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
-                    {formatFullDate(u.created_at)}
-                  </Text>
-                </View>
-              </View>
-              
-              {/* 右侧更多菜单 */}
-              <Menu
-                visible={menuVisible === u.id}
-                onDismiss={() => setMenuVisible(null)}
-                anchor={
-                  <IconButton
-                    icon="dots-vertical"
-                    size={18}
-                    onPress={() => setMenuVisible(u.id)}
-                    style={styles.moreBtn}
-                  />
-                }
+          <>
+            {loadError ? (
+              <Card mode="contained" style={{ marginBottom: 8 }}>
+                <Card.Content>
+                  <Text style={{ color: pTheme.colors.error }}>刷新失败，当前展示的是旧列表：{loadError}</Text>
+                </Card.Content>
+              </Card>
+            ) : null}
+            {actionError ? (
+              <Card mode="contained" style={{ marginBottom: 8 }}>
+                <Card.Content>
+                  <Text style={{ color: pTheme.colors.error }}>{actionError}</Text>
+                </Card.Content>
+              </Card>
+            ) : null}
+            {users.map((u) => (
+              <Pressable
+                key={u.id}
+                style={[styles.userTile, { backgroundColor: colors.surfaceContainer }]}
               >
-                {canManageRole && (
-                  <>
-                    <Menu.Item 
-                      onPress={() => {
-                        setMenuVisible(null);
-                        handleUpdateRole(u.id, ROLES.USER);
-                      }} 
-                      title="设为普通用户" 
-                      leadingIcon="account"
-                      disabled={u.role === ROLES.USER}
-                    />
-                    <Menu.Item 
-                      onPress={() => {
-                        setMenuVisible(null);
-                        handleUpdateRole(u.id, ROLES.ADMIN);
-                      }} 
-                      title="设为管理员" 
-                      leadingIcon="shield-account"
-                      disabled={u.role === ROLES.ADMIN}
-                    />
-                    <Menu.Item 
-                      onPress={() => {
-                        setMenuVisible(null);
-                        handleUpdateRole(u.id, ROLES.SUPER_ADMIN);
-                      }} 
-                      title="设为超级管理员" 
-                      leadingIcon="shield-crown"
-                      disabled={u.role === ROLES.SUPER_ADMIN}
-                    />
-                    <Divider />
-                  </>
-                )}
-                <Menu.Item 
-                  onPress={() => {
-                    setMenuVisible(null);
-                    handleUpdateStatus(u.id, !u.is_active);
-                  }} 
-                  title={u.is_active ? '禁用用户' : '启用用户'} 
-                  leadingIcon={u.is_active ? 'account-cancel' : 'account-check'}
-                  titleStyle={u.is_active ? { color: pTheme.colors.error } : undefined}
+                <UserAvatar
+                  userId={u.id}
+                  name={u.name}
+                  avatar_url={u.avatar_url}
+                  size={44}
                 />
-              </Menu>
-            </Pressable>
-          ))
+
+                <View style={styles.userInfo}>
+                  <View style={styles.userNameRow}>
+                    <Text style={[styles.userName, { color: pTheme.colors.onSurface }]} numberOfLines={1}>
+                      {u.name}
+                    </Text>
+                    <RoleBadge role={u.role} />
+                    {!u.is_active && (
+                      <View style={[styles.statusBadge, { backgroundColor: pTheme.colors.errorContainer }]}>
+                        <Text style={[styles.statusBadgeText, { color: pTheme.colors.error }]}>已禁用</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <Text style={[styles.userEmail, { color: pTheme.colors.onSurfaceVariant }]} numberOfLines={1}>
+                    {u.email}
+                  </Text>
+
+                  <View style={styles.userMeta}>
+                    <Ionicons name="document-text-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
+                    <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
+                      {u.stats?.post_count || 0}
+                    </Text>
+                    <Text style={[styles.metaSeparator, { color: pTheme.colors.outline }]}>·</Text>
+                    <Ionicons name="people-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
+                    <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
+                      {u.stats?.follower_count || 0}
+                    </Text>
+                    <Text style={[styles.metaSeparator, { color: pTheme.colors.outline }]}>·</Text>
+                    <Ionicons name="time-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
+                    <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
+                      {formatFullDate(u.created_at)}
+                    </Text>
+                  </View>
+                </View>
+
+                <Menu
+                  visible={menuVisible === u.id}
+                  onDismiss={() => setMenuVisible(null)}
+                  anchor={
+                    <IconButton
+                      icon="dots-vertical"
+                      size={18}
+                      onPress={() => setMenuVisible(u.id)}
+                      style={styles.moreBtn}
+                    />
+                  }
+                >
+                  {canManageRole && (
+                    <>
+                      <Menu.Item
+                        onPress={() => {
+                          setMenuVisible(null);
+                          void handleUpdateRole(u.id, ROLES.USER);
+                        }}
+                        title="设为普通用户"
+                        leadingIcon="account"
+                        disabled={u.role === ROLES.USER}
+                      />
+                      <Menu.Item
+                        onPress={() => {
+                          setMenuVisible(null);
+                          void handleUpdateRole(u.id, ROLES.ADMIN);
+                        }}
+                        title="设为管理员"
+                        leadingIcon="shield-account"
+                        disabled={u.role === ROLES.ADMIN}
+                      />
+                      <Menu.Item
+                        onPress={() => {
+                          setMenuVisible(null);
+                          void handleUpdateRole(u.id, ROLES.SUPER_ADMIN);
+                        }}
+                        title="设为超级管理员"
+                        leadingIcon="shield-crown"
+                        disabled={u.role === ROLES.SUPER_ADMIN}
+                      />
+                      <Divider />
+                    </>
+                  )}
+                  <Menu.Item
+                    onPress={() => {
+                      setMenuVisible(null);
+                      void handleUpdateStatus(u.id, !u.is_active);
+                    }}
+                    title={u.is_active ? '禁用用户' : '启用用户'}
+                    leadingIcon={u.is_active ? 'account-cancel' : 'account-check'}
+                    titleStyle={u.is_active ? { color: pTheme.colors.error } : undefined}
+                  />
+                </Menu>
+              </Pressable>
+            ))}
+          </>
         )}
       </ScrollView>
     </View>
