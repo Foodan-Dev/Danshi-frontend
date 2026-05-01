@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -37,8 +37,15 @@ export default function ImageDropZone({
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadingCount, setUploadingCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const imagesRef = useRef(images);
+  const uploadLockRef = useRef(false);
 
   const isWeb = Platform.OS === 'web';
+  const normalizedMaxImages = Number.isFinite(maxImages) ? Math.max(1, Math.floor(maxImages)) : 9;
+
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
 
   // 检查图片 URL 是否有效
   const isValidImageUrl = useCallback((url: string) => {
@@ -46,7 +53,18 @@ export default function ImageDropZone({
   }, []);
 
   // 获取有效的图片列表
-  const validImages = images.filter((url) => url && isValidImageUrl(url));
+  const validImageItems = useMemo(
+    () =>
+      images
+        .map((url, index) => ({ url, index }))
+        .filter((item) => item.url && isValidImageUrl(item.url)),
+    [images, isValidImageUrl]
+  );
+  const validImages = useMemo(() => validImageItems.map((item) => item.url), [validImageItems]);
+  const occupiedSlotCount = useMemo(
+    () => images.filter((url) => typeof url === 'string' && url.trim().length > 0).length,
+    [images]
+  );
 
   // 处理图片链接变更
   const handleChangeImage = useCallback(
@@ -59,48 +77,62 @@ export default function ImageDropZone({
 
   // 添加图片链接输入框
   const handleAddImageField = useCallback(() => {
-    if (images.length < maxImages) {
-      onImagesChange([...images, '']);
+    const currentImages = imagesRef.current;
+    if (currentImages.length < normalizedMaxImages) {
+      onImagesChange([...currentImages, '']);
     }
-  }, [images, maxImages, onImagesChange]);
+  }, [normalizedMaxImages, onImagesChange]);
 
   // 删除图片
   const handleRemoveImage = useCallback(
     (index: number) => {
-      const newImages = images.length === 1 ? [''] : images.filter((_, idx) => idx !== index);
+      const currentImages = imagesRef.current;
+      const newImages = currentImages.length === 1 ? [''] : currentImages.filter((_, idx) => idx !== index);
       onImagesChange(newImages);
     },
-    [images, onImagesChange]
+    [onImagesChange]
   );
 
   // 添加已上传的图片 URL
   const addUploadedImages = useCallback(
     (urls: string[]) => {
-      // 移除空的输入框，添加新的 URL
-      const existingValidImages = images.filter((url) => url && isValidImageUrl(url));
-      const newImages = [...existingValidImages, ...urls].slice(0, maxImages);
-      // 如果还有空间，保留一个空输入框
-      if (newImages.length < maxImages) {
-        newImages.push('');
+      const currentImages = imagesRef.current.slice(0, normalizedMaxImages);
+      const nextImages = [...currentImages];
+
+      urls.forEach((url) => {
+        const emptyIndex = nextImages.findIndex((item) => !item || !item.trim());
+        if (emptyIndex >= 0) {
+          nextImages[emptyIndex] = url;
+          return;
+        }
+        if (nextImages.length < normalizedMaxImages) {
+          nextImages.push(url);
+        }
+      });
+
+      if (nextImages.length < normalizedMaxImages && !nextImages.some((item) => !item || !item.trim())) {
+        nextImages.push('');
       }
-      onImagesChange(newImages);
+      onImagesChange(nextImages.slice(0, normalizedMaxImages));
     },
-    [images, maxImages, onImagesChange, isValidImageUrl]
+    [normalizedMaxImages, onImagesChange]
   );
 
   // 上传文件 (Web 端)
   const uploadFiles = useCallback(
     async (files: File[]) => {
+      if (uploadLockRef.current) return;
       if (files.length === 0) return;
 
-      const availableSlots = maxImages - validImages.length;
+      const availableSlots = normalizedMaxImages - imagesRef.current.filter((url) => typeof url === 'string' && url.trim().length > 0).length;
       if (availableSlots <= 0) {
-        setUploadError(`最多只能上传 ${maxImages} 张图片`);
+        setUploadError(`最多只能上传 ${normalizedMaxImages} 张图片`);
         return;
       }
 
       const filesToUpload = files.slice(0, availableSlots);
       setUploadError(null);
+      uploadLockRef.current = true;
       setUploadingCount(filesToUpload.length);
 
       try {
@@ -112,19 +144,21 @@ export default function ImageDropZone({
         const message = err instanceof Error ? err.message : '上传失败，请稍后重试';
         setUploadError(message);
       } finally {
+        uploadLockRef.current = false;
         setUploadingCount(0);
       }
     },
-    [maxImages, validImages.length, addUploadedImages]
+    [normalizedMaxImages, addUploadedImages]
   );
 
   // 原生端：从图库选择图片
   const pickImageFromLibrary = useCallback(async () => {
     if (isWeb) return;
+    if (uploadLockRef.current) return;
 
-    const availableSlots = maxImages - validImages.length;
+    const availableSlots = normalizedMaxImages - imagesRef.current.filter((url) => typeof url === 'string' && url.trim().length > 0).length;
     if (availableSlots <= 0) {
-      setUploadError(`最多只能上传 ${maxImages} 张图片`);
+      setUploadError(`最多只能上传 ${normalizedMaxImages} 张图片`);
       return;
     }
 
@@ -149,6 +183,7 @@ export default function ImageDropZone({
       }
 
       setUploadError(null);
+      uploadLockRef.current = true;
       setUploadingCount(result.assets.length);
 
       // 上传选中的图片
@@ -165,25 +200,29 @@ export default function ImageDropZone({
       const message = err instanceof Error ? err.message : '上传失败，请稍后重试';
       setUploadError(message);
     } finally {
+      uploadLockRef.current = false;
       setUploadingCount(0);
     }
-  }, [isWeb, maxImages, validImages.length, addUploadedImages]);
+  }, [isWeb, normalizedMaxImages, addUploadedImages]);
 
   // Web 端拖拽处理
   const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!enableDragDrop) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(true);
-  }, []);
+  }, [enableDragDrop]);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
+    if (!enableDragDrop) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-  }, []);
+  }, [enableDragDrop]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
+      if (!enableDragDrop) return;
       e.preventDefault();
       e.stopPropagation();
       setIsDragOver(false);
@@ -194,9 +233,11 @@ export default function ImageDropZone({
 
       if (files.length > 0) {
         uploadFiles(files);
+      } else if (e.dataTransfer.files.length > 0) {
+        setUploadError('请选择图片文件');
       }
     },
-    [uploadFiles]
+    [enableDragDrop, uploadFiles]
   );
 
   // 点击上传区域
@@ -207,11 +248,14 @@ export default function ImageDropZone({
       input.accept = 'image/*';
       input.multiple = true;
       input.onchange = (e) => {
-        const files = Array.from((e.target as HTMLInputElement).files || []).filter((file) =>
+        const pickedFiles = Array.from((e.target as HTMLInputElement).files || []);
+        const files = pickedFiles.filter((file) =>
           file.type.startsWith('image/')
         );
         if (files.length > 0) {
           uploadFiles(files);
+        } else if (pickedFiles.length > 0) {
+          setUploadError('请选择图片文件');
         }
       };
       input.click();
@@ -244,7 +288,7 @@ export default function ImageDropZone({
         {/* 图片网格 */}
         <View style={styles.imageGrid}>
           {/* 已有图片 */}
-          {validImages.map((url, idx) => (
+          {validImageItems.map(({ url, index }, idx) => (
             <View
               key={`img-${idx}`}
               style={[
@@ -262,7 +306,7 @@ export default function ImageDropZone({
                 size={20}
                 iconColor={theme.colors.error}
                 style={styles.imageRemoveBtn}
-                onPress={() => handleRemoveImage(idx)}
+                onPress={() => handleRemoveImage(index)}
               />
             </View>
           ))}
@@ -284,7 +328,7 @@ export default function ImageDropZone({
           )}
 
           {/* 添加按钮 - 支持拖拽 */}
-          {validImages.length < maxImages && uploadingCount === 0 && (
+          {(occupiedSlotCount < normalizedMaxImages || images.some((item) => !item || !item.trim())) && uploadingCount === 0 && (
             <Pressable
               style={[
                 styles.imageGridItem,
@@ -295,18 +339,22 @@ export default function ImageDropZone({
                 },
               ]}
               onPress={handleClickUpload}
-              // @ts-ignore - Web only props
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+              {...(enableDragDrop ? {
+                // @ts-ignore - Web only props
+                onDragOver: handleDragOver,
+                // @ts-ignore - Web only props
+                onDragLeave: handleDragLeave,
+                // @ts-ignore - Web only props
+                onDrop: handleDrop,
+              } : {})}
             >
-              <Ionicons 
-                name={isDragOver ? 'cloud-upload' : 'add'} 
-                size={28} 
-                color={theme.colors.primary} 
+              <Ionicons
+                name={enableDragDrop && isDragOver ? 'cloud-upload' : 'add'}
+                size={28}
+                color={theme.colors.primary}
               />
               <Text style={[styles.addImageText, { color: theme.colors.primary }]}>
-                {isDragOver ? '松开上传' : '点击或拖拽'}
+                {enableDragDrop ? (isDragOver ? '松开上传' : '点击或拖拽') : '点击上传'}
               </Text>
             </Pressable>
           )}
@@ -314,7 +362,7 @@ export default function ImageDropZone({
 
         {/* 提示文字 */}
         <Text style={[styles.hintText, { color: theme.colors.outline }]}>
-          点击选择文件或拖拽图片上传
+          {enableDragDrop ? '点击选择文件或拖拽图片上传' : '点击选择文件上传'}
         </Text>
       </View>
     );
@@ -395,7 +443,7 @@ export default function ImageDropZone({
         )}
 
         {/* 从图库选择按钮 */}
-        {images.length < maxImages && uploadingCount === 0 && (
+        {(occupiedSlotCount < normalizedMaxImages || images.some((item) => !item || !item.trim())) && uploadingCount === 0 && (
           <Pressable
             style={[
               styles.imageGridItem,
@@ -412,7 +460,7 @@ export default function ImageDropZone({
         )}
 
         {/* 添加链接按钮 */}
-        {images.length < maxImages && uploadingCount === 0 && (
+        {images.length < normalizedMaxImages && uploadingCount === 0 && (
           <Pressable
             style={[
               styles.imageGridItem,

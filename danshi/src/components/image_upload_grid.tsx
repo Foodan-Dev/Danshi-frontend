@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -39,8 +39,15 @@ export default function ImageUploadGrid({
   const [uploadingCount, setUploadingCount] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const imagesRef = useRef(images);
+  const uploadLockRef = useRef(false);
 
   const isWeb = Platform.OS === 'web';
+  const normalizedMaxImages = Number.isFinite(maxImages) ? Math.max(1, Math.floor(maxImages)) : 9;
+
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
 
   // 检查图片 URL 是否有效
   const isValidImageUrl = useCallback((url: string) => {
@@ -48,7 +55,14 @@ export default function ImageUploadGrid({
   }, []);
 
   // 获取有效的图片列表
-  const validImages = images.filter((url) => url && isValidImageUrl(url));
+  const validImageItems = useMemo(
+    () =>
+      images
+        .map((url, index) => ({ url, index }))
+        .filter((item) => item.url && isValidImageUrl(item.url)),
+    [images, isValidImageUrl]
+  );
+  const validImages = useMemo(() => validImageItems.map((item) => item.url), [validImageItems]);
 
   // 计算网格项尺寸 (3 列，间距 10px)
   const containerPadding = 0;
@@ -59,26 +73,33 @@ export default function ImageUploadGrid({
 
   // 删除图片
   const handleRemoveImage = useCallback(
-    (index: number) => {
-      const validList = images.filter((url) => url && isValidImageUrl(url));
-      const newList = validList.filter((_, idx) => idx !== index);
+    (displayIndex: number) => {
+      const originalIndex = validImageItems[displayIndex]?.index;
+      if (typeof originalIndex !== 'number') return;
+      const currentImages = imagesRef.current.filter(
+        (url, index) => index !== originalIndex && url && isValidImageUrl(url)
+      );
+      const newList = currentImages.slice(0, normalizedMaxImages);
       onImagesChange(newList.length > 0 ? newList : []);
     },
-    [images, onImagesChange, isValidImageUrl]
+    [validImageItems, normalizedMaxImages, onImagesChange, isValidImageUrl]
   );
 
   // 添加已上传的图片 URL
   const addUploadedImages = useCallback(
     (urls: string[]) => {
-      const existingValid = images.filter((url) => url && isValidImageUrl(url));
-      const newImages = [...existingValid, ...urls].slice(0, maxImages);
+      const existingValid = imagesRef.current.filter((url) => url && isValidImageUrl(url));
+      const newImages = [...existingValid, ...urls].slice(0, normalizedMaxImages);
       onImagesChange(newImages);
     },
-    [images, maxImages, onImagesChange, isValidImageUrl]
+    [normalizedMaxImages, onImagesChange, isValidImageUrl]
   );
 
   // Web 端：处理文件上传
   const handleWebFileUpload = useCallback(async (files: FileList | File[]) => {
+    if (uploadLockRef.current) {
+      return;
+    }
     const fileArray = Array.from(files);
     const imageFiles = fileArray.filter(f => f.type.startsWith('image/'));
     
@@ -87,9 +108,9 @@ export default function ImageUploadGrid({
       return;
     }
 
-    const availableSlots = maxImages - validImages.length;
+    const availableSlots = normalizedMaxImages - imagesRef.current.filter((url) => url && isValidImageUrl(url)).length;
     if (availableSlots <= 0) {
-      setUploadError(`最多只能上传 ${maxImages} 张图片`);
+      setUploadError(`最多只能上传 ${normalizedMaxImages} 张图片`);
       return;
     }
 
@@ -103,6 +124,7 @@ export default function ImageUploadGrid({
     }
 
     setUploadError(null);
+    uploadLockRef.current = true;
     setUploadingCount(filesToUpload.length);
 
     try {
@@ -113,9 +135,10 @@ export default function ImageUploadGrid({
       const message = err instanceof Error ? err.message : '上传失败，请稍后重试';
       setUploadError(message);
     } finally {
+      uploadLockRef.current = false;
       setUploadingCount(0);
     }
-  }, [maxImages, validImages.length, addUploadedImages]);
+  }, [normalizedMaxImages, addUploadedImages, isValidImageUrl]);
 
   // Web 端：点击选择文件
   const handleWebClick = useCallback(() => {
@@ -158,9 +181,12 @@ export default function ImageUploadGrid({
 
   // 原生端：从图库选择图片
   const pickImageFromLibrary = useCallback(async () => {
-    const availableSlots = maxImages - validImages.length;
+    if (uploadLockRef.current) {
+      return;
+    }
+    const availableSlots = normalizedMaxImages - imagesRef.current.filter((url) => url && isValidImageUrl(url)).length;
     if (availableSlots <= 0) {
-      setUploadError(`最多只能上传 ${maxImages} 张图片`);
+      setUploadError(`最多只能上传 ${normalizedMaxImages} 张图片`);
       return;
     }
 
@@ -183,6 +209,7 @@ export default function ImageUploadGrid({
       }
 
       setUploadError(null);
+      uploadLockRef.current = true;
       setUploadingCount(result.assets.length);
 
       const sources: UploadSource[] = result.assets.map((asset) => ({
@@ -198,11 +225,12 @@ export default function ImageUploadGrid({
       const message = err instanceof Error ? err.message : '上传失败，请稍后重试';
       setUploadError(message);
     } finally {
+      uploadLockRef.current = false;
       setUploadingCount(0);
     }
-  }, [maxImages, validImages.length, addUploadedImages]);
+  }, [normalizedMaxImages, addUploadedImages, isValidImageUrl]);
 
-  const canAddMore = validImages.length < maxImages && uploadingCount === 0;
+  const canAddMore = validImages.length < normalizedMaxImages && uploadingCount === 0;
 
   return (
     <View style={styles.container}>
@@ -224,7 +252,7 @@ export default function ImageUploadGrid({
       {/* 图片网格 */}
       <View style={styles.grid}>
         {/* 已上传的图片 */}
-        {validImages.map((url, idx) => (
+      {validImages.map((url, idx) => (
           <Pressable
             key={`img-${idx}-${url.slice(-10)}`}
             style={[
@@ -310,7 +338,7 @@ export default function ImageUploadGrid({
       {/* 底部提示 */}
       {validImages.length > 0 && (
         <Text style={[styles.countHint, { color: theme.colors.outline }]}>
-          {validImages.length}/{maxImages} 张图片
+          {validImages.length}/{normalizedMaxImages} 张图片
         </Text>
       )}
     </View>
