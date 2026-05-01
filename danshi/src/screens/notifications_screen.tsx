@@ -36,6 +36,7 @@ const TABS: Tab[] = [
 ];
 
 const PAGE_SIZE = 20;
+const INTERACTION_TYPES: NotificationType[] = ['like_post', 'like_comment', 'comment', 'reply', 'mention'];
 
 // ==================== 骨架屏组件 ====================
 
@@ -130,51 +131,74 @@ export default function NotificationsScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [markAllLoading, setMarkAllLoading] = useState(false);
+  const requestSeqRef = useRef(0);
 
   // 小圆点消失动画
   const dotsOpacity = useRef(new Animated.Value(1)).current;
 
   // 获取当前 Tab 的筛选类型
   const getCurrentTypeFilter = useCallback((tab: TabValue): NotificationType | undefined => {
-    const tabConfig = TABS.find((t) => t.value === tab);
     // 如果有多个类型，接口只支持单个 type，暂时不传（由前端筛选）
     // 这里简化处理：只有 follow tab 传 type
     if (tab === 'follow') return 'follow';
     return undefined;
   }, []);
 
+  const filterNotificationsByTab = useCallback((tab: TabValue, data: Notification[]) => {
+    if (tab === 'interactions') {
+      return data.filter((item) => INTERACTION_TYPES.includes(item.type));
+    }
+    if (tab === 'follow') {
+      return data.filter((item) => item.type === 'follow');
+    }
+    return data;
+  }, []);
+
   // 加载通知列表
   const loadNotifications = useCallback(
-    async (pageNum: number, isRefresh = false) => {
-      const params: ListNotificationsParams = {
-        page: pageNum,
-        limit: PAGE_SIZE,
-        type: getCurrentTypeFilter(activeTab),
-      };
+    async (tab: TabValue, pageNum: number, isRefresh = false) => {
+      const requestId = ++requestSeqRef.current;
+      let currentPage = pageNum;
+      let lastPagination: ListNotificationsResponse['pagination'] | null = null;
+      let collected: Notification[] = [];
 
       try {
         setError(null);
-        const { notifications: data, pagination } = await notificationsService.list(params);
-
-        // 前端额外筛选（互动 Tab 包含多个类型）
-        let filteredData = data;
-        if (activeTab === 'interactions') {
-          const interactionTypes: NotificationType[] = ['like_post', 'like_comment', 'comment', 'reply', 'mention'];
-          filteredData = data.filter((n) => interactionTypes.includes(n.type));
+        while (true) {
+          const params: ListNotificationsParams = {
+            page: currentPage,
+            limit: PAGE_SIZE,
+            type: getCurrentTypeFilter(tab),
+          };
+          const { notifications: data, pagination } = await notificationsService.list(params);
+          if (requestSeqRef.current !== requestId) {
+            return;
+          }
+          lastPagination = pagination;
+          collected = collected.concat(filterNotificationsByTab(tab, data));
+          const reachedPageEnd = pagination.page >= pagination.total_pages;
+          if (tab !== 'interactions' || reachedPageEnd || collected.length >= PAGE_SIZE) {
+            break;
+          }
+          currentPage += 1;
         }
-        if (activeTab === 'follow') {
-          filteredData = data.filter((n) => n.type === 'follow');
+
+        if (!lastPagination || requestSeqRef.current !== requestId) {
+          return;
         }
 
         if (isRefresh || pageNum === 1) {
-          setNotifications(filteredData);
+          setNotifications(collected);
         } else {
-          setNotifications((prev) => [...prev, ...filteredData]);
+          setNotifications((prev) => [...prev, ...collected]);
         }
 
-        setHasMore(pagination.page < pagination.total_pages);
-        setPage(pageNum);
+        setHasMore(lastPagination.page < lastPagination.total_pages);
+        setPage(lastPagination.page);
       } catch (err) {
+        if (requestSeqRef.current !== requestId) {
+          return;
+        }
         if (__DEV__) console.warn('[NotificationsScreen] Failed to load notifications:', err);
         // 仅首页加载失败时显示错误状态，加载更多失败不覆盖已有数据
         if (isRefresh || pageNum === 1) {
@@ -182,32 +206,32 @@ export default function NotificationsScreen() {
         }
       }
     },
-    [activeTab, getCurrentTypeFilter]
+    [filterNotificationsByTab, getCurrentTypeFilter]
   );
 
   // 初始加载
   useEffect(() => {
     setLoading(true);
     setPage(1);
-    loadNotifications(1, true).finally(() => setLoading(false));
+    loadNotifications(activeTab, 1, true).finally(() => setLoading(false));
   }, [activeTab, loadNotifications]);
 
   // 下拉刷新
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     setRefreshSeq((prev) => prev + 1);
-    await loadNotifications(1, true);
+    await loadNotifications(activeTab, 1, true);
     await refreshUnreadCount();
     setRefreshing(false);
-  }, [loadNotifications, refreshUnreadCount]);
+  }, [activeTab, loadNotifications, refreshUnreadCount]);
 
   // 加载更多
   const handleLoadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
-    await loadNotifications(page + 1);
+    await loadNotifications(activeTab, page + 1);
     setLoadingMore(false);
-  }, [loadingMore, hasMore, page, loadNotifications]);
+  }, [activeTab, loadingMore, hasMore, page, loadNotifications]);
 
   // 全部已读
   const handleMarkAllRead = useCallback(async () => {
@@ -374,7 +398,7 @@ export default function NotificationsScreen() {
                 style={[styles.emptyButton, { borderColor: theme.colors.primary }]}
                 onPress={() => {
                   setLoading(true);
-                  loadNotifications(1, true).finally(() => setLoading(false));
+                  loadNotifications(activeTab, 1, true).finally(() => setLoading(false));
                 }}
               >
                 <Text style={[styles.emptyButtonText, { color: theme.colors.primary }]}>
@@ -534,4 +558,3 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
-

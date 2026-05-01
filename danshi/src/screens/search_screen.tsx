@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, Pressable, TextInput as RNTextInput, Platform, Image, TextStyle, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, View, ScrollView, Pressable, TextInput as RNTextInput, Image, TextStyle, useWindowDimensions } from 'react-native';
 import {
   ActivityIndicator,
   Text,
@@ -125,6 +125,7 @@ export default function SearchScreen() {
   const [hasSearched, setHasSearched] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [followLoadingMap, setFollowLoadingMap] = useState<Record<string, boolean>>({});
+  const requestSeqRef = useRef(0);
 
   // 加载搜索历史
   useEffect(() => {
@@ -173,24 +174,30 @@ export default function SearchScreen() {
       setHasSearched(false);
       return;
     }
+    const requestId = ++requestSeqRef.current;
     setLoading(true);
     setError(null);
     try {
       if (tab === 'posts') {
         const { posts: result } = await searchService.searchPosts({ q: term, limit: 20 });
+        if (requestSeqRef.current !== requestId) return;
         setPosts(result);
         setUsers([]);
       } else {
         const { users: result } = await searchService.searchUsers({ q: term, limit: 20 });
+        if (requestSeqRef.current !== requestId) return;
         setUsers(result);
         setPosts([]);
       }
       setHasSearched(true);
     } catch (e) {
+      if (requestSeqRef.current !== requestId) return;
       const message = (e as Error)?.message ?? '搜索失败，请稍后重试';
       setError(message);
     } finally {
-      setLoading(false);
+      if (requestSeqRef.current === requestId) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -221,6 +228,10 @@ export default function SearchScreen() {
   );
 
   const handleToggleFollow = useCallback(async (userId: string, currentlyFollowing: boolean) => {
+    if (!currentUser) {
+      showAlert('请先登录', '登录后才能关注用户');
+      return;
+    }
     setFollowLoadingMap(prev => ({ ...prev, [userId]: true }));
     try {
       if (currentlyFollowing) {
@@ -230,14 +241,23 @@ export default function SearchScreen() {
       }
       // 乐观更新本地用户列表中的关注状态
       setUsers(prev => prev.map(u =>
-        u.id === userId ? { ...u, is_following: !currentlyFollowing } : u
+        u.id === userId
+          ? {
+              ...u,
+              is_following: !currentlyFollowing,
+              stats: {
+                ...u.stats,
+                follower_count: Math.max(0, (u.stats?.follower_count ?? 0) + (currentlyFollowing ? -1 : 1)),
+              },
+            }
+          : u
       ));
     } catch (err: any) {
       showAlert('操作失败', err.message || '请稍后重试');
     } finally {
       setFollowLoadingMap(prev => ({ ...prev, [userId]: false }));
     }
-  }, []);
+  }, [currentUser]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -478,7 +498,7 @@ export default function SearchScreen() {
                     </View>
 
                     {/* 右侧：关注按钮（不对自己显示） */}
-                    {currentUser?.id !== user.id && (
+                    {currentUser && currentUser.id !== user.id && (
                       <Pressable
                         style={[
                           styles.followBtn,
