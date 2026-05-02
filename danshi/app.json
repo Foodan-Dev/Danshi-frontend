@@ -2,7 +2,7 @@
   "expo": {
     "name": "DanShi",
     "slug": "DanShi",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "danshi",
@@ -18,10 +18,9 @@
         },
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "0"
+      "buildNumber": "2"
     },
     "android": {
-      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -59,7 +58,8 @@
       ],
       "expo-router",
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
