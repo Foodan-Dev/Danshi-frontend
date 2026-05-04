@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View, ScrollView, Pressable, TextInput as RNTextInput, Image, TextStyle, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, ScrollView, Pressable, TextInput as RNTextInput, Image, TextStyle, type StyleProp, useWindowDimensions } from 'react-native';
 import {
   ActivityIndicator,
   Text,
@@ -35,7 +35,7 @@ const HIGHLIGHT_CLOSE = '</em>';
 
 type HighlightedTextProps = {
   value: string;
-  style?: TextStyle;
+  style?: StyleProp<TextStyle>;
   numberOfLines?: number;
 };
 
