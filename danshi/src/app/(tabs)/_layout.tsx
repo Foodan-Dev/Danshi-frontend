@@ -161,10 +161,6 @@ export default function TabsLayout() {
             style={StyleSheet.absoluteFill}
           />
         ) : null,
-      sceneContainerStyle: {
-        backgroundColor: theme.background,
-        paddingBottom: shouldHideTabBar ? 0 : tabBarTotalHeight,
-      },
       tabBarActiveTintColor: theme.colors.primary,
       tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
       tabBarLabelStyle: { fontSize: 11, fontWeight: '600' as const },
@@ -258,7 +254,6 @@ export default function TabsLayout() {
             </View>
           ),
           tabBarStyle: { display: 'none' },
-          sceneContainerStyle: { paddingBottom: 0 },
         }}
       />
       <Tabs.Screen
@@ -275,7 +270,6 @@ export default function TabsLayout() {
         options={{
           href: null, // 从 Tab Bar 中隐藏
           tabBarStyle: { display: 'none' },
-          sceneContainerStyle: { paddingBottom: 0 },
         }}
       />
     </Tabs>
