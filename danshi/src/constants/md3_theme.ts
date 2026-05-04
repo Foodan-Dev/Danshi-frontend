@@ -22,6 +22,16 @@ export interface SemanticColors {
   onSeekingContainer: string;
 }
 
+export interface SurfaceColors {
+  surfaceDim: string;
+  surfaceBright: string;
+  surfaceContainerLowest: string;
+  surfaceContainerLow: string;
+  surfaceContainer: string;
+  surfaceContainerHigh: string;
+  surfaceContainerHighest: string;
+}
+
 const semanticLight: SemanticColors = {
   // 推荐：绿色系
   recommend: '#059669',
@@ -170,7 +180,7 @@ const brandDark = {
 // ==================== 扩展主题类型 ====================
 
 export type ExtendedMD3Theme = MD3Theme & {
-  colors: MD3Theme['colors'] & SemanticColors;
+  colors: MD3Theme['colors'] & SemanticColors & SurfaceColors;
 };
 
 // 默认主题色

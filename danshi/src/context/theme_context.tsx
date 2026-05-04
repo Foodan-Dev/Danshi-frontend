@@ -2,12 +2,13 @@ import React, { createContext, useContext, useEffect, useState, useMemo } from '
 import { View, StyleSheet } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useColorScheme as useRNColorScheme } from 'react-native'
-import { MD3DarkTheme, MD3LightTheme, useTheme as usePaperTheme, MD3Theme } from 'react-native-paper'
+import { MD3DarkTheme, MD3LightTheme, useTheme as usePaperTheme } from 'react-native-paper'
 import { generatePalette, PRESET_COLORS, isValidHex } from '@/src/lib/theme/color_generator'
+import type { ExtendedMD3Theme } from '@/src/constants/md3_theme'
 
 // Types
 export type ThemeMode = 'light' | 'dark' | 'system'
-export type ThemeColors = MD3Theme['colors']
+export type ThemeColors = ExtendedMD3Theme['colors']
 
 // 空字符串表示使用默认预设颜色
 const DEFAULT_ACCENT_COLOR = ''
@@ -115,7 +116,7 @@ export function useTheme() {
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider')
 
   const { effective } = ctx
-  const paper = usePaperTheme()
+  const paper = usePaperTheme<ExtendedMD3Theme>()
   const colors: ThemeColors = paper.colors
 
   return {
