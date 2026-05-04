@@ -38,7 +38,7 @@ export type SearchPostsResponse = {
   };
 };
 
-export type SearchUser = User & {
+export type SearchUser = Omit<User, 'stats'> & {
   bio?: string;
   stats?: {
     post_count?: number;
