@@ -60,7 +60,65 @@ function RootStack() {
 function ThemedPaperRoot({ children }: { children: React.ReactNode }) {
   const { effective, accentColor } = useTheme();
   const theme = getMD3Theme(effective, accentColor);
-  return <PaperProvider theme={theme}>{children}</PaperProvider>;
+  return (
+    <PaperProvider theme={theme}>
+      <WebAutofillStyle
+        backgroundColor={theme.colors.surface}
+        textColor={theme.colors.onSurface}
+        caretColor={theme.colors.primary}
+      />
+      {children}
+    </PaperProvider>
+  );
+}
+
+function WebAutofillStyle({
+  backgroundColor,
+  textColor,
+  caretColor,
+}: {
+  backgroundColor: string;
+  textColor: string;
+  caretColor: string;
+}) {
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      return;
+    }
+
+    const styleId = 'danshi-web-autofill-style';
+    const css = `
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: ${textColor};
+  caret-color: ${caretColor};
+  -webkit-box-shadow: 0 0 0 1000px ${backgroundColor} inset;
+  box-shadow: 0 0 0 1000px ${backgroundColor} inset;
+}
+`;
+
+    const existing = document.getElementById(styleId);
+    const style = existing ?? document.createElement('style');
+    style.id = styleId;
+    style.textContent = css;
+
+    if (!existing) {
+      document.head.appendChild(style);
+    }
+
+    return () => {
+      const current = document.getElementById(styleId);
+      if (current?.parentNode) {
+        current.parentNode.removeChild(current);
+      }
+    };
+  }, [backgroundColor, textColor, caretColor]);
+
+  return null;
 }
 
 const styles = StyleSheet.create({
