@@ -60,7 +60,7 @@ export const MyPostsScreen: React.FC = () => {
         if (requestSeqRef.current !== requestId) {
           return;
         }
-        setPosts(supportedPosts.map(mapUserPostListItemToPost));
+        setPosts(supportedPosts);
       } catch (err: any) {
         if (requestSeqRef.current !== requestId) {
           return;
