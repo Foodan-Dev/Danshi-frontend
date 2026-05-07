@@ -67,7 +67,7 @@ danshi/
 - 帖子浏览、详情、创建与互动（点赞/收藏）
 - 搜索、通知、关注与个人中心
 - 主题切换与响应式布局
-- Mock/Server 一键切换（`USE_MOCK`）（本地 Mock 已废弃）
+- Mock/Server 切换（`USE_MOCK`）
 
 ## 🚀 快速开始
 

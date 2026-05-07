@@ -1,6 +1,6 @@
 # 项目架构说明（DanShi）
 
-> 最新修改日期：2026-03-16
+> 最新修改日期：2026-05-07
 
 ---
 
@@ -124,7 +124,7 @@
 | 文件 | 服务域 | 主要能力 |
 |------|--------|---------|
 | `auth_service.ts` | 认证 | 登录（邮箱/用户名自动识别）、注册、刷新 Token、登出 |
-| `posts_service.ts` | 帖子 | 三类帖子（share/seeking/companion）分别校验、输入规范化（`normalizePostInput<T>()`）、列表/CRUD/点赞/收藏/状态 |
+| `posts_service.ts` | 帖子 | 两类帖子（share/seeking）输入校验、输入规范化（`normalizePostInput()`）、列表/CRUD/点赞/收藏/状态；并保留结伴状态更新能力 |
 | `comments_service.ts` | 评论 | 评论创建校验（长度限制 500）、分页参数清洗、列表/回复/点赞/删除 |
 | `users_service.ts` | 用户 | 用户信息获取与更新、头像 URL 校验（Mock/Server 不同策略）、关注/取关 |
 | `notifications_service.ts` | 通知 | 通知列表/未读数/标记已读、路由跳转辅助、类型标签/图标映射 |
@@ -218,7 +218,7 @@ React Context 全局状态管理。
 |------|------|------|
 | `explore_screen.tsx` | 探索页 | 瀑布流展示，响应式列数/间距，搜索栏（大屏显示） |
 | `post_detail_screen.tsx` | 帖子详情 | 桌面/移动双布局，评论系统，图片轮播，通过 `usePostActions` 和 `usePostComments` Hook 管理逻辑 |
-| `post_screen.tsx` | 发帖/编辑 | 三类帖子表单，图片上传，响应式布局 |
+| `post_screen.tsx` | 发帖/编辑 | 两类帖子表单（share/seeking），图片上传，响应式布局 |
 | `search_screen.tsx` | 搜索页 | 帖子/用户搜索，历史记录，瀑布流结果 |
 | `login_screen.tsx` | 登录页 | 邮箱/用户名登录，Session 过期提示 |
 | `register_screen.tsx` | 注册页 | 表单校验 + 注册 |
@@ -240,14 +240,14 @@ Expo Router 路由入口。路由文件通常只做路由绑定与 Screen 引入
 
 ```
 app/
-├── _layout.tsx                 # 根布局：全局 Provider（Paper、Auth、Theme、Notifications、Waterfall）
+├── _layout.tsx                 # 根布局：全局 Provider（Theme、Paper、Auth、Notifications、Waterfall）+ Web autofill 样式注入
 ├── index.tsx                   # 首页路由：根据登录态重定向
 ├── (auth)/
 │   ├── _layout.tsx             # 认证分组布局（已登录→重定向探索页）
 │   ├── login.tsx
 │   └── register.tsx
 ├── (tabs)/
-│   ├── _layout.tsx             # Tab 布局 + 响应式侧边栏（md 断点切换）
+│   ├── _layout.tsx             # Tab 布局 + 响应式侧边栏（md 断点切换，搜索/管理等子路由按路径隐藏 TabBar）
 │   ├── explore.tsx             # 探索
 │   ├── post.tsx                # 发帖
 │   ├── search.tsx              # 搜索
@@ -285,7 +285,7 @@ app/
 领域模型定义，纯类型文件。
 
 - `User.ts`：用户模型（`User`、`UserStats`、`Gender`）
-- `Post.ts`：帖子模型与联合类型（`Post = SharePost | SeekingPost`）、创建输入（`PostCreateInput`）、结伴状态等
+- `Post.ts`：帖子模型与联合类型（`Post = SharePost | SeekingPost`）、创建输入（`PostCreateInput`）、结伴状态请求类型等
 - `Comment.ts`：评论模型（`Comment`、`CommentReply`、`CommentEntity`、`CommentsListResponse`、`CreateCommentInput`）
 - `Stats.ts`：平台统计（`PlatformStats`）、用户聚合统计（`UserAggregateStats`）
 
@@ -293,7 +293,7 @@ app/
 
 工具函数聚合。
 
-- `src/utils/index.ts`：Web 平台专属样式常量（`WEB_NO_OUTLINE`），用于替代 `as any` 的跨平台样式
+- `src/utils/index.ts`：Web 平台样式工具（当前包含 `WEB_NO_OUTLINE`）
 - `src/utils/time_format.ts`：**统一的时间格式化工具**
   - `formatRelativeTime(dateString)`：相对时间（"刚刚"/"5分钟前"/"昨天"/"3月16日"）
   - `formatDate(dateString, style)`：绝对日期（compact `03-16` / short `3/16` / full `2026/3/16`）
@@ -435,7 +435,7 @@ EXPO_PUBLIC_REQUEST_TIMEOUT_MS=10000
   - 无自定义色：使用预设品牌色（橙色系 `#F97316`）
   - 有自定义色：通过 Material Color Utilities（`color_generator.ts`）动态生成完整调色板
 - **主题注入**：`PaperProvider`（`app/_layout.tsx`）提供全局 MD3 主题
-- **主题消费**：使用 `useExtendedTheme()` Hook 获取类型安全的扩展主题
+- **主题消费**：页面/组件优先使用 `useExtendedTheme()`；上下文层通过 `useTheme()` 暴露扩展颜色与常用语义字段
 
 ### 语义颜色
 
@@ -449,7 +449,7 @@ EXPO_PUBLIC_REQUEST_TIMEOUT_MS=10000
 
 - 优先使用 `react-native-paper` MD3 组件
 - 不在组件内硬编码颜色，统一走主题 Token 或 `useExtendedTheme()`
-- Web 平台特殊样式使用 `WEB_NO_OUTLINE` 等类型安全的工具常量
+- Web 平台特殊样式统一收敛到工具常量或根级样式注入；当前根布局额外处理浏览器 autofill 样式覆盖
 
 ---
 
@@ -487,8 +487,8 @@ const maxWidth = pickByBreakpoint(bp, { base: '100%', sm: 540, md: 580, lg: 620 
 
 ### 重要约定
 
-- **禁止硬编码断点数字**，一律使用 `breakpoints.md`、`breakpoints.lg` 等常量引用
-- **统一使用 `useResponsive()`** 获取窗口尺寸与断点信息，避免多余的 `useWindowDimensions()` 调用
+- **优先复用断点常量**，避免散落硬编码断点数字；当前代码中仍存在少量 `useWindowDimensions()` 直接读取宽度的页面
+- 断点判断优先使用 `useResponsive()` / `useBreakpoint()` / `pickByBreakpoint()`，需要精确尺寸时可直接配合 `useWindowDimensions()`
 
 ---
 
@@ -533,8 +533,8 @@ const maxWidth = pickByBreakpoint(bp, { base: '100%', sm: 540, md: 580, lg: 620 
   - 路由跳转：`as Href`（从 `expo-router` 导入 `type Href`）
   - 主题颜色：使用 `useExtendedTheme()` 而非 `usePaperTheme()` + `as any`
   - Ionicons 图标：`as keyof typeof Ionicons.glyphMap`
-  - Web 样式：使用 `WEB_NO_OUTLINE` 常量
-  - Service 层：通过泛型辅助函数和类型缩窄处理联合类型
+  - Web 样式：优先使用平台样式工具或根级样式注入
+  - Service 层：通过类型缩窄处理联合类型
 
 ### 日志约定
 - 所有 `console.log`/`warn`/`error` 必须使用 `if (__DEV__)` 守卫
@@ -563,7 +563,6 @@ const maxWidth = pickByBreakpoint(bp, { base: '100%', sm: 540, md: 580, lg: 620 
 | `expo-env.d.ts` | Expo 相关类型声明扩展 |
 | `package.json` | 依赖与脚本 |
 | `tsconfig.json` | TypeScript 编译选项（含路径别名 `@/`） |
-| `CODE_REVIEW.md` | 代码审查报告（含已修复记录） |
 | `scripts/reset-project.js` | 项目重置/维护脚本 |
 | `assets/images/*` | 图标与图片资源 |
 
@@ -587,6 +586,7 @@ const maxWidth = pickByBreakpoint(bp, { base: '100%', sm: 540, md: 580, lg: 620 
 | `http/client.ts` | 未鉴权 HTTP 客户端 `http` |
 | `http/http_auth.ts` | 鉴权 HTTP 客户端 `httpAuth`（含自动刷新） |
 | `http/response.ts` | API 响应类型与解包器 |
+| `security/url.ts` | URL 安全校验与远程资源地址清洗 |
 | `auth/auth_storage.ts` | Token 持久化 |
 | `auth/jwt.ts` | JWT Payload 解码 |
 | `auth/roles.ts` | 角色判定工具 |
@@ -611,7 +611,7 @@ const maxWidth = pickByBreakpoint(bp, { base: '100%', sm: 540, md: 580, lg: 620 
 | 文件 | 说明 |
 |------|------|
 | `auth_service.ts` | 认证服务 |
-| `posts_service.ts` | 帖子服务（含 `normalizePostInput<T>()` 泛型辅助） |
+| `posts_service.ts` | 帖子服务（含 `normalizePostInput()`、列表 fallback 与结伴状态更新） |
 | `comments_service.ts` | 评论服务 |
 | `users_service.ts` | 用户服务 |
 | `notifications_service.ts` | 通知服务 |
@@ -666,7 +666,7 @@ const maxWidth = pickByBreakpoint(bp, { base: '100%', sm: 540, md: 580, lg: 620 
 
 | 文件 | 说明 |
 |------|------|
-| `index.ts` | 平台样式工具（`WEB_NO_OUTLINE`） |
+| `index.ts` | 平台样式工具（当前包含 `WEB_NO_OUTLINE`） |
 | `time_format.ts` | 统一时间格式化（`formatRelativeTime`/`formatDate`/`formatRelativeOrDate`/`formatCurrentDate`） |
 | `alert.ts` | 跨平台 `showAlert()` |
 | `post_converters.ts` | 帖子数据格式转换 |
