@@ -1337,8 +1337,10 @@ const styles = StyleSheet.create({
 
   // ==================== Comments ====================
   commentsSection: {
-    padding: 16,
-    gap: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    gap: 10,
   },
   commentsHeader: {
     flexDirection: 'row',
@@ -1369,7 +1371,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   commentsList: {
-    gap: 16,
+    gap: 8,
   },
   commentItem: {},
   emptyComments: {
@@ -1381,9 +1383,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   repliesBlock: {
-    marginTop: 8,
-    gap: 12,
-    marginBottom: 12,
+    marginTop: 0,
+    gap: 4,
+    marginBottom: 4,
   },
   threadSheet: {
     flex: 1,

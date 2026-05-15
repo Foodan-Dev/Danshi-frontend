@@ -222,18 +222,18 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 8,
   },
   body: {
     flex: 1,
-    gap: 8,
+    gap: 5,
   },
   bodyPressable: {
-    gap: 6,
+    gap: 4,
   },
   replyContainer: {
-    paddingVertical: 6,
+    paddingVertical: 2,
   },
   replyFirstLevel: {
     marginLeft: 56,
