@@ -74,7 +74,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
   const canLike = !!onLike;
 
   const isNested = isReply || depth > 0;
-  const avatarSize = 40;
+  const avatarSize = isNested ? 28 : 40;
 
   const containerStyles: ViewStyle[] = [styles.container];
   if (isNested) {
@@ -120,7 +120,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
       <View style={bodyStyles}>
         <View style={styles.headerRow}>
           <View style={styles.authorBlock}>
-            <Text style={[styles.authorName, { color: theme.colors.onSurface }]} numberOfLines={1}>
+            <Text style={[styles.authorName, isNested && styles.replyAuthorName, { color: theme.colors.onSurface }]} numberOfLines={1}>
               {comment.author?.name || '匿名用户'}
             </Text>
             {isAuthor ? (
@@ -166,7 +166,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
           ) : null}
           <Text
             variant="bodyMedium"
-            style={[styles.content, { color: theme.colors.onSurface }]}
+            style={[styles.content, isNested && styles.replyContent, { color: theme.colors.onSurface }]}
             numberOfLines={maxContentLines}
           >
             {comment.content}
@@ -190,7 +190,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
             </Button>
             <Pressable style={styles.likeButton} onPress={handleLike} disabled={!canLike}>
               <IconButton
-                size={18}
+                size={isNested ? 16 : 18}
                 icon={comment.is_liked ? 'heart' : 'heart-outline'}
                 iconColor={comment.is_liked ? theme.colors.error : theme.colors.onSurfaceVariant}
                 style={styles.likeIcon}
@@ -236,10 +236,10 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   replyFirstLevel: {
-    marginLeft: 56,
+    marginLeft: 54,
   },
   replySubsequent: {
-    marginLeft: 56,
+    marginLeft: 54,
   },
   avatarColumn: {
     width: 48,
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   replyAvatarColumn: {
-    width: 48,
+    width: 34,
   },
   headerRow: {
     flexDirection: 'row',
@@ -265,6 +265,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
+  replyAuthorName: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
   authorBadge: {
     fontSize: 10,
     paddingHorizontal: 4,
@@ -278,6 +282,10 @@ const styles = StyleSheet.create({
   content: {
     lineHeight: 20,
     fontSize: 14,
+  },
+  replyContent: {
+    lineHeight: 18,
+    fontSize: 13,
   },
   metaRow: {
     flexDirection: 'row',
