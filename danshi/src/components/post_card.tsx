@@ -107,13 +107,13 @@ export const PostCard: React.FC<PostCardProps> = ({
     }
 
     // 类型标签
-    if (post.post_type === 'share' && post.share_type) {
-      tags.push({
-        key: 'shareType',
-        label: SHARE_LABEL[post.share_type],
-        variant: post.share_type,
-      });
-    }
+    // if (post.post_type === 'share' && post.share_type) {
+    //   tags.push({
+    //     key: 'shareType',
+    //     label: SHARE_LABEL[post.share_type],
+    //     variant: post.share_type,
+    //   });
+    // }
 
     return tags;
   }, [post]);
@@ -257,18 +257,6 @@ export const PostCard: React.FC<PostCardProps> = ({
           )}
         </View>
 
-        {/* 话题标签 + 价格 */}
-        <View style={styles.tagsRow}>
-          <View style={[styles.topicTags, priceLabel ? { maxWidth: '70%' } : null]}>
-            {post.tags && post.tags.length > 0 && post.tags.slice(0, 2).map((tag, idx) => (
-              <Text key={idx} style={[styles.topicTag, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
-                #{tag}
-              </Text>
-            ))}
-          </View>
-          {priceLabel && <Text style={[styles.priceTag, { color: theme.colors.error }]}>{priceLabel}</Text>}
-        </View>
-
         {/* 底部栏：头像+昵称 | 爱心+点赞数 */}
         <View style={styles.footerRow}>
           <View style={styles.authorWrap}>
@@ -350,7 +338,7 @@ export function getPostImageAspectRatio(postId: string): number {
 const styles = StyleSheet.create({
   // 卡片容器 - 无阴影扁平风格
   card: {
-    borderRadius: 8,
+    borderRadius: 4,
     overflow: 'hidden',
   },
 
@@ -362,8 +350,8 @@ const styles = StyleSheet.create({
   },
   coverImage: {
     width: '100%',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
   },
 
   // ==================== 文字海报（莫兰迪色全填充）====================
@@ -406,7 +394,7 @@ const styles = StyleSheet.create({
   overlayTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 4,
     borderRadius: 12,
   },
@@ -432,9 +420,9 @@ const styles = StyleSheet.create({
 
   // ==================== 信息区域 ====================
   infoArea: {
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingHorizontal: 11,
+    paddingTop: 8,
+    paddingBottom: 8,
     gap: 6,
   },
 
@@ -445,8 +433,8 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     lineHeight: 20,
   },
   actionBtn: {
