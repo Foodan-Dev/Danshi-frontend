@@ -66,7 +66,7 @@ export default function ExploreScreen() {
   // 3栏以上（≥1024px）显示搜索栏而非搜索图标
   const showSearchBar = windowWidth >= breakpoints.lg;
   // 移动端列间距极小，紧凑布局
-  const gap = pickByBreakpoint(bp, { base: 4, sm: 6, md: 10, lg: 14, xl: 16 });
+  const gap = pickByBreakpoint(bp, { base: 2.5, sm: 6, md: 10, lg: 14, xl: 16 });
   const verticalGap = pickByBreakpoint(bp, { base: 4, sm: 6, md: 10, lg: 14, xl: 16 });
   const horizontalPadding = pickByBreakpoint(bp, { base: 4, sm: 6, md: 12, lg: 16, xl: 20 });
   const insets = useSafeAreaInsets();
