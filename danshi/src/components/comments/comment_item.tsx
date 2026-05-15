@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Pressable, type ViewStyle } from 'react-native';
-import { Avatar, Button, IconButton, Menu, Text, useTheme as usePaperTheme } from 'react-native-paper';
+import { Avatar, IconButton, Menu, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import type { CommentEntity, MentionedUser } from '@/src/models/Comment';
 import { UserAvatar } from '@/src/components/user_avatar';
 import { formatRelativeTime } from '@/src/utils/time_format';
@@ -178,16 +178,19 @@ export const CommentItem: React.FC<CommentItemProps> = ({
             <Text style={[styles.timestamp, { color: theme.colors.onSurfaceVariant }]}>{relativeTime}</Text>
           ) : null}
           <View style={styles.metaActions}>
-            <Button
-              mode="text"
-              compact
+            <Pressable
+              style={({ pressed }) => [
+                styles.replyAction,
+                pressed && canReply && styles.actionPressed,
+                !canReply && styles.actionDisabled,
+              ]}
               onPress={handleReply}
-              textColor={theme.colors.onSurfaceVariant}
-              uppercase={false}
               disabled={!canReply}
             >
-              回复
-            </Button>
+              <Text style={[styles.replyActionText, { color: theme.colors.onSurfaceVariant }]}>
+                回复
+              </Text>
+            </Pressable>
             <Pressable style={styles.likeButton} onPress={handleLike} disabled={!canLike}>
               <IconButton
                 size={isNested ? 16 : 18}
@@ -223,17 +226,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    marginBottom: 8,
+    marginBottom: 5,
   },
   body: {
     flex: 1,
-    gap: 5,
+    gap: 3,
   },
   bodyPressable: {
-    gap: 4,
+    gap: 2,
   },
   replyContainer: {
-    paddingVertical: 2,
+    paddingVertical: 1,
   },
   replyFirstLevel: {
     marginLeft: 54,
@@ -291,28 +294,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: 0,
   },
   metaActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
+  },
+  replyAction: {
+    minHeight: 18,
+    justifyContent: 'center',
+  },
+  replyActionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  actionPressed: {
+    opacity: 0.7,
+  },
+  actionDisabled: {
+    opacity: 0.5,
   },
   likeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 1,
+    minHeight: 18,
   },
   likeIcon: {
     margin: 0,
+    width: 20,
+    height: 20,
   },
   actionCount: {
     minWidth: 20,
     textAlign: 'left',
+    lineHeight: 16,
   },
   replySummaryButton: {
-    marginTop: 8,
-    paddingVertical: 6,
+    marginTop: 4,
+    paddingVertical: 3,
     alignSelf: 'flex-start',
   },
   replySummaryText: {
