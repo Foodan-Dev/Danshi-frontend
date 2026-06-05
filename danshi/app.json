@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.exdoubled.danshi",
+      "bundleIdentifier": "com.fdueat.danshi",
       "icon": "./assets/images/ios-icon.png",
       "infoPlist": {
         "NSAppTransportSecurity": {
@@ -29,7 +29,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.exdoubled.DanShi"
+      "package": "com.fdueat.DanShi"
     },
     "web": {
       "output": "static",

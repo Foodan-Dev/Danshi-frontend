@@ -133,8 +133,8 @@ Mock/Server 切换与接口契约说明详见 [doc/Architecture/README.md](doc/A
 - **应用名**：DanShi
 - **slug**：DanShi
 - **版本**：0.3.0
-- **iOS Bundle ID**：com.exdoubled.danshi
-- **Android Package**：com.exdoubled.DanShi
+- **iOS Bundle ID**：com.fdueat.danshi
+- **Android Package**：com.fdueat.DanShi
 - **Web 输出**：static
 - **EAS Project ID**：d7bd18a3-1439-434c-8c64-9f8f37e54a74
 - **Owner**：danshi-cslg
