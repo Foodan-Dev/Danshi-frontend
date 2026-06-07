@@ -1,0 +1,117 @@
+name: EAS Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to build"
+        required: true
+        type: choice
+        options:
+          - all
+          - android
+          - ios
+        default: all
+      profile:
+        description: "EAS build profile"
+        required: true
+        type: choice
+        options:
+          - preview
+          - production
+          - testflight
+        default: preview
+
+jobs:
+  build:
+    name: EAS Build & Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: danshi
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: danshi/package-lock.json
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve build params
+        id: params
+        run: |
+          PLATFORM="${{ github.event.inputs.platform || 'all' }}"
+          PROFILE="${{ github.event.inputs.profile || 'preview' }}"
+          VERSION=$(jq -r '.expo.version' app.json)
+
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${VERSION}-${PROFILE}.${{ github.run_number }}"
+          fi
+
+          echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: EAS Build
+        run: |
+          eas build \
+            --platform ${{ steps.params.outputs.platform }} \
+            --profile ${{ steps.params.outputs.profile }} \
+            --non-interactive --wait
+
+      - name: Download artifacts
+        run: |
+          PLATFORM="${{ steps.params.outputs.platform }}"
+          PROFILE="${{ steps.params.outputs.profile }}"
+          VERSION="${{ steps.params.outputs.version }}"
+
+          if [ "$PLATFORM" = "all" ] || [ "$PLATFORM" = "android" ]; then
+            URL=$(eas build:list --platform android --profile "$PROFILE" \
+              --status finished --limit 1 --json --non-interactive \
+              | jq -r '.[0].artifacts.buildUrl')
+            if [ "$URL" != "null" ] && [ -n "$URL" ]; then
+              curl -L -o "../DanShi-v${VERSION}-${PROFILE}.apk" "$URL"
+              echo "Downloaded Android artifact"
+            fi
+          fi
+
+          if [ "$PLATFORM" = "all" ] || [ "$PLATFORM" = "ios" ]; then
+            URL=$(eas build:list --platform ios --profile "$PROFILE" \
+              --status finished --limit 1 --json --non-interactive \
+              | jq -r '.[0].artifacts.buildUrl')
+            if [ "$URL" != "null" ] && [ -n "$URL" ]; then
+              curl -L -o "../DanShi-v${VERSION}-${PROFILE}.ipa" "$URL"
+              echo "Downloaded iOS artifact"
+            fi
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.params.outputs.tag }}
+          name: DanShi v${{ steps.params.outputs.version }} (${{ steps.params.outputs.profile }})
+          files: |
+            DanShi-*.apk
+            DanShi-*.ipa
+          generate_release_notes: true
+          prerelease: ${{ github.ref_type != 'tag' }}

@@ -1,0 +1,59 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "preview": {
+      "autoIncrement": true,
+      "ios": {
+        "distribution": "internal"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://danshi.fdueat.com/api/v1",
+        "EXPO_PUBLIC_USE_MOCK": "false"
+      }
+    },
+    "testflight": {
+      "autoIncrement": true,
+      "ios": {
+        "distribution": "store"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://danshi.fdueat.com/api/v1",
+        "EXPO_PUBLIC_USE_MOCK": "false"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "ios": {
+        "distribution": "store"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://danshi.fdueat.com/api/v1",
+        "EXPO_PUBLIC_USE_MOCK": "false"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal"
+      },
+      "ios": {
+        "ascAppId": "6776636776"
+      }
+    },
+    "testflight": {
+      "ios": {
+        "ascAppId": "6776636776"
+      }
+    }
+  }
+}
