@@ -36,7 +36,7 @@
 目录结构（节选）：
 
 ```
-danshi/
+.
 ├── src/
 │   ├── app/                # 路由入口（Expo Router）
 │   ├── screens/            # 页面级组件（绑定 Service/Context）
@@ -83,7 +83,7 @@ danshi/
 
 ```bash
 git clone https://github.com/Danshi-FDU/Danshi-frontend.git
-cd Danshi-frontend/danshi
+cd Danshi-frontend
 ```
 
 2. **安装依赖**
@@ -114,7 +114,7 @@ npx expo start
 
 1. **环境变量**
 
-请参考 [danshi/.env.example](danshi/.env.example) 创建本地 `.env` 文件，重点配置：
+请参考 [.env.example](.env.example) 创建本地 `.env` 文件，重点配置：
 
 - `EXPO_PUBLIC_API_URL`：后端 API 基地址
 - `EXPO_PUBLIC_REQUEST_TIMEOUT_MS`：请求超时时间
@@ -139,7 +139,7 @@ Mock/Server 切换与接口契约说明详见 [doc/Architecture/README.md](doc/A
 - **EAS Project ID**：d7bd18a3-1439-434c-8c64-9f8f37e54a74
 - **Owner**：danshi-cslg
 
-如需修改发布信息，请同步更新 [danshi/app.json](danshi/app.json) 与相关分发流程。
+如需修改发布信息，请同步更新 [app.json](app.json) 与相关分发流程。
 
 ### EAS Build Profiles
 
@@ -160,7 +160,7 @@ Mock/Server 切换与接口契约说明详见 [doc/Architecture/README.md](doc/A
 
 #### iOS TestFlight 发布流程
 
-本项目已在 [danshi/eas.json.example](danshi/eas.json.example) 中配置了专用的 `testflight` profile（`distribution=store`），用于 TestFlight 分发。
+本项目已在 [eas.json](eas.json) 中配置了专用的 `testflight` profile（`distribution=store`），用于 TestFlight 分发。
 
 首先讲一下本项目 testflight 分发的步骤：
 eas打包-> app connect 认证 -> testflight 认证并分发
@@ -187,7 +187,7 @@ npm run build:submit:ios:testflight
 
 **首次使用详细步骤**
 
-1. 确认 `danshi/eas.json` 文件存在（参照 `eas.json.example` 创建），确保 `testflight` profile 中的后端地址正确
+1. 确认 `eas.json` 文件存在，确保 `testflight` profile 中的后端地址正确
 
 2. 登录 EAS 和配置提交凭证：
 

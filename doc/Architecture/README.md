@@ -36,7 +36,7 @@
 
 ## 2. 目录结构（按功能与分层说明）
 
-以下说明按 `danshi/src/` 下的目录进行，逐一列出用途与文件职责。
+以下说明按 `src/` 下的目录进行，逐一列出用途与文件职责。
 
 ### 2.1 constants/
 
@@ -413,7 +413,7 @@ app/
 
 ## 6. Mock / Server 切换（操作指南）
 
-在项目根（`danshi/`）创建 `.env`（参考 `.env.example`）：
+在项目根目录创建 `.env`（参考 `.env.example`）：
 
 ```env
 EXPO_PUBLIC_USE_MOCK=false
@@ -552,7 +552,7 @@ const maxWidth = pickByBreakpoint(bp, { base: '100%', sm: 540, md: 580, lg: 620 
 
 ## 12. 目录与文件清单（逐项说明）
 
-> 以 `danshi/` 目录为根，逐一说明文件用途。
+> 以项目根目录为根，逐一说明文件用途。
 
 ### 根目录
 
