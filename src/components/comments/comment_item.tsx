@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Pressable, type ViewStyle } from 'react-native';
-import { Avatar, IconButton, Menu, Text, useTheme as usePaperTheme } from 'react-native-paper';
+import { Avatar, Icon, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import type { CommentEntity, MentionedUser } from '@/src/models/Comment';
 import { UserAvatar } from '@/src/components/user_avatar';
 import { formatRelativeTime } from '@/src/utils/time_format';
@@ -62,7 +62,6 @@ export const CommentItem: React.FC<CommentItemProps> = ({
   onShowReplies,
 }) => {
   const theme = usePaperTheme();
-  const [menuVisible, setMenuVisible] = React.useState(false);
   const isAuthor = comment.is_author;
   const handleLike = () => onLike?.(comment);
   const handleReply = () => onReply?.(comment);
@@ -93,16 +92,6 @@ export const CommentItem: React.FC<CommentItemProps> = ({
 
   const relativeTime = formatRelativeTime(comment.created_at);
 
-  React.useEffect(() => {
-    if (!moreActions.length && menuVisible) {
-      setMenuVisible(false);
-    }
-  }, [menuVisible, moreActions.length]);
-
-  React.useEffect(() => {
-    setMenuVisible(false);
-  }, [comment.id]);
-
   return (
     <View style={containerStyles}>
       <View style={[styles.avatarColumn, isNested && styles.replyAvatarColumn]}>
@@ -129,55 +118,33 @@ export const CommentItem: React.FC<CommentItemProps> = ({
               </Text>
             ) : null}
           </View>
-          <Menu
-            visible={menuVisible}
-            onDismiss={() => setMenuVisible(false)}
-            anchor={(
-              <IconButton
-                icon="dots-horizontal"
-                size={18}
-                onPress={() => setMenuVisible(true)}
-                accessibilityLabel="更多操作"
-                iconColor={theme.colors.onSurfaceVariant}
-                style={styles.moreButton}
-                disabled={!moreActions.length}
-              />
-            )}
-          >
-            {moreActions.map((action) => (
-              <Menu.Item
-                key={action.key}
-                onPress={() => {
-                  setMenuVisible(false);
-                  action.onPress();
-                }}
-                title={action.title}
-                leadingIcon={action.icon}
-                titleStyle={action.destructive ? { color: theme.colors.error } : undefined}
-              />
-            ))}
-          </Menu>
         </View>
 
         <Pressable style={styles.bodyPressable} onPress={handleReply} disabled={!canReply}>
           <MentionedText mentions={comment.mentioned_users} />
-          {comment.reply_to ? (
-            <Text style={[styles.replyingText, { color: theme.colors.primary }]}>Replying to @{comment.reply_to.name}</Text>
-          ) : null}
           <Text
             variant="bodyMedium"
             style={[styles.content, isNested && styles.replyContent, { color: theme.colors.onSurface }]}
             numberOfLines={maxContentLines}
           >
+            {comment.reply_to ? (
+              <Text style={styles.replyingText}>
+                回复{' '}
+                <Text style={{ color: theme.colors.onSurfaceVariant }}>
+                  {comment.reply_to.name}
+                </Text>
+                ：
+              </Text>
+            ) : null}
             {comment.content}
           </Text>
         </Pressable>
 
         <View style={styles.metaRow}>
-          {relativeTime ? (
-            <Text style={[styles.timestamp, { color: theme.colors.onSurfaceVariant }]}>{relativeTime}</Text>
-          ) : null}
-          <View style={styles.metaActions}>
+          <View style={styles.metaLeft}>
+            {relativeTime ? (
+              <Text style={[styles.timestamp, { color: theme.colors.onSurfaceVariant }]}>{relativeTime}</Text>
+            ) : null}
             <Pressable
               style={({ pressed }) => [
                 styles.replyAction,
@@ -191,19 +158,43 @@ export const CommentItem: React.FC<CommentItemProps> = ({
                 回复
               </Text>
             </Pressable>
-            <Pressable style={styles.likeButton} onPress={handleLike} disabled={!canLike}>
-              <IconButton
-                size={isNested ? 16 : 18}
-                icon={comment.is_liked ? 'heart' : 'heart-outline'}
-                iconColor={comment.is_liked ? theme.colors.error : theme.colors.onSurfaceVariant}
-                style={styles.likeIcon}
-                disabled
-              />
-              <Text variant="bodySmall" style={styles.actionCount}>
-                {comment.like_count}
-              </Text>
-            </Pressable>
+            {moreActions.map((action) => (
+              <Pressable
+                key={action.key}
+                style={({ pressed }) => [
+                  styles.replyAction,
+                  pressed && styles.actionPressed,
+                ]}
+                onPress={action.onPress}
+                accessibilityLabel={action.title}
+              >
+                <Text
+                  style={[
+                    styles.replyActionText,
+                    { color: action.destructive ? theme.colors.error : theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  {action.title}
+                </Text>
+              </Pressable>
+            ))}
           </View>
+          <Pressable style={styles.likeButton} onPress={handleLike} disabled={!canLike}>
+            <View style={styles.likeIcon}>
+              <Icon
+                source={comment.is_liked ? 'heart' : 'heart-outline'}
+                size={isNested ? 16 : 18}
+                color={comment.is_liked ? theme.colors.error : theme.colors.onSurfaceVariant}
+              />
+            </View>
+            <View style={styles.likeCountSlot}>
+              {comment.like_count > 0 ? (
+                <Text variant="bodySmall" style={styles.actionCount}>
+                  {comment.like_count}
+                </Text>
+              ) : null}
+            </View>
+          </Pressable>
         </View>
 
         {showReplySummaryButton ? (
@@ -226,7 +217,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    marginBottom: 5,
+    marginBottom: 12,
   },
   body: {
     flex: 1,
@@ -245,12 +236,12 @@ const styles = StyleSheet.create({
     marginLeft: 54,
   },
   avatarColumn: {
-    width: 48,
+    width: 40,
     alignItems: 'flex-start',
     position: 'relative',
   },
   replyAvatarColumn: {
-    width: 34,
+    width: 24,
   },
   headerRow: {
     flexDirection: 'row',
@@ -260,7 +251,7 @@ const styles = StyleSheet.create({
   authorBlock: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     flexWrap: 'wrap',
     flex: 1,
   },
@@ -296,10 +287,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 0,
   },
-  metaActions: {
+  metaLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
   },
   replyAction: {
     minHeight: 18,
@@ -308,7 +300,6 @@ const styles = StyleSheet.create({
   replyActionText: {
     fontSize: 12,
     fontWeight: '500',
-    lineHeight: 16,
   },
   actionPressed: {
     opacity: 0.7,
@@ -323,12 +314,16 @@ const styles = StyleSheet.create({
     minHeight: 18,
   },
   likeIcon: {
-    margin: 0,
     width: 20,
     height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  likeCountSlot: {
+    minWidth: 20,
+    justifyContent: 'center',
   },
   actionCount: {
-    minWidth: 20,
     textAlign: 'left',
     lineHeight: 16,
   },
@@ -342,13 +337,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   timestamp: {
-    fontSize: 11,
+    fontSize: 12,
   },
   replyingText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
-  },
-  moreButton: {
-    margin: -8,
   },
 });

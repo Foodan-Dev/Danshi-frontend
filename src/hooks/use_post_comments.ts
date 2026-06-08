@@ -7,7 +7,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { commentsService } from '@/src/services/comments_service';
-import { adminService } from '@/src/services/admin_service';
 import type { Comment, CommentEntity, CommentReply, CommentsPagination } from '@/src/models/Comment';
 import { showAlert } from '@/src/utils/alert';
 
@@ -37,12 +36,11 @@ export type CommentActionItem = {
 type UsePostCommentsParams = {
   postId: string;
   currentUser: { id: string; role?: string } | null;
-  isAdmin: boolean;
   /** 调用者用此回调更新 post.stats.comment_count */
   onCommentCountChange: (delta: number) => void;
 };
 
-export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdmin, onCommentCountChange }: UsePostCommentsParams) {
+export function usePostComments({ postId, currentUser, onCommentCountChange }: UsePostCommentsParams) {
   // ==================== State ====================
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentSort, setCommentSort] = useState<'latest' | 'hot'>('latest');
@@ -296,11 +294,7 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
     if (commentDeleteLoadingRef.current.has(targetId)) return;
     commentDeleteLoadingRef.current.add(targetId);
     try {
-      if (isCurrentUserAdmin) {
-        await adminService.deleteComment(targetId);
-      } else {
-        await commentsService.remove(targetId);
-      }
+      await commentsService.remove(targetId);
 
       await fetchComments(postId, commentSortRef.current);
 
@@ -317,7 +311,7 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
     } finally {
       commentDeleteLoadingRef.current.delete(targetId);
     }
-  }, [postId, isCurrentUserAdmin, fetchComments, threadRootComment, onCommentCountChange]);
+  }, [postId, fetchComments, threadRootComment, onCommentCountChange]);
 
   const handleConfirmDeleteComment = useCallback((entity: CommentEntity) => {
     Alert.alert(
@@ -349,27 +343,18 @@ export function usePostComments({ postId, currentUser, isAdmin: isCurrentUserAdm
   }, [currentUser?.id]);
 
   const getCommentMoreActions = useCallback((entity: CommentEntity): CommentActionItem[] => {
-    const canDeleteAsOwner = !!currentUser?.id && !!entity.author?.id && entity.author.id === currentUser.id;
-    const canDelete = isCurrentUserAdmin || canDeleteAsOwner;
-    const actions: CommentActionItem[] = [
+    const isOwner = !!currentUser?.id && !!entity.author?.id && entity.author.id === currentUser.id;
+    if (!isOwner) return [];
+    return [
       {
-        key: 'reply',
-        title: '回复',
-        icon: 'reply',
-        onPress: () => handleReplyToComment(entity),
-      },
-    ];
-    if (canDelete) {
-      actions.push({
         key: 'delete',
         title: '删除',
         icon: 'delete',
         destructive: true,
         onPress: () => handleConfirmDeleteComment(entity),
-      });
-    }
-    return actions;
-  }, [currentUser, isCurrentUserAdmin, handleReplyToComment, handleConfirmDeleteComment]);
+      },
+    ];
+  }, [currentUser, handleConfirmDeleteComment]);
 
   const handleCancelReply = useCallback(() => setCommentReplyTarget(null), []);
 
