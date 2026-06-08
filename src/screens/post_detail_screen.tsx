@@ -28,7 +28,6 @@ import { formatRelativeOrDate } from '@/src/utils/time_format';
 import { TYPE_LABEL, SHARE_LABEL, type LoaderState } from '@/src/constants/post_labels';
 import { BottomSheet } from '@/src/components/overlays/bottom_sheet';
 import { useAuth } from '@/src/context/auth_context';
-import { isAdmin } from '@/src/lib/auth/roles';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { usePostActions } from '@/src/hooks/use_post_actions';
 import { usePostComments, flattenReplies, REPLY_PREVIEW_COUNT } from '@/src/hooks/use_post_comments';
@@ -97,8 +96,6 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageViewer, setImageViewer] = useState<{ visible: boolean; index: number }>({ visible: false, index: 0 });
 
-  const isCurrentUserAdmin = !!currentUser?.role && isAdmin(currentUser.role);
-
   // ==================== 评论 Hook ====================
   const onCommentCountChange = useCallback((delta: number) => {
     setPost((prev) =>
@@ -115,7 +112,6 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const commentsHook = usePostComments({
     postId,
     currentUser: currentUser ? { id: currentUser.id, role: currentUser.role } : null,
-    isAdmin: isCurrentUserAdmin,
     onCommentCountChange,
   });
 
@@ -841,7 +837,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
             color={post?.is_liked ? theme.colors.error : theme.colors.onSurfaceVariant}
           />
           <Text style={[styles.actionCount, { color: post?.is_liked ? theme.colors.error : theme.colors.onSurfaceVariant }]}>
-            {likeCount}
+            {likeCount > 0 ? likeCount : '点赞'}
           </Text>
         </Pressable>
 
@@ -856,7 +852,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
             color={post?.is_favorited ? theme.colors.primary : theme.colors.onSurfaceVariant}
           />
           <Text style={[styles.actionCount, { color: post?.is_favorited ? theme.colors.primary : theme.colors.onSurfaceVariant }]}>
-            {favoriteCount}
+            {favoriteCount > 0 ? favoriteCount : '收藏'}
           </Text>
         </Pressable>
 
@@ -866,7 +862,9 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           disabled={!post}
         >
           <Ionicons name="chatbubble-outline" size={22} color={theme.colors.onSurfaceVariant} />
-          <Text style={[styles.actionCount, { color: theme.colors.onSurfaceVariant }]}>{commentCount}</Text>
+          <Text style={[styles.actionCount, { color: theme.colors.onSurfaceVariant }]}>
+            {commentCount > 0 ? commentCount : '评论'}
+          </Text>
         </Pressable>
       </View>
     </View>

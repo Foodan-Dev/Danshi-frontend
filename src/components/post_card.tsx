@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { StyleSheet, View, StyleProp, ViewStyle, Image, Pressable, Alert, Platform } from 'react-native';
 import { Text, useTheme as usePaperTheme, IconButton, Menu } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -6,6 +6,10 @@ import type { Post } from '@/src/models/Post';
 import { UserAvatar } from '@/src/components/user_avatar';
 import { SHARE_LABEL } from '@/src/constants/post_labels';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { useAuth } from '@/src/context/auth_context';
+import { postsService } from '@/src/services/posts_service';
+import { showAlert } from '@/src/utils/alert';
+import type { PostLikePatch } from '@/src/utils/post_like';
 
 // 莫兰迪色系背景色组（低饱和、高明度）
 const POSTER_COLORS = [
@@ -21,6 +25,7 @@ const POSTER_COLORS = [
 type PostCardProps = {
   post: Post;
   onPress?: (postId: string) => void;
+  onLikeChange?: (postId: string, patch: PostLikePatch) => void;
   style?: StyleProp<ViewStyle>;
   footer?: React.ReactNode;
   appearance?: 'flat' | 'elevated' | 'outlined';
@@ -32,6 +37,7 @@ type PostCardProps = {
 export const PostCard: React.FC<PostCardProps> = ({
   post,
   onPress,
+  onLikeChange,
   style,
   footer,
   appearance = 'flat',
@@ -40,7 +46,11 @@ export const PostCard: React.FC<PostCardProps> = ({
   onDelete,
 }) => {
   const theme = usePaperTheme();
+  const { user } = useAuth();
   const [menuVisible, setMenuVisible] = useState(false);
+  const [isLiked, setIsLiked] = useState(post.is_liked ?? false);
+  const [likeCount, setLikeCount] = useState(post.stats?.like_count ?? 0);
+  const likeLoadingRef = useRef(false);
   const firstImage = useMemo(
     () => post.images?.map((item) => getSafeRemoteUrl(item)).find((item): item is string => !!item),
     [post.images]
@@ -71,6 +81,52 @@ export const PostCard: React.FC<PostCardProps> = ({
   useEffect(() => {
     setMenuVisible(false);
   }, [post.id]);
+
+  useEffect(() => {
+    setIsLiked(post.is_liked ?? false);
+    setLikeCount(post.stats?.like_count ?? 0);
+  }, [post.id, post.is_liked, post.stats?.like_count]);
+
+  const syncLikeState = useCallback((patch: PostLikePatch) => {
+    setIsLiked(patch.is_liked);
+    setLikeCount(patch.like_count);
+    onLikeChange?.(post.id, patch);
+  }, [onLikeChange, post.id]);
+
+  const handleLikePress = useCallback(async () => {
+    if (likeLoadingRef.current) return;
+    if (!user?.id) {
+      showAlert('请先登录', '登录后才能点赞帖子');
+      return;
+    }
+
+    likeLoadingRef.current = true;
+    const currentlyLiked = isLiked;
+    const currentLikeCount = likeCount;
+    const optimisticPatch: PostLikePatch = {
+      is_liked: !currentlyLiked,
+      like_count: currentLikeCount + (currentlyLiked ? -1 : 1),
+    };
+
+    syncLikeState(optimisticPatch);
+
+    try {
+      const result = currentlyLiked
+        ? await postsService.unlike(post.id)
+        : await postsService.like(post.id);
+      syncLikeState({
+        is_liked: result?.is_liked ?? optimisticPatch.is_liked,
+        like_count: result?.like_count ?? optimisticPatch.like_count,
+      });
+    } catch {
+      syncLikeState({
+        is_liked: currentlyLiked,
+        like_count: currentLikeCount,
+      });
+    } finally {
+      likeLoadingRef.current = false;
+    }
+  }, [user?.id, isLiked, likeCount, post.id, syncLikeState]);
 
   // 使用伪随机比例保持瀑布流参差不齐效果
   const seed = useMemo(() => {
@@ -278,16 +334,27 @@ export const PostCard: React.FC<PostCardProps> = ({
             )}
           </View>
 
-          <View style={styles.likeWrap}>
+          <Pressable
+            style={({ pressed }) => [styles.likeWrap, pressed && styles.likePressed]}
+            onPress={(event) => {
+              if (Platform.OS === 'web') event.stopPropagation?.();
+              void handleLikePress();
+            }}
+            hitSlop={6}
+            accessibilityLabel={isLiked ? '取消点赞' : '点赞'}
+            accessibilityRole="button"
+          >
             <Ionicons
-              name={post.is_liked ? 'heart' : 'heart-outline'}
+              name={isLiked ? 'heart' : 'heart-outline'}
               size={14}
-              color={post.is_liked ? theme.colors.error : theme.colors.onSurfaceVariant}
+              color={isLiked ? theme.colors.error : theme.colors.onSurfaceVariant}
             />
-            <Text style={[styles.likeCount, { color: post.is_liked ? theme.colors.error : theme.colors.onSurfaceVariant }]}>
-              {post.stats?.like_count ?? 0}
-            </Text>
-          </View>
+            <View style={styles.likeCountSlot}>
+              <Text style={[styles.likeCount, { color: isLiked ? theme.colors.error : theme.colors.onSurfaceVariant }]}>
+                {likeCount > 0 ? likeCount : '赞'}
+              </Text>
+            </View>
+          </Pressable>
         </View>
 
         {footer ? <View style={styles.customFooter}>{footer}</View> : null}
@@ -491,13 +558,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
+    minHeight: 18,
+  },
+  likePressed: {
+    opacity: 0.7,
+  },
+  likeCountSlot: {
+    minWidth: 16,
+    justifyContent: 'center',
   },
   likeCount: {
     fontSize: 11,
     fontVariant: ['tabular-nums'],
-  },
-  likeCountActive: {
-    // color is set dynamically
   },
 
   customFooter: {
