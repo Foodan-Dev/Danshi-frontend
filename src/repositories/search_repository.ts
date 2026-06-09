@@ -1,5 +1,5 @@
 import { API_ENDPOINTS } from '@/src/constants/app';
-import { http } from '@/src/lib/http/client';
+import { httpAuth } from '@/src/lib/http/http_auth';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import type { Post } from '@/src/models/Post';
 import type { User } from '@/src/models/User';
@@ -77,7 +77,7 @@ class ApiSearchRepository implements SearchRepository {
       }
     });
     const url = `${API_ENDPOINTS.SEARCH.POSTS}${qs.toString() ? `?${qs.toString()}` : ''}`;
-    const res = await http.get<ApiResponse<SearchPostsResponse>>(url);
+    const res = await httpAuth.get<ApiResponse<SearchPostsResponse>>(url);
     return unwrapApiResponse<SearchPostsResponse>(res, 200);
   }
 
@@ -88,7 +88,7 @@ class ApiSearchRepository implements SearchRepository {
       qs.set(key, String(value));
     });
     const url = `${API_ENDPOINTS.SEARCH.USERS}${qs.toString() ? `?${qs.toString()}` : ''}`;
-    const res = await http.get<ApiResponse<SearchUsersResponse>>(url);
+    const res = await httpAuth.get<ApiResponse<SearchUsersResponse>>(url);
     return unwrapApiResponse<SearchUsersResponse>(res, 200);
   }
 }
