@@ -510,32 +510,6 @@ const styles = StyleSheet.create({
     marginRight: -6,
   },
 
-  // 话题标签 + 价格
-  tagsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 16,
-  },
-  topicTags: {
-    flexDirection: 'row',
-    gap: 6,
-    flex: 1,
-    flexShrink: 1,
-    overflow: 'hidden',
-  },
-  topicTag: {
-    fontSize: 11,
-    fontWeight: '500',
-    flexShrink: 1,
-  },
-  priceTag: {
-    fontSize: 13,
-    fontWeight: '700',
-    flexShrink: 0,
-    marginLeft: 8,
-  },
-
   // ==================== 底部栏 ====================
   footerRow: {
     flexDirection: 'row',
@@ -557,14 +531,13 @@ const styles = StyleSheet.create({
   likeWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    minHeight: 18,
+    gap: 2,
   },
   likePressed: {
     opacity: 0.7,
   },
   likeCountSlot: {
-    minWidth: 16,
+    minWidth: 8,
     justifyContent: 'center',
   },
   likeCount: {

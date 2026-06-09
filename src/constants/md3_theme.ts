@@ -128,7 +128,7 @@ const brandLight = {
 const brandDark = {
   primary: '#FB923C',
   surfaceTint: '#FB923C',
-  onPrimary: '#7C2D12',
+  onPrimary: '#FFFFFF',
   primaryContainer: '#C2410C',
   onPrimaryContainer: '#FFEDD5',
   secondary: '#94A3B8',
