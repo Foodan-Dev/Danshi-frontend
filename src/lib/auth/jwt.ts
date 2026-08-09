@@ -6,9 +6,8 @@ export function decodeJwtPayload<T = unknown>(token: string): T | null {
     if (parts.length < 2) return null;
     const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
-    const json = typeof atob === 'function'
-      ? decodeURIComponent(escape(atob(padded)))
-      : Buffer.from(padded, 'base64').toString('utf8');
+    const bytes = Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
     return JSON.parse(json) as T;
   } catch {
     return null;

@@ -51,6 +51,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify generated API contract
+        run: npm run api:check
+
       - name: Resolve build params
         id: params
         run: |

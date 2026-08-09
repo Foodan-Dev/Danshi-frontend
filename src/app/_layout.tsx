@@ -32,7 +32,7 @@ function RootStack() {
   const { effective, background } = useTheme();
   return (
     <View style={[styles.container, { backgroundColor: background as string }]}>
-      <StatusBar style={effective === 'dark' ? 'light' : 'dark'} translucent />
+      <StatusBar style={effective === 'dark' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
           headerShown: false,

@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     // backgroundColor 已移至动态样式，使用 theme.colors.scrim
   },
   picker: {

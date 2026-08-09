@@ -65,7 +65,7 @@ export default function RegisterScreen() {
       } else if (!appError.status && !appError.code) {
         setError(appError.message);
       } else if (appError.status === 409) {
-        setError('该邮箱或用户名已被占用');
+        setError('该邮箱已被占用');
       } else if (appError.status === 400) {
         setError('注册信息有误，请检查后重试');
       } else {

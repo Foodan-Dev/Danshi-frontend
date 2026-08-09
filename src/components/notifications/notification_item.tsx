@@ -2,8 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Pressable, StyleSheet, Image, Alert, type GestureResponderEvent } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import { router, type Href } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { router, type Href, useFocusEffect } from 'expo-router';
 
 import type { Notification } from '@/src/repositories/notifications_repository';
 import { notificationsService } from '@/src/services/notifications_service';

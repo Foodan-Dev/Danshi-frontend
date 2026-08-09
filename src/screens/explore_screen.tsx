@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View, ScrollView, RefreshControl, Pressable, useWindowDimensions } from 'react-native';
 import { Masonry } from '@/src/components/md3/masonry';
 import { useWaterfallSettings } from '@/src/context/waterfall_context';
@@ -18,12 +17,10 @@ import { postsService } from '@/src/services/posts_service';
 import type { PostListFilters, SortBy } from '@/src/repositories/posts_repository';
 import type { Post, ShareType } from '@/src/models/Post';
 import { configService, type ExploreConfig, type PostTypeSubType } from '@/src/services/config_service';
-import { useRouter } from 'expo-router';
-import type { Href } from 'expo-router';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { BottomSheet } from '@/src/components/overlays/bottom_sheet';
 import { PostCard, estimatePostCardHeight } from '@/src/components/post_card';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect } from '@react-navigation/native';
 import type { LoaderState } from '@/src/constants/post_labels';
 
 
@@ -71,7 +68,7 @@ export default function ExploreScreen() {
   const horizontalPadding = pickByBreakpoint(bp, { base: 4, sm: 6, md: 12, lg: 16, xl: 20 });
   const insets = useSafeAreaInsets();
   const pTheme = usePaperTheme();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = windowWidth >= breakpoints.md ? 0 : 56 + Math.max(insets.bottom, 12);
   const bottomContentPadding = useMemo(() => tabBarHeight + 24, [tabBarHeight]);
 
   const router = useRouter();

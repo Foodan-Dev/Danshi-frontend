@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { ActivityIndicator, Appbar, Button, Text, useTheme as usePaperTheme } from 'react-native-paper';
-import { router, type Href } from 'expo-router';
+import { router, type Href, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use_responsive';
 import { breakpoints, pickByBreakpoint } from '@/src/constants/breakpoints';
@@ -9,7 +9,6 @@ import { useAuth } from '@/src/context/auth_context';
 import { isAdmin, isSuperAdmin } from '@/src/lib/auth/roles';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
 
 
 export default function AdminScreen() {

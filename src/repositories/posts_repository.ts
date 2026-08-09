@@ -6,7 +6,6 @@ import type {
   PostCreateInput,
   PostCreateResult,
   PostAuthor,
-  CompanionStatusUpdateRequest,
   PostStats,
 } from '@/src/models/Post';
 
@@ -53,7 +52,6 @@ export interface PostsRepository {
   unlike(postId: string): Promise<PostLikeResult>;
   favorite(postId: string): Promise<{ is_favorited: boolean; favorite_count: number }>;
   unfavorite(postId: string): Promise<{ is_favorited: boolean; favorite_count: number }>;
-  updateCompanionStatus(postId: string, input: CompanionStatusUpdateRequest): Promise<void>;
 }
 
 export type SortBy = 'latest' | 'hot' | 'trending';
@@ -138,11 +136,6 @@ class ApiPostsRepository implements PostsRepository {
     return unwrapApiResponse<{ is_favorited: boolean; favorite_count: number }>(resp, 200);
   }
 
-  async updateCompanionStatus(postId: string, input: CompanionStatusUpdateRequest): Promise<void> {
-    const path = API_ENDPOINTS.POSTS.COMPANION_STATUS.replace(':postId', encodeURIComponent(postId));
-    const resp = await httpAuth.put(path, input);
-    unwrapApiResponse<void>(resp, 200);
-  }
 }
 
 const MOCK_AUTHORS: PostAuthor[] = [
@@ -412,10 +405,6 @@ class MockPostsRepository implements PostsRepository {
       p.stats.favorite_count = Math.max(0, (p.stats?.favorite_count ?? 0) - 1);
     }
     return { is_favorited: false, favorite_count: p.stats.favorite_count ?? 0 };
-  }
-
-  async updateCompanionStatus(postId: string, input: CompanionStatusUpdateRequest): Promise<void> {
-    // Mock implementation: do nothing
   }
 
 }

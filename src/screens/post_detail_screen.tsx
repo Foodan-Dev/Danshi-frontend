@@ -1617,10 +1617,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   heroGradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   heroPattern: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     overflow: 'hidden',
   },
   heroCircle: {
@@ -1678,7 +1678,6 @@ const styles = StyleSheet.create({
     padding: 12,
     // backgroundColor: 使用 inverseOnSurface 配合 15% opacity (在组件中动态设置)
     borderRadius: 16,
-    backdropFilter: 'blur(10px)',
   },
   heroAuthorInfo: {
     flexDirection: 'row',
@@ -1766,7 +1765,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   fallbackGradientBase: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   fallbackMeshLayer1: {
     position: 'absolute',
@@ -1798,7 +1797,7 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   fallbackDecorations: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     overflow: 'hidden',
   },
   fallbackCircle1: {

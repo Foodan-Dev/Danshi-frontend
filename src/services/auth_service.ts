@@ -7,17 +7,14 @@ import { REGEX } from '@/src/constants/app';
 export type AuthState = { token: string; user: User };
 
 const isEmail = (v: string) => REGEX.EMAIL.test(v);
-const isUsername = (v: string) => REGEX.USERNAME.test(v);
 
 export const authService = {
-  async login(input: { identifier: string; password: string }): Promise<AuthState> {
-    const { identifier, password } = input;
-    if (!identifier) throw new AppError('请输入邮箱或用户名');
-    const email = isEmail(identifier) ? identifier : undefined;
-    const username = !email && isUsername(identifier) ? identifier : undefined;
-    if (!email && !username) throw new AppError('请输入有效的邮箱或用户名');
+  async login(input: { email: string; password: string }): Promise<AuthState> {
+    const { email, password } = input;
+    if (!email) throw new AppError('请输入邮箱');
+    if (!isEmail(email)) throw new AppError('请输入有效的邮箱');
     if (!password) throw new AppError('请输入密码');
-    const { token, refresh_token, user } = await authRepository.login({ email, username, password });
+    const { token, refresh_token, user } = await authRepository.login({ email, password });
     await AuthStorage.setToken(token);
     if (refresh_token) await AuthStorage.setRefreshToken(refresh_token);
     return { token, user };

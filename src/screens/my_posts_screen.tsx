@@ -2,9 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, RefreshControl, ScrollView } from 'react-native';
 import { ActivityIndicator, Appbar, Text, useTheme as usePaperTheme, Chip, FAB, Dialog, Portal, Button } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import type { Href } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
 
 import { useAuth } from '@/src/context/auth_context';
 import { usersService } from '@/src/services/users_service';

@@ -3,19 +3,53 @@ import { httpAuth } from '@/src/lib/http/http_auth';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import type { User } from '@/src/models/User';
 import { API_ENDPOINTS, USE_MOCK } from '@/src/constants/app';
+import { AppError } from '@/src/lib/errors/app_error';
+import type { components } from '@/src/generated/openapi';
 
-export type LoginInput = { email?: string; username?: string; password: string };
-export type RegisterInput = {
-  email: string;
-  password: string;
-  name: string; // 强制必填
-  gender?: 'male' | 'female';
-  hometown?: string;
-  avatar_url?: string | null;
+export type LoginInput = components['schemas']['LoginRequest'];
+type RegisterRequest = components['schemas']['RegisterRequest'];
+export type RegisterInput = Omit<RegisterRequest, 'gender' | 'name'> & {
+  gender?: User['gender'];
+  name: string;
 };
+
+type AuthContractPayload = components['schemas']['AuthResponse'];
+type RefreshContractPayload = components['schemas']['TokenResponse'];
+type UserContract = components['schemas']['UserOut'];
+type MeContractPayload = components['schemas']['ApiEnvelope_dict_str__UserOut__']['data'];
 
 export type AuthPayload = { token: string; user: User; refresh_token?: string };
 export type RefreshPayload = { token: string; refresh_token?: string };
+
+function isUserRole(role: string | null | undefined): role is User['role'] {
+  return role === 'user' || role === 'admin' || role === 'super_admin';
+}
+
+function toUser(user: UserContract): User {
+  if (!isUserRole(user.role)) {
+    throw new AppError('服务端返回了无效的用户角色');
+  }
+  const gender = user.gender === 'male' || user.gender === 'female'
+    ? user.gender
+    : undefined;
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name?.trim() || user.email.split('@')[0],
+    role: user.role,
+    avatar_url: user.avatar_url,
+    ...(gender ? { gender } : {}),
+    ...(user.hometown ? { hometown: user.hometown } : {}),
+  };
+}
+
+function toAuthPayload(payload: AuthContractPayload): AuthPayload {
+  return {
+    token: payload.token,
+    refresh_token: payload.refresh_token,
+    user: toUser(payload.user),
+  };
+}
 
 export interface AuthRepository {
   login(input: LoginInput): Promise<AuthPayload>;
@@ -27,16 +61,20 @@ export interface AuthRepository {
 
 export class ApiAuthRepository implements AuthRepository {
   async login(input: LoginInput): Promise<AuthPayload> {
-    const res = await http.post<ApiResponse<AuthPayload>>(API_ENDPOINTS.AUTH.LOGIN, input);
-    return unwrapApiResponse<AuthPayload>(res);
+    const res = await http.post<ApiResponse<AuthContractPayload>>(API_ENDPOINTS.AUTH.LOGIN, input);
+    return toAuthPayload(unwrapApiResponse(res));
   }
   async register(input: RegisterInput): Promise<AuthPayload> {
-    const res = await http.post<ApiResponse<AuthPayload>>(API_ENDPOINTS.AUTH.REGISTER, input);
-    return unwrapApiResponse<AuthPayload>(res);
+    const res = await http.post<ApiResponse<AuthContractPayload>>(API_ENDPOINTS.AUTH.REGISTER, input);
+    return toAuthPayload(unwrapApiResponse(res));
   }
   async me(): Promise<{ user: User }> {
-    const res = await httpAuth.get<ApiResponse<{ user: User }>>(API_ENDPOINTS.AUTH.ME);
-    return unwrapApiResponse<{ user: User }>(res);
+    const res = await httpAuth.get<ApiResponse<MeContractPayload>>(API_ENDPOINTS.AUTH.ME);
+    const payload = unwrapApiResponse(res);
+    if (!payload.user) {
+      throw new AppError('服务端响应缺少用户信息');
+    }
+    return { user: toUser(payload.user) };
   }
   async logout(): Promise<void> {
     try {
@@ -48,8 +86,9 @@ export class ApiAuthRepository implements AuthRepository {
     }
   }
   async refresh(refreshToken: string): Promise<RefreshPayload> {
-    const res = await http.post<ApiResponse<RefreshPayload>>(API_ENDPOINTS.AUTH.REFRESH, { refresh_token: refreshToken });
-    return unwrapApiResponse<RefreshPayload>(res);
+    const input: components['schemas']['RefreshTokenRequest'] = { refresh_token: refreshToken };
+    const res = await http.post<ApiResponse<RefreshContractPayload>>(API_ENDPOINTS.AUTH.REFRESH, input);
+    return unwrapApiResponse(res);
   }
 }
 
@@ -74,12 +113,7 @@ export class MockAuthRepository implements AuthRepository {
 
   async login(input: LoginInput): Promise<AuthPayload> {
     await new Promise((r) => setTimeout(r, 400));
-    // 基于本地 Mock 的严格校验：
-    // 1) must provide identifier and password
-    // 2) identifier must match current mockUser (email or username)
-    // 3) password must match mockPassword
-    const providedId = input.email ?? input.username ?? '';
-    const idMatch = providedId === this.mockUser.email || providedId === this.mockUser.name;
+    const idMatch = input.email === this.mockUser.email;
     const pwdMatch = !!input.password && input.password === this.mockPassword;
     if (!idMatch || !pwdMatch) {
       throw new Error('账号或密码错误');

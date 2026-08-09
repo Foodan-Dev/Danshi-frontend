@@ -48,9 +48,9 @@
     - `API_BASE_URL`（服务端 URL，来源 `EXPO_PUBLIC_API_URL`）
     - `REQUEST_TIMEOUT_MS`（请求超时，来源 `EXPO_PUBLIC_REQUEST_TIMEOUT_MS`）
   - `STORAGE_KEYS`：`AUTH_TOKEN`、`REFRESH_TOKEN`、`POSTS` 等存储键
-  - `API_ENDPOINTS`：所有 API 路径常量（按 AUTH / USERS / ADMIN / POSTS / COMMENTS / SEARCH / NOTIFICATIONS 分组）
+  - `API_ENDPOINTS`：所有 API 路径常量（按 AUTH / USERS / ADMIN / POSTS / COMMENTS / SEARCH / NOTIFICATIONS 分组），并由后端 OpenAPI 生成类型做静态约束
   - `ROLES`、`ROLE_ORDER`：角色常量与优先级序列
-  - `REGEX`：邮箱与用户名校验正则
+  - `REGEX`：邮箱校验正则
 
 - `src/constants/breakpoints.ts`
   - 断点定义与工具：
@@ -123,8 +123,8 @@
 
 | 文件 | 服务域 | 主要能力 |
 |------|--------|---------|
-| `auth_service.ts` | 认证 | 登录（邮箱/用户名自动识别）、注册、刷新 Token、登出 |
-| `posts_service.ts` | 帖子 | 两类帖子（share/seeking）输入校验、输入规范化（`normalizePostInput()`）、列表/CRUD/点赞/收藏/状态；并保留结伴状态更新能力 |
+| `auth_service.ts` | 认证 | 邮箱登录、注册、刷新 Token、登出 |
+| `posts_service.ts` | 帖子 | 两类帖子（share/seeking）输入校验、输入规范化（`normalizePostInput()`）、列表/CRUD/点赞/收藏/状态 |
 | `comments_service.ts` | 评论 | 评论创建校验（长度限制 500）、分页参数清洗、列表/回复/点赞/删除 |
 | `users_service.ts` | 用户 | 用户信息获取与更新、头像 URL 校验（Mock/Server 不同策略）、关注/取关 |
 | `notifications_service.ts` | 通知 | 通知列表/未读数/标记已读、路由跳转辅助、类型标签/图标映射 |
@@ -220,7 +220,7 @@ React Context 全局状态管理。
 | `post_detail_screen.tsx` | 帖子详情 | 桌面/移动双布局，评论系统，图片轮播，通过 `usePostActions` 和 `usePostComments` Hook 管理逻辑 |
 | `post_screen.tsx` | 发帖/编辑 | 两类帖子表单（share/seeking），图片上传，响应式布局 |
 | `search_screen.tsx` | 搜索页 | 帖子/用户搜索，历史记录，瀑布流结果 |
-| `login_screen.tsx` | 登录页 | 邮箱/用户名登录，Session 过期提示 |
+| `login_screen.tsx` | 登录页 | 邮箱登录，Session 过期提示 |
 | `register_screen.tsx` | 注册页 | 表单校验 + 注册 |
 | `myself_screen.tsx` | 个人中心 | 用户信息、帖子/收藏列表、管理入口 |
 | `settings_screen.tsx` | 设置页 | 个人资料编辑、主题切换、主题色选择 |
@@ -351,6 +351,10 @@ app/
 
 ## 4. HTTP 与错误处理（统一约定）
 
+- **唯一契约**：后端 FastAPI 运行时生成的 OpenAPI 是唯一 API 契约；前端 `openapi.json` 与 `src/generated/openapi.ts` 都是只读派生产物，不允许手工补接口或字段
+- **同步契约**：后端运行后执行 `npm run api:sync -- http://127.0.0.1:8000/openapi.json`，再执行 `npm run api:generate`
+- **本地文件**：也可执行 `npm run api:sync -- ../Danshi_backend/.artifacts/openapi/openapi.json` 消费后端离线导出器生成的文件
+- **漂移检查**：`npm run api:check` 会重新生成 TypeScript 类型，并在派生产物未提交或被手工修改时失败
 - **响应结构**：后端返回 `{ code: number; message: string; data: T }`
 - **正常结果**：`code === 200`（可按后端调整），使用 `unwrapApiResponse` 直接获取 `data`
 - **异常结果**：`code !== 200` 或网络错误/解析错误，均转换为 `AppError`
@@ -511,7 +515,7 @@ const maxWidth = pickByBreakpoint(bp, { base: '100%', sm: 540, md: 580, lg: 620 
 
 ### API 路径约定
 
-- 所有 API 路径定义在 `API_ENDPOINTS`（`constants/app.ts`），仅含路径部分
+- 所有 API 路径定义在 `API_ENDPOINTS`（`constants/app.ts`），仅含路径部分，并必须满足生成的后端 `paths` 类型
 - Base URL（含 `/api/v1` 前缀）由 `API_BASE_URL` 提供
 
 ---

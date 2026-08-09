@@ -2267,7 +2267,7 @@ const styles = StyleSheet.create({
 		opacity: 0.4,
 	},
 	previewFallbackDecorations: {
-		...StyleSheet.absoluteFillObject,
+		...StyleSheet.absoluteFill,
 	},
 	previewFallbackCircle1: {
 		position: 'absolute',

@@ -131,13 +131,13 @@ export interface UsersRepository {
 
 export class ApiUsersRepository implements UsersRepository {
   async getUser(userId: string): Promise<UserProfile> {
-    const url = `${API_ENDPOINTS.USERS.ROOT}/${encodeURIComponent(userId)}`;
+    const url = API_ENDPOINTS.USERS.ROOT.replace(':userId', encodeURIComponent(userId));
     // 使用 httpAuth 以便后端能识别当前用户身份，正确返回 is_following 状态
     const res = await httpAuth.get<ApiResponse<UserProfile>>(url);
     return unwrapApiResponse<UserProfile>(res);
   }
   async updateUser(userId: string, input: UpdateUserInput): Promise<{ user: UserProfile }> {
-    const url = `${API_ENDPOINTS.USERS.ROOT}/${encodeURIComponent(userId)}`;
+    const url = API_ENDPOINTS.USERS.ROOT.replace(':userId', encodeURIComponent(userId));
     const res = await httpAuth.put<ApiResponse<{ user: UserProfile }>>(url, input);
     return unwrapApiResponse<{ user: UserProfile }>(res);
   }

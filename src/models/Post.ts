@@ -83,10 +83,3 @@ export type PostCreateResult = {
   post_type: PostType;
   status: 'pending' | 'approved' | 'rejected';
 };
-
-export type CompanionStatus = 'open' | 'full' | 'closed';
-
-export type CompanionStatusUpdateRequest = {
-  status: CompanionStatus;
-  current_people?: number | null;
-};

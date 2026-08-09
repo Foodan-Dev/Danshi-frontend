@@ -124,6 +124,14 @@ npx expo start
 
 Mock/Server 切换与接口契约说明详见 [doc/Architecture/README.md](doc/Architecture/README.md)。
 
+后端 OpenAPI 是唯一接口契约。后端启动后使用以下命令同步并生成前端类型：
+
+```bash
+npm run api:sync -- http://127.0.0.1:8000/openapi.json
+npm run api:generate
+npm run api:check
+```
+
 ## 📦 分发与发布
 
 本项目使用 Expo/EAS 进行多端分发。以下为常见发布流程：

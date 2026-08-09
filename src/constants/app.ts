@@ -1,5 +1,16 @@
 import type { User } from '@/src/models/User';
 import { isHttpOrHttpsUrl } from '@/src/lib/security/url';
+import type { paths } from '@/src/generated/openapi';
+
+type BackendPath = Extract<keyof paths, `/api/v1${string}`>;
+type RelativeBackendPath<Path extends BackendPath> = Path extends `/api/v1${infer Relative}`
+  ? Relative
+  : never;
+type EndpointTemplate<Path extends string> = Path extends `${infer Prefix}{${string}}${infer Suffix}`
+  ? `${Prefix}:${string}${EndpointTemplate<Suffix>}`
+  : Path;
+type ApiEndpoint = EndpointTemplate<RelativeBackendPath<BackendPath>>;
+type ApiEndpointMap = { readonly [key: string]: ApiEndpoint | ApiEndpointMap };
 
 // Storage keys used across the app
 export const STORAGE_KEYS = {
@@ -42,7 +53,7 @@ export const API_ENDPOINTS = {
     REFRESH: '/auth/refresh',         // POST 
   },
   USERS: {
-    ROOT: '/users', // GET /:userId, PUT /:userId
+    ROOT: '/users/:userId',
     POSTS: '/users/:userId/posts',
     FAVORITES: '/users/:userId/favorites',
     FOLLOWING: '/users/:userId/following',
@@ -72,7 +83,6 @@ export const API_ENDPOINTS = {
     UNLIKEPOST: '/posts/:postId/like',  // DELETE
     FAVORITEPOST: '/posts/:postId/favorite',  // POST
     UNFAVORITEPOST: '/posts/:postId/favorite',  // DELETE
-    COMPANION_STATUS: '/posts/:postId/companion-status', // PUT
   },
   COMMENTS: {
     LIST_FOR_POST: '/posts/:postId/comments',
@@ -108,7 +118,7 @@ export const API_ENDPOINTS = {
     USER: '/stats/user/:userId',
   },
   */
-} as const;
+} as const satisfies ApiEndpointMap;
 
 // Role literals and their order (low -> high privilege)
 export const ROLES = {
@@ -122,10 +132,7 @@ export const ROLE_ORDER: RoleLiteral[] = [ROLES.USER, ROLES.ADMIN, ROLES.SUPER_A
 
 // Common regex patterns
 export const REGEX = {
-  // email: simple email validation
   EMAIL: /.+@.+\..+/,
-  // username: 3-30 chars, letters, numbers, underscore, dot, hyphen
-  USERNAME: /^[a-zA-Z0-9_.-]{3,30}$/,
 } as const;
 
 // Convenience type to align with domain type if needed

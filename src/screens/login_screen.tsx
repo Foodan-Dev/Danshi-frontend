@@ -15,7 +15,7 @@ export default function LoginScreen() {
   const bp = useBreakpoint();
   const pad = pickByBreakpoint(bp, { base: 16, sm: 20, md: 24, lg: 32, xl: 40 });
   const maxWidth = pickByBreakpoint(bp, { base: 440, sm: 480, md: 560, lg: 640, xl: 720 });
-  const [identifier, setIdentifier] = useState(''); // email or username
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -32,10 +32,9 @@ export default function LoginScreen() {
     }
   }, [sessionExpired, clearSessionExpired]);
 
-  const validate = (nextIdentifier: string, nextPassword: string) => {
-    if (!nextIdentifier) return '请输入邮箱或用户名';
-    const ok = REGEX.EMAIL.test(nextIdentifier) || REGEX.USERNAME.test(nextIdentifier);
-    if (!ok) return '请输入有效的邮箱或用户名';
+  const validate = (nextEmail: string, nextPassword: string) => {
+    if (!nextEmail) return '请输入邮箱';
+    if (!REGEX.EMAIL.test(nextEmail)) return '请输入有效的邮箱';
     if (!nextPassword) return '请输入密码';
     return '';
   };
@@ -43,11 +42,11 @@ export default function LoginScreen() {
   const onSubmit = async () => {
     if (loading) return;
     setError('');
-    const normalizedIdentifier = identifier.trim();
-    if (normalizedIdentifier !== identifier) {
-      setIdentifier(normalizedIdentifier);
+    const normalizedEmail = email.trim();
+    if (normalizedEmail !== email) {
+      setEmail(normalizedEmail);
     }
-    const v = validate(normalizedIdentifier, password);
+    const v = validate(normalizedEmail, password);
     if (v) {
       setError(v);
       return;
@@ -55,7 +54,7 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      const { token } = await authService.login({ identifier: normalizedIdentifier, password });
+      const { token } = await authService.login({ email: normalizedEmail, password });
       await signIn(token);
       // 直接跳到 tabs 的探索页，避免在 (auth) 栈内 REPLACE('index') 报错
       router.replace('/explore');
@@ -66,7 +65,7 @@ export default function LoginScreen() {
       } else if (!appError.status && !appError.code) {
         setError(appError.message);
       } else if (appError.status === 401) {
-        setError('账号或密码错误');
+        setError('邮箱或密码错误');
       } else {
         setError('登录失败，请重试');
       }
@@ -126,11 +125,14 @@ export default function LoginScreen() {
 
               <View style={{ gap: 20 }}>
                 <TextInput
-                  label="邮箱或用户名"
+                  label="邮箱"
                   mode="outlined"
                   autoCapitalize="none"
-                  value={identifier}
-                  onChangeText={setIdentifier}
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  value={email}
+                  onChangeText={setEmail}
                   outlineColor="transparent"
                   activeOutlineColor={colors.primary}
                   textColor={colors.onSurface}

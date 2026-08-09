@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
   Image,
   Pressable,
@@ -7,10 +6,10 @@ import {
   StyleSheet,
   View,
   RefreshControl,
+  useWindowDimensions,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router, type Href } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { router, type Href, useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Button, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/src/context/auth_context';
@@ -24,7 +23,7 @@ import { Masonry } from '@/src/components/md3/masonry';
 import { PostCard, estimatePostCardHeight } from '@/src/components/post_card';
 import { useWaterfallSettings } from '@/src/context/waterfall_context';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
-import { pickByBreakpoint } from '@/src/constants/breakpoints';
+import { breakpoints, pickByBreakpoint } from '@/src/constants/breakpoints';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
@@ -133,7 +132,8 @@ export default function MyselfScreen() {
   const insets = useSafeAreaInsets();
   const theme = usePaperTheme();
   const { minHeight, maxHeight } = useWaterfallSettings();
-  const tabBarHeight = useBottomTabBarHeight();
+  const { width: windowWidth } = useWindowDimensions();
+  const tabBarHeight = windowWidth >= breakpoints.md ? 0 : 56 + Math.max(insets.bottom, 12);
   const bottomContentPadding = useMemo(() => tabBarHeight + 24, [tabBarHeight]);
 
   // 响应式间距 - 与探索界面保持一致
@@ -812,4 +812,3 @@ const styles = StyleSheet.create({
     // color is set dynamically
   },
 });
-

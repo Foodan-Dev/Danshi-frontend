@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   modalContainer: {
     width: '100%',
