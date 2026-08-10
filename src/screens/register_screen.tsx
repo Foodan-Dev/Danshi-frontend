@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/src/context/auth_context';
@@ -11,6 +11,9 @@ import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { REGEX } from '../constants/app';
 import { ensureAppError } from '@/src/lib/errors/app_error';
 
+const VERIFICATION_CODE_LENGTH = 6;
+const VERIFICATION_COOLDOWN_SECONDS = 60;
+
 export default function RegisterScreen() {
   const bp = useBreakpoint();
   const pad = pickByBreakpoint(bp, { base: 16, sm: 20, md: 24, lg: 32, xl: 40 });
@@ -18,16 +21,38 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [verificationMessage, setVerificationMessage] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [username, setUsername] = useState('');
 
-  const validate = (nextUsername: string, nextEmail: string, nextPassword: string, nextConfirm: string) => {
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = setTimeout(() => {
+      setCooldownSeconds((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [cooldownSeconds]);
+
+  const validate = (
+    nextUsername: string,
+    nextEmail: string,
+    nextVerificationCode: string,
+    nextPassword: string,
+    nextConfirm: string,
+  ) => {
     if (!nextUsername) return '请输入用户名';
     if (nextUsername.length < 3) return '用户名至少 3 个字符';
     if (!nextEmail) return '请输入邮箱';
     const emailRegex = REGEX.EMAIL;
     if (!emailRegex.test(nextEmail)) return '请输入有效的邮箱地址';
+    if (!verificationEmail) return '请先获取邮箱验证码';
+    if (verificationEmail !== nextEmail) return '邮箱已修改，请重新获取验证码';
+    if (nextVerificationCode.length !== VERIFICATION_CODE_LENGTH) return '请输入 6 位邮箱验证码';
     if (!nextPassword) return '请输入密码';
     if (nextPassword.length < 8) return '密码长度至少 8 位';
     if (nextPassword !== nextConfirm) return '两次输入的密码不一致';
@@ -35,6 +60,49 @@ export default function RegisterScreen() {
   };
 
   const { signIn } = useAuth();
+
+  const onRequestCode = async () => {
+    if (sendingCode || loading || cooldownSeconds > 0) return;
+    setError('');
+    setVerificationMessage('');
+    const normalizedEmail = email.trim();
+    if (normalizedEmail !== email) {
+      setEmail(normalizedEmail);
+    }
+    if (!normalizedEmail || !REGEX.EMAIL.test(normalizedEmail)) {
+      setError('请输入有效的邮箱地址');
+      return;
+    }
+
+    setSendingCode(true);
+    try {
+      await authService.requestRegistrationCode(normalizedEmail);
+      setVerificationEmail(normalizedEmail);
+      setCooldownSeconds(VERIFICATION_COOLDOWN_SECONDS);
+      setVerificationMessage('验证码已发送，有效期 10 分钟');
+    } catch (caught) {
+      const appError = ensureAppError(caught, '验证码发送失败，请重试');
+      if (appError.status === 429) {
+        const retryAfter = Math.max(
+          1,
+          appError.retryAfterSeconds ?? VERIFICATION_COOLDOWN_SECONDS,
+        );
+        setCooldownSeconds(retryAfter);
+        setError(`请求过于频繁，请 ${retryAfter} 秒后重试`);
+      } else if (
+        appError.status === 400
+        || appError.status === 503
+        || appError.code === 'NETWORK_ERROR'
+        || appError.code === 'TIMEOUT'
+      ) {
+        setError(appError.message);
+      } else {
+        setError('验证码发送失败，请重试');
+      }
+    } finally {
+      setSendingCode(false);
+    }
+  };
 
   const onSubmit = async () => {
     if (loading) return;
@@ -47,7 +115,13 @@ export default function RegisterScreen() {
     if (normalizedEmail !== email) {
       setEmail(normalizedEmail);
     }
-    const v = validate(normalizedUsername, normalizedEmail, password, confirm);
+    const v = validate(
+      normalizedUsername,
+      normalizedEmail,
+      verificationCode,
+      password,
+      confirm,
+    );
     if (v) {
       setError(v);
       return;
@@ -55,7 +129,12 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      const { token } = await authService.register({ email: normalizedEmail, password, name: normalizedUsername });
+      const { token } = await authService.register({
+        email: normalizedEmail,
+        password,
+        name: normalizedUsername,
+        verification_code: verificationCode,
+      });
       await signIn(token);
       router.replace('/explore');
     } catch (e) {
@@ -82,6 +161,9 @@ export default function RegisterScreen() {
   const cardBorderColor = palette.outlineVariant ?? colors.outline;
   const rowPromptColor = palette.onSurfaceVariant ?? colors.onSurface;
   const inputTheme = { roundness: 10 };
+  const requestCodeButtonLabel = cooldownSeconds > 0
+    ? `${cooldownSeconds} 秒后重试`
+    : '获取验证码';
 
   return (
     <KeyboardAvoidingView
@@ -104,11 +186,27 @@ export default function RegisterScreen() {
               <Text variant="headlineSmall" style={[styles.title, { color: colors.onSurface }]}>
                 注册
               </Text>
-              {error ? <Text style={{ color: danger, marginBottom: 8 }}>{error}</Text> : null}
+              {error ? (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={{ color: danger, marginBottom: 8 }}
+                >
+                  {error}
+                </Text>
+              ) : null}
+              {verificationMessage ? (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={{ color: rowPromptColor, marginBottom: 8 }}
+                >
+                  {verificationMessage}
+                </Text>
+              ) : null}
 
               <View style={{ gap: 20 }}>
                 <TextInput
                   label="用户名"
+                  accessibilityLabel="用户名"
                   mode="outlined"
                   value={username}
                   onChangeText={setUsername}
@@ -121,9 +219,12 @@ export default function RegisterScreen() {
 
                 <TextInput
                   label="邮箱"
+                  accessibilityLabel="邮箱"
                   mode="outlined"
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoComplete="email"
+                  textContentType="emailAddress"
                   value={email}
                   onChangeText={setEmail}
                   outlineColor="transparent"
@@ -132,8 +233,43 @@ export default function RegisterScreen() {
                   theme={inputTheme}
                 />
 
+                <View style={styles.verificationRow}>
+                  <TextInput
+                    label="邮箱验证码"
+                    accessibilityLabel="邮箱验证码"
+                    mode="outlined"
+                    keyboardType="number-pad"
+                    autoComplete="one-time-code"
+                    textContentType="oneTimeCode"
+                    value={verificationCode}
+                    onChangeText={(value) => {
+                      setVerificationCode(
+                        value.replace(/\D/g, '').slice(0, VERIFICATION_CODE_LENGTH),
+                      );
+                    }}
+                    outlineColor="transparent"
+                    activeOutlineColor={colors.primary}
+                    textColor={colors.onSurface}
+                    theme={inputTheme}
+                    style={styles.verificationInput}
+                  />
+                  <Button
+                    mode="outlined"
+                    onPress={onRequestCode}
+                    loading={sendingCode}
+                    disabled={sendingCode || loading || cooldownSeconds > 0}
+                    accessibilityLabel={requestCodeButtonLabel}
+                    style={[styles.verificationButton, { borderColor: colors.outline }]}
+                    contentStyle={styles.verificationButtonContent}
+                    textColor={colors.primary}
+                  >
+                    {requestCodeButtonLabel}
+                  </Button>
+                </View>
+
                 <TextInput
                   label="密码"
+                  accessibilityLabel="密码"
                   mode="outlined"
                   secureTextEntry
                   value={password}
@@ -146,6 +282,7 @@ export default function RegisterScreen() {
 
                 <TextInput
                   label="确认密码"
+                  accessibilityLabel="确认密码"
                   mode="outlined"
                   secureTextEntry
                   value={confirm}
@@ -163,7 +300,7 @@ export default function RegisterScreen() {
                 contentStyle={{ height: 48 }}
                 onPress={onSubmit}
                 loading={loading}
-                disabled={loading}
+                disabled={loading || sendingCode}
                 buttonColor={colors.primary}
                 textColor={colors.onPrimary}
               >
@@ -208,6 +345,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
     textAlign: 'center',
+  },
+  verificationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  verificationInput: {
+    flex: 1,
+  },
+  verificationButton: {
+    borderRadius: 12,
+  },
+  verificationButtonContent: {
+    height: 56,
   },
   row: {
     flexDirection: 'row',

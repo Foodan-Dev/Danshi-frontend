@@ -7,6 +7,7 @@ import { AppError } from '@/src/lib/errors/app_error';
 import type { components } from '@/src/generated/openapi';
 
 export type LoginInput = components['schemas']['LoginRequest'];
+export type EmailVerificationCodeInput = components['schemas']['EmailVerificationCodeRequest'];
 type RegisterRequest = components['schemas']['RegisterRequest'];
 export type RegisterInput = Omit<RegisterRequest, 'gender' | 'name'> & {
   gender?: User['gender'];
@@ -53,6 +54,7 @@ function toAuthPayload(payload: AuthContractPayload): AuthPayload {
 
 export interface AuthRepository {
   login(input: LoginInput): Promise<AuthPayload>;
+  requestRegistrationCode(input: EmailVerificationCodeInput): Promise<void>;
   register(input: RegisterInput): Promise<AuthPayload>;
   me(): Promise<{ user: User }>;
   logout(): Promise<void>;
@@ -63,6 +65,13 @@ export class ApiAuthRepository implements AuthRepository {
   async login(input: LoginInput): Promise<AuthPayload> {
     const res = await http.post<ApiResponse<AuthContractPayload>>(API_ENDPOINTS.AUTH.LOGIN, input);
     return toAuthPayload(unwrapApiResponse(res));
+  }
+  async requestRegistrationCode(input: EmailVerificationCodeInput): Promise<void> {
+    const res = await http.post<ApiResponse<null>>(
+      API_ENDPOINTS.AUTH.EMAIL_VERIFICATION_CODES,
+      input,
+    );
+    unwrapApiResponse(res);
   }
   async register(input: RegisterInput): Promise<AuthPayload> {
     const res = await http.post<ApiResponse<AuthContractPayload>>(API_ENDPOINTS.AUTH.REGISTER, input);
@@ -121,6 +130,10 @@ export class MockAuthRepository implements AuthRepository {
     const seed = this.mockUser.email || this.mockUser.name;
     this.mockUser = { ...this.mockUser, avatar_url: this.computeAvatar(seed) };
     return { token: 'mock-token', refresh_token: 'mock-refresh-token', user: this.mockUser };
+  }
+  async requestRegistrationCode(input: EmailVerificationCodeInput): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    if (!input.email) throw new AppError('请输入邮箱');
   }
   async register(input: RegisterInput): Promise<AuthPayload> {
     await new Promise((r) => setTimeout(r, 500));

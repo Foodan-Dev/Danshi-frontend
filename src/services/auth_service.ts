@@ -20,9 +20,19 @@ export const authService = {
     return { token, user };
   },
 
+  async requestRegistrationCode(email: string): Promise<void> {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) throw new AppError('请输入邮箱');
+    if (!isEmail(normalizedEmail)) throw new AppError('请输入有效的邮箱');
+    await authRepository.requestRegistrationCode({ email: normalizedEmail });
+  },
+
   async register(input: RegisterInput): Promise<AuthState> {
     if (!input.name || !input.name.trim()) throw new AppError('用户名不能为空');
     if (!input.email || !isEmail(input.email)) throw new AppError('邮箱格式不正确');
+    if (!input.verification_code || !/^\d{6}$/.test(input.verification_code)) {
+      throw new AppError('请输入 6 位邮箱验证码');
+    }
     if (!input.password || input.password.length < 8 || input.password.length > 64) throw new AppError('密码长度需 8-64');
     const { token, refresh_token, user } = await authRepository.register(input);
     await AuthStorage.setToken(token);

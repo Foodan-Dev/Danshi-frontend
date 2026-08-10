@@ -81,7 +81,18 @@ export function createHttpClient(opts: HttpOptions = {}): HttpClient {
 
       if (!res.ok) {
         const message = (data && typeof data === 'object' && 'message' in data ? (data as { message?: string }).message : undefined) || `请求失败(${res.status})`;
-        throw new AppError(message, { status: res.status, cause: data });
+        const retryAfterHeader = res.headers.get('retry-after');
+        const parsedRetryAfter = retryAfterHeader === null
+          ? Number.NaN
+          : Number.parseInt(retryAfterHeader, 10);
+        const retryAfterSeconds = Number.isFinite(parsedRetryAfter) && parsedRetryAfter > 0
+          ? parsedRetryAfter
+          : undefined;
+        throw new AppError(message, {
+          status: res.status,
+          retryAfterSeconds,
+          cause: data,
+        });
       }
 
       return (data as unknown) as T;

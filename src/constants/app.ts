@@ -48,6 +48,7 @@ export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/auth/login',             // POST
     REGISTER: '/auth/register',       // POST
+    EMAIL_VERIFICATION_CODES: '/auth/email-verification-codes',
     ME: '/auth/me',                   // GET
     LOGOUT: '/auth/logout',           // POST
     REFRESH: '/auth/refresh',         // POST 

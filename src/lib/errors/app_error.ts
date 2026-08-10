@@ -1,14 +1,24 @@
 export class AppError extends Error {
   code?: string;
   status?: number;
+  retryAfterSeconds?: number;
   cause?: unknown;
 
-  constructor(message: string, opts?: { code?: string; status?: number; cause?: unknown }) {
+  constructor(
+    message: string,
+    opts?: {
+      code?: string;
+      status?: number;
+      retryAfterSeconds?: number;
+      cause?: unknown;
+    },
+  ) {
     super(message);
     this.name = 'AppError';
     if (opts) {
       this.code = opts.code;
       this.status = opts.status;
+      this.retryAfterSeconds = opts.retryAfterSeconds;
       this.cause = opts.cause;
     }
   }
@@ -18,7 +28,8 @@ export class AppError extends Error {
     const err = error as Record<string, unknown> | null | undefined;
     const status = (err?.status as number | undefined) ?? (err?.response as Record<string, unknown> | undefined)?.status as number | undefined;
     const message = (err?.message as string | undefined) ?? fallbackMessage;
-    return new AppError(message, { status, cause: error });
+    const retryAfterSeconds = err?.retryAfterSeconds as number | undefined;
+    return new AppError(message, { status, retryAfterSeconds, cause: error });
   }
 }
 
