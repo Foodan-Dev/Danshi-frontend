@@ -1,6 +1,6 @@
 # 项目架构说明（DanShi）
 
-> 最新修改日期：2026-05-07
+> 最新修改日期：2026-08-14
 
 ---
 
@@ -11,7 +11,7 @@
 3. [分层架构详解](#3-分层架构详解职责依赖与边界)
 4. [HTTP 与错误处理](#4-http-与错误处理统一约定)
 5. [认证与权限](#5-认证与权限auth--roles)
-6. [Mock / Server 切换](#6-mock--server-切换操作指南)
+6. [后端连接](#6-后端连接操作指南)
 7. [主题与设计系统](#7-主题与设计系统theme--ds)
 8. [响应式系统](#8-响应式系统responsive)
 9. [页面与路由](#9-页面与路由screens--expo-router)
@@ -26,9 +26,9 @@
 本项目是基于 Expo + React Native（TypeScript）的校园美食分享与互动平台移动应用，支持 iOS、Android 与 Web 三端。
 
 - 核心分层（自下而上）：
-  - **Constants（常量与配置）**：集中管理环境变量、运行时开关、常量定义，避免散落硬编码
+  - **Constants（常量与配置）**：集中管理环境变量与常量定义，避免散落硬编码
   - **Infra（基础设施层）**：错误模型、HTTP 客户端、认证存储、权限工具、主题色生成器
-  - **Data Sources & Repositories（数据访问层）**：统一对外的资源访问接口（API / Mock），按资源域（auth、posts、comments、users、notifications、search、admin、uploads、stats）组织
+  - **Data Sources & Repositories（数据访问层）**：统一对外的后端 API 资源接口，按资源域（auth、posts、comments、users、notifications、search、admin、uploads）组织
   - **Services（领域服务层）**：业务校验与编排，面向用例而非数据表
   - **Presentation（表现层）**：Hook、Context、组件（基于 Material 3）、屏幕、导航与主题系统
 
@@ -40,14 +40,13 @@
 
 ### 2.1 constants/
 
-集中式常量、配置与运行时开关。
+集中式常量与配置。
 
 - `src/constants/app.ts`
-  - 运行时配置与开关（原 `config/index.ts` 已合并至此）：
-    - `USE_MOCK`（切换 Mock/Server，来源 `EXPO_PUBLIC_USE_MOCK`）
+  - 运行时配置（原 `config/index.ts` 已合并至此）：
     - `API_BASE_URL`（服务端 URL，来源 `EXPO_PUBLIC_API_URL`）
     - `REQUEST_TIMEOUT_MS`（请求超时，来源 `EXPO_PUBLIC_REQUEST_TIMEOUT_MS`）
-  - `STORAGE_KEYS`：`AUTH_TOKEN`、`REFRESH_TOKEN`、`POSTS` 等存储键
+  - `STORAGE_KEYS`：`AUTH_TOKEN`、`REFRESH_TOKEN` 存储键
   - `API_ENDPOINTS`：所有 API 路径常量（按 AUTH / USERS / ADMIN / POSTS / COMMENTS / SEARCH / NOTIFICATIONS 分组），并由后端 OpenAPI 生成类型做静态约束
   - `ROLES`、`ROLE_ORDER`：角色常量与优先级序列
   - `REGEX`：邮箱校验正则
@@ -103,19 +102,18 @@
 
 ### 2.3 repositories/
 
-以"资源"为单位，提供稳定的读写接口；屏蔽数据源差异（API / Mock）。
+以"资源"为单位，提供稳定的后端 API 读写接口。
 
 | 文件 | 资源域 | 实现 | 说明 |
 |------|--------|------|------|
-| `auth_repository.ts` | 认证 | Mock + Api | 登录/注册/刷新，`USE_MOCK` 自动切换 |
-| `posts_repository.ts` | 帖子 | Mock + Api | 列表/详情/CRUD/点赞/收藏/状态，读走 `http`，写走 `httpAuth` |
-| `comments_repository.ts` | 评论 | Mock + Api | 评论列表/回复/创建/点赞/删除 |
-| `users_repository.ts` | 用户 | Mock + Api | 用户信息/帖子/收藏/关注/粉丝 |
-| `notifications_repository.ts` | 通知 | Api only | 通知列表/未读数/标记已读 |
-| `search_repository.ts` | 搜索 | Api only | 帖子搜索/用户搜索 |
-| `admin_repository.ts` | 管理 | Api only | 帖子审核/用户管理/评论管理/管理员列表 |
-| `uploads_repository.ts` | 上传 | Api only | FDUHole 图片托管服务集成 |
-| `stats_repository.ts` | 统计 | Api only | 平台统计/用户聚合统计 |
+| `auth_repository.ts` | 认证 | Api | 登录/注册/刷新 |
+| `posts_repository.ts` | 帖子 | Api | 列表/详情/CRUD/点赞/收藏/状态 |
+| `comments_repository.ts` | 评论 | Api | 评论列表/回复/创建/点赞/删除 |
+| `users_repository.ts` | 用户 | Api | 用户信息/帖子/收藏/关注/粉丝 |
+| `notifications_repository.ts` | 通知 | Api | 通知列表/未读数/标记已读 |
+| `search_repository.ts` | 搜索 | Api | 帖子搜索/用户搜索 |
+| `admin_repository.ts` | 管理 | Api | 帖子审核/用户管理/评论管理/管理员列表 |
+| `uploads_repository.ts` | 上传 | Api | COS 图片直传 |
 
 ### 2.4 services/
 
@@ -126,13 +124,12 @@
 | `auth_service.ts` | 认证 | 邮箱登录、注册、刷新 Token、登出 |
 | `posts_service.ts` | 帖子 | 两类帖子（share/seeking）输入校验、输入规范化（`normalizePostInput()`）、列表/CRUD/点赞/收藏/状态 |
 | `comments_service.ts` | 评论 | 评论创建校验（长度限制 500）、分页参数清洗、列表/回复/点赞/删除 |
-| `users_service.ts` | 用户 | 用户信息获取与更新、头像 URL 校验（Mock/Server 不同策略）、关注/取关 |
+| `users_service.ts` | 用户 | 用户信息获取与更新、头像 URL 校验、关注/取关 |
 | `notifications_service.ts` | 通知 | 通知列表/未读数/标记已读、路由跳转辅助、类型标签/图标映射 |
 | `search_service.ts` | 搜索 | 帖子/用户搜索，参数校验与规范化 |
 | `admin_service.ts` | 管理 | 帖子审核、用户角色/状态变更、评论管理，分页参数清洗 |
 | `upload_service.ts` | 上传 | 单张/批量图片上传（≤9 张，≤5MB），文件类型推断与归一化 |
-| `stats_service.ts` | 统计 | 平台统计/用户聚合统计 |
-| `config_service.ts` | 配置 | 帖子类型/食堂/菜系/口味配置（带缓存，目前使用本地 fallback） |
+| `config_service.ts` | 配置 | 帖子类型/食堂/菜系/口味配置（带缓存，使用本地静态配置） |
 
 ### 2.5 context/
 
@@ -287,7 +284,7 @@ app/
 - `User.ts`：用户模型（`User`、`UserStats`、`Gender`）
 - `Post.ts`：帖子模型与联合类型（`Post = SharePost | SeekingPost`）、创建输入（`PostCreateInput`）、结伴状态请求类型等
 - `Comment.ts`：评论模型（`Comment`、`CommentReply`、`CommentEntity`、`CommentsListResponse`、`CreateCommentInput`）
-- `Stats.ts`：平台统计（`PlatformStats`）、用户聚合统计（`UserAggregateStats`）
+- `Stats.ts`：用户聚合统计（`UserAggregateStats`）
 
 ### 2.11 utils/
 
@@ -326,9 +323,9 @@ app/
 
 ### 3.3 数据访问层（Repositories）
 
-- **职责**：以"资源"为单位，提供稳定的 CRUD 接口；屏蔽数据源差异。
-- **模式**：定义 TypeScript 接口 → 提供 Mock + Api 两种实现 → 依据 `USE_MOCK` 自动导出
-- **约定**：读操作走 `http`（未鉴权），写操作走 `httpAuth`（鉴权），统一用 `unwrapApiResponse` 解包
+- **职责**：以"资源"为单位，提供稳定的 CRUD 接口；封装后端 API 调用细节。
+- **模式**：定义 TypeScript 接口 → 提供 API 实现 → 导出资源仓储单例
+- **约定**：按接口鉴权要求使用 `http` 或 `httpAuth`，统一用 `unwrapApiResponse` 解包
 - **边界**：不做输入校验/格式化；不直接操作 UI/导航
 
 ### 3.4 领域服务层（Services）
@@ -415,18 +412,16 @@ app/
 
 ---
 
-## 6. Mock / Server 切换（操作指南）
+## 6. 后端连接（操作指南）
 
 在项目根目录创建 `.env`（参考 `.env.example`）：
 
 ```env
-EXPO_PUBLIC_USE_MOCK=false
 EXPO_PUBLIC_API_URL=https://your-api-server.com/api/v1
 EXPO_PUBLIC_REQUEST_TIMEOUT_MS=10000
 ```
 
-- `USE_MOCK=true`：使用内存 Mock 数据，无需后端
-- `USE_MOCK=false`（默认）：连接真实后端 API
+应用始终连接 `EXPO_PUBLIC_API_URL` 指定的后端 API。
 
 ---
 
@@ -600,29 +595,27 @@ const maxWidth = pickByBreakpoint(bp, { base: '100%', sm: 540, md: 580, lg: 620 
 
 | 文件 | 说明 |
 |------|------|
-| `auth_repository.ts` | 认证仓储（Mock + Api） |
-| `posts_repository.ts` | 帖子仓储（Mock + Api） |
-| `comments_repository.ts` | 评论仓储（Mock + Api） |
-| `users_repository.ts` | 用户仓储（Mock + Api） |
+| `auth_repository.ts` | 认证仓储（Api） |
+| `posts_repository.ts` | 帖子仓储（Api） |
+| `comments_repository.ts` | 评论仓储（Api） |
+| `users_repository.ts` | 用户仓储（Api） |
 | `notifications_repository.ts` | 通知仓储（Api） |
 | `search_repository.ts` | 搜索仓储（Api） |
 | `admin_repository.ts` | 管理仓储（Api） |
-| `uploads_repository.ts` | FDUHole 图片上传仓储（Api） |
-| `stats_repository.ts` | 统计仓储（Api） |
+| `uploads_repository.ts` | COS 图片直传仓储（Api） |
 
 ### src/services/
 
 | 文件 | 说明 |
 |------|------|
 | `auth_service.ts` | 认证服务 |
-| `posts_service.ts` | 帖子服务（含 `normalizePostInput()`、列表 fallback 与结伴状态更新） |
+| `posts_service.ts` | 帖子服务（含 `normalizePostInput()` 与结伴状态更新） |
 | `comments_service.ts` | 评论服务 |
 | `users_service.ts` | 用户服务 |
 | `notifications_service.ts` | 通知服务 |
 | `search_service.ts` | 搜索服务 |
 | `admin_service.ts` | 管理服务 |
 | `upload_service.ts` | 图片上传服务 |
-| `stats_service.ts` | 统计服务 |
 | `config_service.ts` | 配置服务（帖子类型/食堂/菜系/口味） |
 
 ### src/context/
@@ -682,7 +675,7 @@ const maxWidth = pickByBreakpoint(bp, { base: '100%', sm: 540, md: 580, lg: 620 
 | `User.ts` | 用户模型（`User`/`UserStats`/`Gender`） |
 | `Post.ts` | 帖子模型（`Post`/`SharePost`/`SeekingPost`/`PostCreateInput`） |
 | `Comment.ts` | 评论模型（`Comment`/`CommentReply`/`CommentEntity`/`CreateCommentInput`） |
-| `Stats.ts` | 统计模型（`PlatformStats`/`UserAggregateStats`） |
+| `Stats.ts` | 用户聚合统计模型（`UserAggregateStats`） |
 
 ---
 

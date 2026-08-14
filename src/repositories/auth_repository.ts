@@ -2,7 +2,7 @@ import { http } from '@/src/lib/http/client';
 import { httpAuth } from '@/src/lib/http/http_auth';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import type { User } from '@/src/models/User';
-import { API_ENDPOINTS, USE_MOCK } from '@/src/constants/app';
+import { API_ENDPOINTS } from '@/src/constants/app';
 import { AppError } from '@/src/lib/errors/app_error';
 import type { components } from '@/src/generated/openapi';
 
@@ -101,65 +101,4 @@ export class ApiAuthRepository implements AuthRepository {
   }
 }
 
-// Mock
-export class MockAuthRepository implements AuthRepository {
-  private mockUser: User = {
-    id: '1234567890',
-    email: 'knd@example.com',
-    name: 'knd',
-    gender: 'male',
-    hometown: 'Shanghai',
-    role: 'admin', // 改为管理员以便访问管理界面
-    avatar_url: null,
-  };
-  private mockPassword: string = 'password123';
-
-  // get avatar
-  private computeAvatar(seed: string) {
-    const s = seed?.trim() || 'guest';
-    return `https://api.dicebear.com/7.x/identicon/png?seed=${encodeURIComponent(s)}`;
-  }
-
-  async login(input: LoginInput): Promise<AuthPayload> {
-    await new Promise((r) => setTimeout(r, 400));
-    const idMatch = input.email === this.mockUser.email;
-    const pwdMatch = !!input.password && input.password === this.mockPassword;
-    if (!idMatch || !pwdMatch) {
-      throw new Error('账号或密码错误');
-    }
-    const seed = this.mockUser.email || this.mockUser.name;
-    this.mockUser = { ...this.mockUser, avatar_url: this.computeAvatar(seed) };
-    return { token: 'mock-token', refresh_token: 'mock-refresh-token', user: this.mockUser };
-  }
-  async requestRegistrationCode(input: EmailVerificationCodeInput): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    if (!input.email) throw new AppError('请输入邮箱');
-  }
-  async register(input: RegisterInput): Promise<AuthPayload> {
-    await new Promise((r) => setTimeout(r, 500));
-    if (!input.name) throw new Error('用户名不能为空');
-    const avatar_url = this.computeAvatar(input.email || input.name);
-    this.mockUser = { ...this.mockUser, email: input.email, name: input.name, avatar_url };
-    this.mockPassword = input.password;
-    return { token: 'mock-token', refresh_token: 'mock-refresh-token', user: this.mockUser };
-  }
-  async me(): Promise<{ user: User }> {
-    await new Promise((r) => setTimeout(r, 200));
-    const seed = this.mockUser.email || this.mockUser.name;
-    const ensured = this.mockUser.avatar_url ? this.mockUser.avatar_url : this.computeAvatar(seed);
-    this.mockUser = { ...this.mockUser, avatar_url: ensured };
-    return { user: this.mockUser };
-  }
-  async logout(): Promise<void> {
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  async refresh(refreshToken: string): Promise<RefreshPayload> {
-    await new Promise((r) => setTimeout(r, 300));
-    if (!refreshToken) throw new Error('无效的刷新令牌');
-    return { token: 'mock-token-refreshed', refresh_token: 'mock-refresh-token-next' };
-  }
-}
-
-export const authRepository: AuthRepository = USE_MOCK
-  ? new MockAuthRepository()
-  : new ApiAuthRepository();
+export const authRepository: AuthRepository = new ApiAuthRepository();

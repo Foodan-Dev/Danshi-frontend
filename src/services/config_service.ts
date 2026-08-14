@@ -1,6 +1,3 @@
-import { API_ENDPOINTS, USE_MOCK } from '@/src/constants/app';
-import { http } from '@/src/lib/http/client';
-import { unwrapApiResponse } from '@/src/lib/http/response';
 import type { PostType, ShareType } from '@/src/models/Post';
 
 export type PostTypeSubType = {
@@ -109,20 +106,6 @@ const FLAVORS_FALLBACK: string[] = [
   '爽口',
   '其他',
 ];
-
-async function fetchOrFallback<T>(path: string, fallback: T): Promise<T> {
-  // if (USE_MOCK) return fallback;
-  // try {
-  //   const resp = await http.get(path);
-  //   const data = unwrapApiResponse<T | null>(resp, 200);
-  //   if (!data) return fallback;
-  //   return data;
-  // } catch (error) {
-  //   console.warn('[config_service] fallback triggered for', path, error);
-  //   return fallback;
-  // }
-  return fallback;
-}
 
 function withCache<T>(entry: CacheEntry<T>, force = false): Fetcher<T> {
   return async () => {
