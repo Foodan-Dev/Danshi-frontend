@@ -6,10 +6,11 @@ import {
   Pressable,
   Image,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
-import { Text, IconButton, useTheme as usePaperTheme, ActivityIndicator } from 'react-native-paper';
+import { Text, IconButton, useTheme as usePaperTheme } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { uploadService, type UploadSource } from '@/src/services/upload_service';
+import { formatBatchSummary, uploadService, type UploadSource } from '@/src/services/upload_service';
 import * as ImagePicker from 'expo-image-picker';
 import { isHttpOrHttpsUrl } from '@/src/lib/security/url';
 
@@ -116,21 +117,18 @@ export default function ImageUploadGrid({
 
     const filesToUpload = imageFiles.slice(0, availableSlots);
     
-    // 检查文件大小
-    const oversizedFile = filesToUpload.find(f => f.size > 5 * 1024 * 1024);
-    if (oversizedFile) {
-      setUploadError('图片大小不能超过 5MB');
-      return;
-    }
-
     setUploadError(null);
     uploadLockRef.current = true;
     setUploadingCount(filesToUpload.length);
 
     try {
-      const uploadResults = await uploadService.uploadImages(filesToUpload);
-      const urls = uploadResults.map((r) => r.url);
-      addUploadedImages(urls);
+      const { results, failures, skipped } = await uploadService.uploadImages(filesToUpload, 'post');
+      if (results.length > 0) {
+        addUploadedImages(results.map((r) => r.url));
+      }
+      if (failures.length > 0) {
+        setUploadError(formatBatchSummary({ results, failures, skipped }));
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : '上传失败，请稍后重试';
       setUploadError(message);
@@ -218,9 +216,13 @@ export default function ImageUploadGrid({
         name: asset.fileName || `image_${Date.now()}.jpg`,
       }));
 
-      const uploadResults = await uploadService.uploadImages(sources);
-      const urls = uploadResults.map((r) => r.url);
-      addUploadedImages(urls);
+      const { results, failures, skipped } = await uploadService.uploadImages(sources, 'post');
+      if (results.length > 0) {
+        addUploadedImages(results.map((r) => r.url));
+      }
+      if (failures.length > 0) {
+        setUploadError(formatBatchSummary({ results, failures, skipped }));
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : '上传失败，请稍后重试';
       setUploadError(message);

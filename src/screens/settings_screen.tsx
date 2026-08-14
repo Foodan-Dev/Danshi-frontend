@@ -9,9 +9,10 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '@/src/context/theme_context';
-import { Text, List, useTheme as usePaperTheme, ActivityIndicator, Button, Snackbar } from 'react-native-paper';
+import { Text, List, useTheme as usePaperTheme, Button, Snackbar } from 'react-native-paper';
 import BottomSheetOverlay from '@/src/components/overlays/bottom_sheet';
 import { CenterPicker } from '@/src/components/overlays/center_picker';
 import { ThemeColorPicker } from '@/src/components/theme_color_picker';
@@ -170,8 +171,8 @@ export default function SettingsScreen() {
       window.alert('请选择图片文件');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      window.alert('图片大小不能超过 5MB');
+    if (file.size > 10 * 1024 * 1024) {
+      window.alert('图片大小不能超过 10MB');
       return;
     }
 
@@ -181,7 +182,7 @@ export default function SettingsScreen() {
     setUploadingAvatar(true);
 
     try {
-      const uploadResult = await uploadService.uploadImage(file);
+      const uploadResult = await uploadService.uploadImage(file, 'avatar');
       setAvatarUrl(uploadResult.url);
       setLocalAvatarUri(null);
       URL.revokeObjectURL(localUrl);
@@ -233,11 +234,14 @@ export default function SettingsScreen() {
       setUploadingAvatar(true);
 
       try {
-        const uploadResult = await uploadService.uploadImage({
-          uri: asset.uri,
-          name: asset.fileName ?? `avatar-${Date.now()}.jpg`,
-          type: asset.mimeType ?? 'image/jpeg',
-        });
+        const uploadResult = await uploadService.uploadImage(
+          {
+            uri: asset.uri,
+            name: asset.fileName ?? `avatar-${Date.now()}.jpg`,
+            type: asset.mimeType ?? 'image/jpeg',
+          },
+          'avatar',
+        );
         setAvatarUrl(uploadResult.url);
         setLocalAvatarUri(null);
       } catch (uploadError: any) {

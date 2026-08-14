@@ -31,6 +31,7 @@
     "expo-blur": "~57.0.2",
     "expo-build-properties": "~57.0.9",
     "expo-constants": "~57.0.9",
+    "expo-file-system": "~57.0.2",
     "expo-font": "~57.0.1",
     "expo-haptics": "~57.0.1",
     "expo-image": "~57.0.2",
@@ -54,10 +55,12 @@
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.10.1",
-    "reanimated-color-picker": "^4.2.0"
+    "reanimated-color-picker": "^4.2.0",
+    "spark-md5": "^3.0.2"
   },
   "devDependencies": {
     "@types/react": "~19.2.10",
+    "@types/spark-md5": "^3.0.5",
     "baseline-browser-mapping": "^2.9.18",
     "cross-env": "^7.0.3",
     "eslint": "^9.25.0",
