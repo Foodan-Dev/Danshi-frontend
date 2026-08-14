@@ -117,9 +117,9 @@ export default function ImageUploadGrid({
     const filesToUpload = imageFiles.slice(0, availableSlots);
     
     // 检查文件大小
-    const oversizedFile = filesToUpload.find(f => f.size > 5 * 1024 * 1024);
+    const oversizedFile = filesToUpload.find(f => f.size > 10 * 1024 * 1024);
     if (oversizedFile) {
-      setUploadError('图片大小不能超过 5MB');
+      setUploadError('图片大小不能超过 10MB');
       return;
     }
 
@@ -128,7 +128,7 @@ export default function ImageUploadGrid({
     setUploadingCount(filesToUpload.length);
 
     try {
-      const uploadResults = await uploadService.uploadImages(filesToUpload);
+      const uploadResults = await uploadService.uploadImages(filesToUpload, 'post');
       const urls = uploadResults.map((r) => r.url);
       addUploadedImages(urls);
     } catch (err) {
@@ -218,7 +218,7 @@ export default function ImageUploadGrid({
         name: asset.fileName || `image_${Date.now()}.jpg`,
       }));
 
-      const uploadResults = await uploadService.uploadImages(sources);
+      const uploadResults = await uploadService.uploadImages(sources, 'post');
       const urls = uploadResults.map((r) => r.url);
       addUploadedImages(urls);
     } catch (err) {

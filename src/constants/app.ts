@@ -103,6 +103,10 @@ export const API_ENDPOINTS = {
     MARK_READ: '/notifications/:notificationId/read',
     MARK_ALL_READ: '/notifications/read-all',
   },
+  UPLOAD: {
+    PRESIGN: '/uploads/presign',
+    COMPLETE: '/uploads/:uploadId/complete',
+  },
   /*
   CONFIG: {
     CANTEENS: '/config/canteens',

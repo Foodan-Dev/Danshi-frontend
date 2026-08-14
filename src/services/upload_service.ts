@@ -3,9 +3,11 @@ import {
   uploadsRepository,
   type UploadFilePayload,
   type UploadImageResult,
+  type UploadPurpose,
 } from '@/src/repositories/uploads_repository';
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+// 对齐后端 COS_MAX_IMAGE_BYTES 默认值（10 MiB）
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_BATCH_COUNT = 9;
 const FALLBACK_MIME = 'application/octet-stream';
 
@@ -26,18 +28,19 @@ const EXT_MIME: Record<string, string> = {
   gif: 'image/gif',
   heic: 'image/heic',
   heif: 'image/heif',
+  bmp: 'image/bmp',
 };
 
-const isFile = (value: any): value is File => typeof File !== 'undefined' && value instanceof File;
-const isBlob = (value: any): value is Blob => typeof Blob !== 'undefined' && value instanceof Blob;
-const isUriSource = (value: any): value is { uri: string; name?: string; type?: string; size?: number } =>
-  value && typeof value === 'object' && typeof value.uri === 'string';
-
-function ensureSizeWithinLimit(size?: number) {
-  if (typeof size === 'number' && size > MAX_FILE_SIZE) {
-    throw new AppError('单个文件不能超过 5MB');
-  }
-}
+const isFile = (value: unknown): value is File =>
+  typeof File !== 'undefined' && value instanceof File;
+const isBlob = (value: unknown): value is Blob =>
+  typeof Blob !== 'undefined' && value instanceof Blob;
+const isUriSource = (
+  value: unknown,
+): value is { uri: string; name?: string; type?: string; size?: number } =>
+  !!value &&
+  typeof value === 'object' &&
+  typeof (value as { uri?: unknown }).uri === 'string';
 
 function inferMimeFromName(name?: string) {
   if (!name) return FALLBACK_MIME;
@@ -46,46 +49,75 @@ function inferMimeFromName(name?: string) {
   return EXT_MIME[ext] ?? FALLBACK_MIME;
 }
 
-function normalizeSource(source: UploadSource, index: number): UploadFilePayload {
-  const fallbackName = `upload-${Date.now()}-${index + 1}.jpg`;
-  if (isFile(source)) {
-    ensureSizeWithinLimit(source.size);
-    const name = source.name || fallbackName;
-    const type = source.type || inferMimeFromName(name);
-    return { name, type, blob: source };
-  }
+/** 读取本地图片的原始字节（Web 用 Blob，原生用 file:// fetch）。 */
+async function readBytes(source: Blob | { uri: string }): Promise<ArrayBuffer> {
   if (isBlob(source)) {
-    ensureSizeWithinLimit(source.size);
-    return { name: fallbackName, type: source.type || FALLBACK_MIME, blob: source };
+    return source.arrayBuffer();
   }
-  if (isUriSource(source)) {
-    ensureSizeWithinLimit(source.size);
-    const name = source.name || fallbackName;
-    const type = source.type || inferMimeFromName(name);
-    return { name, type, uri: source.uri };
+  const res = await fetch(source.uri);
+  if (!res.ok) {
+    throw new AppError('无法读取本地图片，请重试');
   }
-  throw new AppError('不支持的文件来源');
+  return res.arrayBuffer();
+}
+
+/** 把 UploadSource 归一化为 { name, type, bytes }，并在读字节后校验大小。 */
+async function normalizeSource(
+  source: UploadSource,
+  index: number,
+): Promise<UploadFilePayload> {
+  const fallbackName = `upload-${Date.now()}-${index + 1}.jpg`;
+
+  let name: string;
+  let type: string;
+  let bytes: ArrayBuffer;
+
+  if (isFile(source) || isBlob(source)) {
+    name = isFile(source) ? source.name || fallbackName : fallbackName;
+    type = source.type || inferMimeFromName(name);
+    bytes = await source.arrayBuffer();
+  } else if (isUriSource(source)) {
+    name = source.name || fallbackName;
+    type = source.type || inferMimeFromName(name);
+    bytes = await readBytes(source);
+  } else {
+    throw new AppError('不支持的文件来源');
+  }
+
+  if (bytes.byteLength > MAX_FILE_SIZE) {
+    throw new AppError('单个文件不能超过 10MB');
+  }
+  return { name, type, bytes };
 }
 
 export const uploadService = {
   /**
-   * 上传单张图片到 FDUHole 图片托管服务
-   * 注意: 需要在校园网环境下使用
+   * 上传单张图片到后端 COS 图床（presign → 直传 → complete）。
+   * @param source 图片源（Web 为 Blob/File，原生为 { uri, name, type }）
+   * @param purpose post（帖子图片）或 avatar（头像）
    */
-  async uploadImage(source: UploadSource): Promise<UploadImageResult> {
-    const payload = normalizeSource(source, 0);
-    return uploadsRepository.uploadImage(payload);
+  async uploadImage(
+    source: UploadSource,
+    purpose: UploadPurpose,
+  ): Promise<UploadImageResult> {
+    const payload = await normalizeSource(source, 0);
+    return uploadsRepository.uploadImage(payload, purpose);
   },
 
   /**
-   * 批量上传图片到 FDUHole 图片托管服务
-   * 注意: 需要在校园网环境下使用
-   * @param sources 图片源数组，最多 9 张
+   * 批量上传图片到后端 COS 图床，最多 9 张。
    */
-  async uploadImages(sources: UploadSource[]): Promise<UploadImageResult[]> {
+  async uploadImages(
+    sources: UploadSource[],
+    purpose: UploadPurpose,
+  ): Promise<UploadImageResult[]> {
     if (!sources.length) throw new AppError('请至少选择 1 张图片');
-    if (sources.length > MAX_BATCH_COUNT) throw new AppError('单次最多上传 9 张图片');
-    const payloads = sources.map((src, index) => normalizeSource(src, index));
-    return uploadsRepository.uploadImages(payloads);
+    if (sources.length > MAX_BATCH_COUNT) {
+      throw new AppError('单次最多上传 9 张图片');
+    }
+    const payloads = await Promise.all(
+      sources.map((src, index) => normalizeSource(src, index)),
+    );
+    return uploadsRepository.uploadImages(payloads, purpose);
   },
 };

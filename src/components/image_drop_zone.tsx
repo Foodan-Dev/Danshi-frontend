@@ -23,9 +23,8 @@ interface ImageDropZoneProps {
 
 /**
  * 图片上传组件
- * - Web 端：由于 CORS 限制，暂不支持拖拽上传，仅支持粘贴图片链接
- * - 原生端：支持上传到 FDUHole 图片托管（需校园网）
- * - 支持粘贴图片链接
+ * - 支持从相册/文件选择、拖拽上传（Web）与粘贴图片链接
+ * - 图片统一上传到后端 COS 图床（presign → 直传 → complete）
  */
 export default function ImageDropZone({
   images,
@@ -137,7 +136,7 @@ export default function ImageDropZone({
 
       try {
         const sources: UploadSource[] = filesToUpload.map((file) => file as Blob);
-        const results = await uploadService.uploadImages(sources);
+        const results = await uploadService.uploadImages(sources, 'post');
         const urls = results.map((r) => r.url);
         addUploadedImages(urls);
       } catch (err) {
@@ -193,7 +192,7 @@ export default function ImageDropZone({
         name: asset.fileName || `image_${Date.now()}.jpg`,
       }));
 
-      const uploadResults = await uploadService.uploadImages(sources);
+      const uploadResults = await uploadService.uploadImages(sources, 'post');
       const urls = uploadResults.map((r) => r.url);
       addUploadedImages(urls);
     } catch (err) {
