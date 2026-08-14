@@ -6,8 +6,9 @@ import {
   Pressable,
   Image,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
-import { Text, IconButton, useTheme as usePaperTheme, ActivityIndicator } from 'react-native-paper';
+import { Text, IconButton, useTheme as usePaperTheme } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatBatchSummary, uploadService, type UploadSource } from '@/src/services/upload_service';
 import * as ImagePicker from 'expo-image-picker';

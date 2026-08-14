@@ -9,9 +9,10 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '@/src/context/theme_context';
-import { Text, List, useTheme as usePaperTheme, ActivityIndicator, Button, Snackbar } from 'react-native-paper';
+import { Text, List, useTheme as usePaperTheme, Button, Snackbar } from 'react-native-paper';
 import BottomSheetOverlay from '@/src/components/overlays/bottom_sheet';
 import { CenterPicker } from '@/src/components/overlays/center_picker';
 import { ThemeColorPicker } from '@/src/components/theme_color_picker';
