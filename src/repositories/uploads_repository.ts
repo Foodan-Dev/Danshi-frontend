@@ -1,4 +1,4 @@
-import { API_ENDPOINTS, USE_MOCK } from '@/src/constants/app';
+import { API_ENDPOINTS } from '@/src/constants/app';
 import { AppError } from '@/src/lib/errors/app_error';
 import { httpAuth } from '@/src/lib/http/http_auth';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
@@ -122,30 +122,4 @@ class ApiUploadsRepository implements UploadsRepository {
   }
 }
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-class MockUploadsRepository implements UploadsRepository {
-  private seq = 0;
-
-  private nextUrl(name: string) {
-    this.seq += 1;
-    return `https://mock-storage.dawn-eat.com/${Date.now()}-${this.seq}-${encodeURIComponent(name)}`;
-  }
-
-  async uploadImage(
-    file: UploadFilePayload,
-    _purpose: UploadPurpose,
-  ): Promise<UploadImageResult> {
-    await delay(120);
-    const filename = file.name || `mock-${Date.now()}.jpg`;
-    return {
-      url: this.nextUrl(filename),
-      filename,
-      size: file.bytes.byteLength,
-    };
-  }
-}
-
-export const uploadsRepository: UploadsRepository = USE_MOCK
-  ? new MockUploadsRepository()
-  : new ApiUploadsRepository();
+export const uploadsRepository: UploadsRepository = new ApiUploadsRepository();

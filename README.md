@@ -29,7 +29,7 @@
 
 - **Config & Constants**：配置与常量集中管理
 - **Infra**：错误模型、HTTP 客户端、认证存储与权限工具
-- **Repositories**：数据访问层，屏蔽 API/Mock/本地差异
+- **Repositories**：数据访问层，封装后端 API 调用
 - **Services**：用例服务层，输入校验与业务编排
 - **Presentation**：Hooks / Context / Components / Screens / Routes
 
@@ -44,7 +44,7 @@
 │   ├── context/            # 全局状态与上下文（Auth/Theme/Notifications/Waterfall）
 │   ├── hooks/              # 自定义 Hook（响应式/帖子操作/评论管理）
 │   ├── services/           # 用例服务（校验/编排）
-│   ├── repositories/       # 资源仓储（API/Mock 自动切换）
+│   ├── repositories/       # 后端 API 资源仓储
 │   ├── lib/                # Infra：HTTP/Auth/Error/Theme
 │   ├── models/             # 领域模型定义（User/Post/Comment/Stats）
 │   ├── constants/          # 常量、配置与主题
@@ -55,10 +55,10 @@
 
 ### 架构说明
 
-- **Constants**: `src/constants/` 统一管理配置、开关、断点、主题、标签常量（原 `config/` 已合并至此）
+- **Constants**: `src/constants/` 统一管理配置、断点、主题、标签常量（原 `config/` 已合并至此）
 - **Infra**: `src/lib/`（HTTP 客户端、鉴权与双 Token 刷新、错误模型、JWT 解析、动态主题色生成）
-- **Repositories**: `src/repositories/` 提供资源级接口（Mock/Api 自动切换，9 个资源域）
-- **Services**: `src/services/` 用例级校验与流程编排（10 个服务）
+- **Repositories**: `src/repositories/` 提供后端 API 资源级接口（8 个资源域）
+- **Services**: `src/services/` 用例级校验与流程编排（9 个服务）
 - **Presentation**: `src/app/` 路由入口、`src/screens/` 页面（17 个）、`src/components/` 组件、`src/context/` 全局状态、`src/hooks/` 自定义 Hook
 
 ## ✨ 功能特性
@@ -67,7 +67,6 @@
 - 帖子浏览、详情、创建与互动（点赞/收藏）
 - 搜索、通知、关注与个人中心
 - 主题切换与响应式布局
-- Mock/Server 切换（`USE_MOCK`）
 
 ## 🚀 快速开始
 
@@ -118,11 +117,10 @@ npx expo start
 
 - `EXPO_PUBLIC_API_URL`：后端 API 基地址
 - `EXPO_PUBLIC_REQUEST_TIMEOUT_MS`：请求超时时间
-- `EXPO_PUBLIC_USE_MOCK`：Mock 开关（true/false）
 
-2. **Mock 与接口说明**
+2. **接口说明**
 
-Mock/Server 切换与接口契约说明详见 [doc/Architecture/README.md](doc/Architecture/README.md)。
+接口契约说明详见 [doc/Architecture/README.md](doc/Architecture/README.md)。
 
 后端 OpenAPI 是唯一接口契约。后端启动后使用以下命令同步并生成前端类型：
 

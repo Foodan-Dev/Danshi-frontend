@@ -16,16 +16,13 @@ type ApiEndpointMap = { readonly [key: string]: ApiEndpoint | ApiEndpointMap };
 export const STORAGE_KEYS = {
   AUTH_TOKEN: 'auth_token',
   REFRESH_TOKEN: 'refresh_token',
-  POSTS: 'posts:v1',
 } as const;
 
-// Runtime config & feature switches (can be overridden via EXPO_PUBLIC_* envs)
-// 生产环境默认关闭 Mock
-export const USE_MOCK = (process.env.EXPO_PUBLIC_USE_MOCK ?? 'false').toLowerCase() === 'true';
+// Runtime config (can be overridden via EXPO_PUBLIC_* envs)
 const rawApiBaseUrl = (process.env.EXPO_PUBLIC_API_URL ?? '').trim();
 
-if (__DEV__ && !USE_MOCK && !rawApiBaseUrl) {
-  console.warn('[config] USE_MOCK is false but EXPO_PUBLIC_API_URL is not set. Falling back to https://example.invalid');
+if (__DEV__ && !rawApiBaseUrl) {
+  console.warn('[config] EXPO_PUBLIC_API_URL is not set. Falling back to https://example.invalid');
 }
 
 function resolveApiBaseUrl(value?: string) {
@@ -107,22 +104,6 @@ export const API_ENDPOINTS = {
     PRESIGN: '/uploads/presign',
     COMPLETE: '/uploads/:uploadId/complete',
   },
-  /*
-  CONFIG: {
-    CANTEENS: '/config/canteens',
-    CUISINES: '/config/cuisines',
-    FLAVORS: '/config/flavors',
-    POST_TYPES: '/config/post-types',
-  },
-  UPLOAD: {
-    IMAGE: '/upload/image',
-    IMAGES: '/upload/images',
-  },
-  STATS: {
-    PLATFORM: '/stats/platform',
-    USER: '/stats/user/:userId',
-  },
-  */
 } as const satisfies ApiEndpointMap;
 
 // Role literals and their order (low -> high privilege)

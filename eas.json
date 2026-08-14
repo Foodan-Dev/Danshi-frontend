@@ -13,8 +13,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://danshi.fdueat.com/api/v1",
-        "EXPO_PUBLIC_USE_MOCK": "false"
+        "EXPO_PUBLIC_API_URL": "https://danshi.fdueat.com/api/v1"
       }
     },
     "testflight": {
@@ -23,8 +22,7 @@
         "distribution": "store"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://danshi.fdueat.com/api/v1",
-        "EXPO_PUBLIC_USE_MOCK": "false"
+        "EXPO_PUBLIC_API_URL": "https://danshi.fdueat.com/api/v1"
       }
     },
     "production": {
@@ -36,8 +34,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://danshi.fdueat.com/api/v1",
-        "EXPO_PUBLIC_USE_MOCK": "false"
+        "EXPO_PUBLIC_API_URL": "https://danshi.fdueat.com/api/v1"
       }
     }
   },

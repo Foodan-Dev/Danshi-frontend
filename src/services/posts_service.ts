@@ -1,5 +1,4 @@
-import { postsRepository, seedMockPosts } from '@/src/repositories/posts_repository';
-import { USE_MOCK } from '@/src/constants/app';
+import { postsRepository } from '@/src/repositories/posts_repository';
 import type { PostCreateInput, PostCreateResult, SharePostCreateInput } from '@/src/models/Post';
 import type { PostListFilters, PostsListResponse } from '@/src/repositories/posts_repository';
 import { AppError } from '@/src/lib/errors/app_error';
@@ -80,39 +79,7 @@ export const postsService = {
       page: filters.page && filters.page > 0 ? Math.floor(filters.page) : 1,
       limit: filters.limit && filters.limit > 0 ? Math.floor(filters.limit) : 20,
     };
-    try {
-      return await postsRepository.list(cleaned);
-    } catch (err: any) {
-      // 如果是网络/CORS 或者服务端 500，可以选择回退到本地 mock（仅在环境允许时）
-      const fallbackEnabled = USE_MOCK || (process.env.EXPO_PUBLIC_FALLBACK_TO_MOCK ?? 'false').toLowerCase() === 'true';
-      const isNetworkOrCors = err && err.code === 'CORS_OR_NETWORK';
-      const status = (err instanceof AppError) ? err.status : undefined;
-      const isServer500 = status === 500;
-      if (fallbackEnabled && (isNetworkOrCors || isServer500)) {
-        // 使用与 MockPostsRepository 相同的种子数据并做分页/排序处理
-        const all = seedMockPosts();
-        const page = Math.max(1, Math.floor(cleaned.page ?? 1));
-        const limit = Math.min(50, Math.max(1, Math.floor(cleaned.limit ?? 20)));
-        const arr = [...all].sort((a, b) => {
-          switch (cleaned.sortBy) {
-            case 'hot':
-              return (b.stats?.like_count ?? 0) - (a.stats?.like_count ?? 0);
-            case 'trending':
-              return (new Date(b.updated_at ?? b.created_at ?? 0).getTime() || 0) - (new Date(a.updated_at ?? a.created_at ?? 0).getTime() || 0);
-            case 'latest':
-            default:
-              return (new Date(b.created_at ?? 0).getTime() || 0) - (new Date(a.created_at ?? 0).getTime() || 0);
-          }
-        });
-        const total = arr.length;
-        const total_pages = Math.max(1, Math.ceil(total / limit));
-        const start = (page - 1) * limit;
-        const posts = arr.slice(start, start + limit);
-        return { posts, pagination: { page, limit, total, total_pages } };
-      }
-
-      throw err;
-    }
+    return postsRepository.list(cleaned);
   },
 
   async get(postId: string) {
