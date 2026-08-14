@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Text, IconButton, useTheme as usePaperTheme, ActivityIndicator } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { uploadService, type UploadSource } from '@/src/services/upload_service';
+import { formatBatchSummary, uploadService, type UploadSource } from '@/src/services/upload_service';
 import * as ImagePicker from 'expo-image-picker';
 import { isHttpOrHttpsUrl } from '@/src/lib/security/url';
 
@@ -136,9 +136,13 @@ export default function ImageDropZone({
 
       try {
         const sources: UploadSource[] = filesToUpload.map((file) => file as Blob);
-        const results = await uploadService.uploadImages(sources, 'post');
-        const urls = results.map((r) => r.url);
-        addUploadedImages(urls);
+        const { results, failures, skipped } = await uploadService.uploadImages(sources, 'post');
+        if (results.length > 0) {
+          addUploadedImages(results.map((r) => r.url));
+        }
+        if (failures.length > 0) {
+          setUploadError(formatBatchSummary({ results, failures, skipped }));
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : '上传失败，请稍后重试';
         setUploadError(message);
@@ -192,9 +196,13 @@ export default function ImageDropZone({
         name: asset.fileName || `image_${Date.now()}.jpg`,
       }));
 
-      const uploadResults = await uploadService.uploadImages(sources, 'post');
-      const urls = uploadResults.map((r) => r.url);
-      addUploadedImages(urls);
+      const { results, failures, skipped } = await uploadService.uploadImages(sources, 'post');
+      if (results.length > 0) {
+        addUploadedImages(results.map((r) => r.url));
+      }
+      if (failures.length > 0) {
+        setUploadError(formatBatchSummary({ results, failures, skipped }));
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : '上传失败，请稍后重试';
       setUploadError(message);

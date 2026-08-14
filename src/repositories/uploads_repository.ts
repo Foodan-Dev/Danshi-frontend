@@ -21,6 +21,9 @@ export type UploadImageResult = {
   size: number;
 };
 
+/** 单张图片直传 COS 的超时（毫秒）；超时只影响当前这一张。 */
+const COS_PUT_TIMEOUT_MS = 60 * 1000;
+
 // 后端 presign / complete 的响应契约（与 validators/upload.py 对齐）
 type UploadPresignData = {
   upload_id: string;
@@ -41,10 +44,6 @@ export interface UploadsRepository {
     file: UploadFilePayload,
     purpose: UploadPurpose,
   ): Promise<UploadImageResult>;
-  uploadImages(
-    files: UploadFilePayload[],
-    purpose: UploadPurpose,
-  ): Promise<UploadImageResult[]>;
 }
 
 /**
@@ -71,15 +70,29 @@ class ApiUploadsRepository implements UploadsRepository {
     );
     const presign = unwrapApiResponse<UploadPresignData>(presignRes);
 
-    // 2. 直传 COS（裸 fetch：非 API 域名、不带 Authorization）
-    const putRes = await fetch(presign.upload_url, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': file.type,
-        'Content-MD5': contentMd5,
-      },
-      body: file.bytes,
-    });
+    // 2. 直传 COS（裸 fetch：非 API 域名、不带 Authorization，带独立超时）
+    const putRes = await (async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), COS_PUT_TIMEOUT_MS);
+      try {
+        return await fetch(presign.upload_url, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': file.type,
+            'Content-MD5': contentMd5,
+          },
+          body: file.bytes,
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (controller.signal.aborted) {
+          throw new AppError('上传超时，请重试', { code: 'UPLOAD_TIMEOUT' });
+        }
+        throw new AppError('网络连接失败，请检查网络后重试', { code: 'NETWORK_ERROR', cause: error });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    })();
     if (!putRes.ok) {
       if (__DEV__) {
         console.error('[uploads] COS PUT failed:', putRes.status);
@@ -107,17 +120,6 @@ class ApiUploadsRepository implements UploadsRepository {
       size,
     };
   }
-
-  async uploadImages(
-    files: UploadFilePayload[],
-    purpose: UploadPurpose,
-  ): Promise<UploadImageResult[]> {
-    const results: UploadImageResult[] = [];
-    for (const file of files) {
-      results.push(await this.uploadImage(file, purpose));
-    }
-    return results;
-  }
 }
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -141,17 +143,6 @@ class MockUploadsRepository implements UploadsRepository {
       filename,
       size: file.bytes.byteLength,
     };
-  }
-
-  async uploadImages(
-    files: UploadFilePayload[],
-    purpose: UploadPurpose,
-  ): Promise<UploadImageResult[]> {
-    const results: UploadImageResult[] = [];
-    for (const file of files) {
-      results.push(await this.uploadImage(file, purpose));
-    }
-    return results;
   }
 }
 
