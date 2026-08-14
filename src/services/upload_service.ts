@@ -1,3 +1,5 @@
+import { File as ExpoFile } from 'expo-file-system';
+
 import { AppError } from '@/src/lib/errors/app_error';
 import {
   uploadsRepository,
@@ -63,16 +65,16 @@ function inferMimeFromName(name?: string) {
   return EXT_MIME[ext] ?? FALLBACK_MIME;
 }
 
-/** 读取本地图片的原始字节（Web 用 Blob，原生用 file:// fetch）。 */
+/** 读取本地图片的原始字节（Web 用 Blob，原生用 expo-file-system 读 file://）。 */
 async function readBytes(source: Blob | { uri: string }): Promise<ArrayBuffer> {
   if (isBlob(source)) {
     return source.arrayBuffer();
   }
-  const res = await fetch(source.uri);
-  if (!res.ok) {
-    throw new AppError('无法读取本地图片，请重试');
+  try {
+    return await new ExpoFile(source.uri).arrayBuffer();
+  } catch (error) {
+    throw new AppError('无法读取本地图片，请重试', { cause: error });
   }
-  return res.arrayBuffer();
 }
 
 /** 把 UploadSource 归一化为 { name, type, bytes }，并在读字节后校验大小。 */
