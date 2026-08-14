@@ -583,6 +583,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/uploads/{upload_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Upload
+         * @description 确认一次 COS 直传完成并校验对象。
+         */
+        post: operations["complete_upload_api_v1_uploads__upload_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uploads/presign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Presign Upload
+         * @description 为一次图片上传签发 COS 直传凭证。
+         */
+        post: operations["presign_upload_api_v1_uploads_presign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{user_id}": {
         parameters: {
             query?: never;
@@ -1053,6 +1093,22 @@ export interface components {
             /** Code */
             code: number;
             data: components["schemas"]["TokenResponse"];
+            /** Message */
+            message: string;
+        };
+        /** ApiEnvelope[UploadCompleteData] */
+        ApiEnvelope_UploadCompleteData_: {
+            /** Code */
+            code: number;
+            data: components["schemas"]["UploadCompleteData"];
+            /** Message */
+            message: string;
+        };
+        /** ApiEnvelope[UploadPresignData] */
+        ApiEnvelope_UploadPresignData_: {
+            /** Code */
+            code: number;
+            data: components["schemas"]["UploadPresignData"];
             /** Message */
             message: string;
         };
@@ -1697,6 +1753,51 @@ export interface components {
             refresh_token: string;
             /** Token */
             token: string;
+        };
+        /**
+         * UploadCompleteData
+         * @description ``complete`` 接口返回的确认信息（确认后才含对象键与公开 URL）。
+         */
+        UploadCompleteData: {
+            /** Object Key */
+            object_key: string;
+            /** Public Url */
+            public_url: string;
+            /** Status */
+            status: string;
+            /** Upload Id */
+            upload_id: string;
+        };
+        /**
+         * UploadPresignData
+         * @description ``presign`` 接口返回的上传信息（不含对象键与公开 URL）。
+         */
+        UploadPresignData: {
+            /** Expires At */
+            expires_at: string;
+            /** Method */
+            method: string;
+            /** Upload Id */
+            upload_id: string;
+            /** Upload Url */
+            upload_url: string;
+        };
+        /**
+         * UploadPresignRequest
+         * @description 申请 COS 直传凭证的请求体。
+         */
+        UploadPresignRequest: {
+            /**
+             * Content Md5
+             * @description 对象内容 MD5 的标准 Base64（RFC 1864，固定 24 字符）
+             */
+            content_md5: string;
+            /** Content Type */
+            content_type: string;
+            /** Purpose */
+            purpose: string;
+            /** Size */
+            size: number;
         };
         /** UserFollowListOut */
         UserFollowListOut: {
@@ -5108,6 +5209,178 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiEnvelope_SearchUserListOut_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_ValidationErrorData_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+        };
+    };
+    complete_upload_api_v1_uploads__upload_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_UploadCompleteData_"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_ValidationErrorData_"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_NoneType_"];
+                };
+            };
+        };
+    };
+    presign_upload_api_v1_uploads_presign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadPresignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiEnvelope_UploadPresignData_"];
                 };
             };
             /** @description Bad Request */
