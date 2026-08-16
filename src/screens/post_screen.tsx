@@ -35,7 +35,7 @@ import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useAuth } from '@/src/context/auth_context';
 import { formatCurrentDate } from '@/src/utils/time_format';
 import { WEB_NO_OUTLINE } from '@/src/utils';
-import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { CachedAvatar } from '@/src/components/cached_avatar';
 import type {
 	Category,
 	CommonCreateBase,
@@ -74,7 +74,6 @@ export default function PostScreen({
 	// 发帖页面隐藏了 Tab Bar，底部只需安全区域间距
 	const bottomContentPadding = useMemo(() => Math.max(insets.bottom, 16) + 16, [insets.bottom]);
 	const { user: currentUser } = useAuth();
-	const safeCurrentUserAvatarUrl = useMemo(() => getSafeRemoteUrl(currentUser?.avatar_url), [currentUser?.avatar_url]);
 
 	// 宽屏模式判断（宽度 >= xl 断点时显示左右分栏，隐藏返回按钮）
 	// iPad 等中等宽度设备使用窄屏模式，通过预览按钮切换
@@ -1404,15 +1403,16 @@ export default function PostScreen({
 					{/* 作者栏 */}
 					<View style={[styles.previewAuthorBar, { backgroundColor: theme.colors.surface }]}>
 						<View style={styles.previewAuthorInfo}>
-							{safeCurrentUserAvatarUrl ? (
-								<Image source={{ uri: safeCurrentUserAvatarUrl }} style={styles.previewAuthorAvatar} />
-							) : (
-								<View style={[styles.previewAuthorAvatarPlaceholder, { backgroundColor: theme.colors.primaryContainer }]}>
+							<CachedAvatar
+								uri={currentUser?.avatar_url}
+								size={44}
+								backgroundColor={theme.colors.primaryContainer}
+								fallback={
 									<Text style={{ color: theme.colors.primary, fontSize: 16, fontWeight: '600' }}>
 										{currentUser?.name?.[0] || '我'}
 									</Text>
-								</View>
-							)}
+								}
+							/>
 							<View style={styles.previewAuthorTextWrap}>
 								<Text style={[styles.previewAuthorName, { color: theme.colors.onSurface }]} numberOfLines={1}>
 									{currentUser?.name || '我'}
@@ -2317,18 +2317,6 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		alignItems: 'center',
 		flex: 1,
-	},
-	previewAuthorAvatar: {
-		width: 44,
-		height: 44,
-		borderRadius: 22,
-	},
-	previewAuthorAvatarPlaceholder: {
-		width: 44,
-		height: 44,
-		borderRadius: 22,
-		alignItems: 'center',
-		justifyContent: 'center',
 	},
 	previewAuthorTextWrap: {
 		marginLeft: 12,

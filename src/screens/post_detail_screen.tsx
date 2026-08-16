@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import {
   ActivityIndicator,
-  Avatar,
   Button,
   Text,
 } from 'react-native-paper';
@@ -35,6 +34,7 @@ import { usePostComments, flattenReplies, REPLY_PREVIEW_COUNT } from '@/src/hook
 import { breakpoints } from '@/src/constants/breakpoints';
 import { useExtendedTheme } from '@/src/constants/md3_theme';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { CachedAvatar } from '@/src/components/cached_avatar';
 
 // 图片展示配置
 const IMAGE_CONFIG = {
@@ -177,7 +177,6 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     [post?.images]
   );
 
-  const safeAuthorAvatarUrl = getSafeRemoteUrl(post?.author?.avatar_url);
   const shouldShowFollowButton = !!currentUser?.id && !!post?.author?.id && currentUser.id !== post.author.id;
   const shouldShowBottomBar = !!post && !error;
 
@@ -492,16 +491,16 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const renderAuthorBar = () => (
     <View style={styles.authorBar}>
       <Pressable style={styles.authorInfo} onPress={() => post?.author?.id && router.push(`/user/${post.author.id}`)}>
-        {safeAuthorAvatarUrl ? (
-          <Avatar.Image size={44} source={{ uri: safeAuthorAvatarUrl }} />
-        ) : (
-          <Avatar.Text
-            size={44}
-            label={(post?.author?.name ?? '访').slice(0, 1)}
-            style={{ backgroundColor: theme.colors.primaryContainer }}
-            labelStyle={{ color: theme.colors.onPrimaryContainer }}
-          />
-        )}
+        <CachedAvatar
+          uri={post?.author?.avatar_url}
+          size={44}
+          backgroundColor={theme.colors.primaryContainer}
+          fallback={
+            <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 18 }}>
+              {(post?.author?.name ?? '访').slice(0, 1)}
+            </Text>
+          }
+        />
         <View style={styles.authorTextWrap}>
           <Text style={styles.authorName} numberOfLines={1}>{post?.author?.name ?? '匿名用户'}</Text>
           <Text style={[styles.authorMeta, { color: theme.colors.onSurfaceVariant }]}>

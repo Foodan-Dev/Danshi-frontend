@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Image, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -9,7 +9,7 @@ import { useAuth } from '@/src/context/auth_context';
 import { usersService } from '@/src/services/users_service';
 import type { FollowUserItem } from '@/src/repositories/users_repository';
 import { AppError } from '@/src/lib/errors/app_error';
-import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { CachedAvatar } from '@/src/components/cached_avatar';
 
 const formatCount = (value?: number) => {
   if (value == null) return '0';
@@ -42,7 +42,6 @@ const UserListItem: React.FC<UserListItemProps> = ({
 }) => {
   const theme = usePaperTheme();
   const isFollowed = !!user.is_following;
-  const safeAvatarUrl = getSafeRemoteUrl(user.avatar_url);
   
   // 判断是否互关
   const isMutual = listType === 'followers' && isFollowed;
@@ -126,13 +125,13 @@ const UserListItem: React.FC<UserListItemProps> = ({
     >
       {/* 左侧：头像 */}
       <View style={styles.avatarContainer}>
-        {safeAvatarUrl ? (
-          <Image source={{ uri: safeAvatarUrl }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.primaryContainer }]}>
-            <Ionicons name="person" size={24} color={theme.colors.primary} />
-          </View>
-        )}
+        <CachedAvatar
+          uri={user.avatar_url}
+          size={52}
+          backgroundColor={theme.colors.primaryContainer}
+          iconColor={theme.colors.primary}
+          iconSize={24}
+        />
       </View>
 
       {/* 中间：用户信息 */}
@@ -477,18 +476,6 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     marginRight: 14,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-  },
-  avatarPlaceholder: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   infoContainer: {
     flex: 1,
