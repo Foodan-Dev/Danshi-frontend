@@ -434,7 +434,7 @@ export default function MyselfScreen() {
               onPress={() => setActiveTab('favorites')}
             >
               <Ionicons
-                name={activeTab === 'favorites' ? 'bookmark' : 'bookmark-outline'}
+                name={activeTab === 'favorites' ? 'star' : 'star-outline'}
                 size={20}
                 color={activeTab === 'favorites' ? theme.colors.primary : theme.colors.onSurfaceVariant}
               />
@@ -475,7 +475,7 @@ export default function MyselfScreen() {
           ) : currentPosts.length === 0 ? (
             <View style={styles.emptyWrap}>
               <Ionicons
-                name={activeTab === 'posts' ? 'document-text-outline' : 'bookmark-outline'}
+                name={activeTab === 'posts' ? 'document-text-outline' : 'star-outline'}
                 size={48}
                 color={theme.colors.outlineVariant}
               />

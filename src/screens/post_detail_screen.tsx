@@ -847,7 +847,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           disabled={actionLoading.favorite || !post}
         >
           <Ionicons
-            name={post?.is_favorited ? 'bookmark' : 'bookmark-outline'}
+            name={post?.is_favorited ? 'star' : 'star-outline'}
             size={22}
             color={post?.is_favorited ? theme.colors.primary : theme.colors.onSurfaceVariant}
           />

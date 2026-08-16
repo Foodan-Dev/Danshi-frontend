@@ -1579,7 +1579,7 @@ export default function PostScreen({
 							<Text style={[styles.previewActionCount, { color: theme.colors.onSurfaceVariant }]}>0</Text>
 						</View>
 						<View style={styles.previewActionBtn}>
-							<Ionicons name="bookmark-outline" size={20} color={theme.colors.onSurfaceVariant} />
+							<Ionicons name="star-outline" size={20} color={theme.colors.onSurfaceVariant} />
 							<Text style={[styles.previewActionCount, { color: theme.colors.onSurfaceVariant }]}>0</Text>
 						</View>
 						<View style={styles.previewActionBtn}>
