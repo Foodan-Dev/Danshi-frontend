@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert, Pressable, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, Pressable } from 'react-native';
 import { ActivityIndicator, Appbar, Text, useTheme as usePaperTheme, Button, Card, Menu } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { isAdmin } from '@/src/lib/auth/roles';
 import { adminService } from '@/src/services/admin_service';
 import type { AdminCommentSummary } from '@/src/repositories/admin_repository';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { CachedAvatar } from '@/src/components/cached_avatar';
 
 // 格式化时间：显示为 MM-DD HH:mm
 const formatTime = (dateStr: string) => {
@@ -253,21 +253,17 @@ export default function AdminCommentsScreen() {
               </Card>
             ) : null}
             {comments.map((comment) => {
-              const safeAuthorAvatarUrl = getSafeRemoteUrl((comment.author as any).avatar_url);
               return (
                 <View key={comment.id} style={dynamicStyles.commentCard}>
                   <View style={styles.headerRow}>
                     <View style={styles.userInfo}>
-                      <View style={[styles.avatar, { backgroundColor: pTheme.colors.surfaceVariant }]}>
-                        {safeAuthorAvatarUrl ? (
-                          <Image
-                            source={{ uri: safeAuthorAvatarUrl }}
-                            style={styles.avatarImage}
-                          />
-                        ) : (
-                          <Ionicons name="person" size={16} color={pTheme.colors.onSurfaceVariant} />
-                        )}
-                      </View>
+                      <CachedAvatar
+                        uri={(comment.author as any).avatar_url}
+                        size={32}
+                        backgroundColor={pTheme.colors.surfaceVariant}
+                        iconColor={pTheme.colors.onSurfaceVariant}
+                        iconSize={16}
+                      />
                       <View style={styles.userTextContainer}>
                         <Text style={dynamicStyles.userName}>{comment.author.name}</Text>
                         <Text style={dynamicStyles.userEmail} numberOfLines={1}>
@@ -356,19 +352,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
   },
   userTextContainer: {
     marginLeft: 10,

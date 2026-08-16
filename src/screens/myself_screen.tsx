@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Image,
   Pressable,
   StyleSheet,
   View,
@@ -25,7 +24,7 @@ import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { breakpoints, pickByBreakpoint } from '@/src/constants/breakpoints';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { CachedAvatar } from '@/src/components/cached_avatar';
 
 
 
@@ -159,7 +158,6 @@ export default function MyselfScreen() {
   const [postsError, setPostsError] = useState('');
   const [favoritesError, setFavoritesError] = useState('');
   const [isProfileExpanded, setIsProfileExpanded] = useState(false);
-  const [avatarLoadError, setAvatarLoadError] = useState(false);
   const currentUserRef = useRef(user);
   const currentProfileRef = useRef<UserProfile | null>(null);
   const activeTabRef = useRef<TabType>(activeTab);
@@ -182,12 +180,6 @@ export default function MyselfScreen() {
     () => profile?.avatar_url ?? user?.avatar_url ?? null,
     [profile?.avatar_url, user?.avatar_url]
   );
-  const safeAvatarUrl = useMemo(() => getSafeRemoteUrl(avatarUrl), [avatarUrl]);
-
-  // 当 avatarUrl 变化时重置加载错误状态
-  useEffect(() => {
-    setAvatarLoadError(false);
-  }, [safeAvatarUrl]);
 
   // 加载用户资料
   const loadProfile = useCallback((): Promise<void> => {
@@ -413,17 +405,13 @@ export default function MyselfScreen() {
               style={[styles.avatarContainer, { backgroundColor: theme.colors.primaryContainer }]}
               onPress={() => router.push('/myself/settings')}
             >
-              {safeAvatarUrl && !avatarLoadError ? (
-                <Image 
-                  source={{ uri: safeAvatarUrl }}
-                  style={styles.avatar}
-                  onError={() => setAvatarLoadError(true)}
-                />
-              ) : (
-                <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.primaryContainer }]}>
-                  <Ionicons name="person" size={40} color={theme.colors.primary} />
-                </View>
-              )}
+              <CachedAvatar
+                uri={avatarUrl}
+                size={88}
+                backgroundColor={theme.colors.primaryContainer}
+                iconColor={theme.colors.primary}
+                iconSize={40}
+              />
             </Pressable>
             <View style={styles.userInfoColumn}>
               <View style={styles.userInfoRow}>
@@ -652,16 +640,6 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: 44,
     overflow: 'hidden',
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarPlaceholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   userInfoRow: {
     flexDirection: 'row',

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Platform, useWindowDimensions, Pressable, Text as RNText, Image, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Platform, useWindowDimensions, Pressable, Text as RNText, ActivityIndicator } from 'react-native';
 import { Tabs, Redirect, usePathname, useRouter, type Href } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/src/context/theme_context';
@@ -8,7 +8,7 @@ import { useAuth } from '@/src/context/auth_context';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { breakpoints } from '@/src/constants/breakpoints';
-import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { CachedAvatar } from '@/src/components/cached_avatar';
 
 // 侧边栏导航项
 const SIDEBAR_ITEMS = [
@@ -24,7 +24,6 @@ function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuth();
-  const safeUserAvatarUrl = getSafeRemoteUrl(user?.avatar_url);
 
   const getActiveTab = () => {
     if (pathname.includes('/explore')) return 'explore';
@@ -52,17 +51,7 @@ function Sidebar() {
         style={styles.sidebarAvatar}
         onPress={() => router.push('/(tabs)/myself')}
       >
-        {safeUserAvatarUrl ? (
-          <Image
-            source={{ uri: safeUserAvatarUrl }}
-            style={styles.avatarImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceVariant }]}>
-            <Ionicons name="person" size={26} color={theme.colors.onSurfaceVariant} />
-          </View>
-        )}
+        <CachedAvatar uri={user?.avatar_url} size={48} />
       </Pressable>
 
       {/* 导航项 */}
@@ -300,18 +289,6 @@ const styles = StyleSheet.create({
   sidebarAvatar: {
     paddingHorizontal: 12,
     paddingBottom: 28,
-  },
-  avatarImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  avatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   sidebarNav: {
     flex: 1,

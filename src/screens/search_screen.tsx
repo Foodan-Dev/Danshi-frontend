@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View, ScrollView, Pressable, TextInput as RNTextInput, Image, TextStyle, type StyleProp, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, ScrollView, Pressable, TextInput as RNTextInput, TextStyle, type StyleProp, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import {
   ActivityIndicator,
@@ -19,7 +19,7 @@ import { PostCard } from '@/src/components/post_card';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WEB_NO_OUTLINE } from '@/src/utils';
-import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { CachedAvatar } from '@/src/components/cached_avatar';
 
 // 宽屏断点
 const WIDE_BREAKPOINT = 768;
@@ -476,22 +476,15 @@ export default function SearchScreen() {
           ) : users.length ? (
             <View style={styles.userList}>
               {users.map((user) => {
-                const safeAvatarUrl = getSafeRemoteUrl(user.avatar_url);
                 return (
                   <Pressable
                     key={user.id}
                     style={styles.userItem}
                     onPress={() => handleUserPress(user.id)}
-                  >
+                    >
                     {/* 左侧：头像 */}
                     <View style={styles.userAvatar}>
-                      {safeAvatarUrl ? (
-                        <Image source={{ uri: safeAvatarUrl }} style={styles.avatarImage} />
-                      ) : (
-                        <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceVariant }]}>
-                          <Ionicons name="person" size={20} color={theme.colors.onSurfaceVariant} />
-                        </View>
-                      )}
+                      <CachedAvatar uri={user.avatar_url} size={48} iconSize={20} />
                     </View>
 
                     {/* 中间：用户信息 */}
@@ -781,18 +774,6 @@ const styles = StyleSheet.create({
   userAvatar: {
     width: 48,
     height: 48,
-  },
-  avatarImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  avatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   userInfo: {
     flex: 1,

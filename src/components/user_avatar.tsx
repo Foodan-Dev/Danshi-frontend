@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, View, Image, StyleSheet, ViewStyle } from 'react-native';
+import React, { useMemo } from 'react';
+import { Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { router, type Href } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { CachedAvatar } from '@/src/components/cached_avatar';
 
 export type UserAvatarProps = {
   userId: string;
@@ -30,17 +29,11 @@ export function UserAvatar({
   disabled = false,
 }: UserAvatarProps) {
   const pTheme = usePaperTheme();
-  const safeAvatarUrl = getSafeRemoteUrl(avatar_url);
-  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const normalizedUserId = useMemo(() => userId.trim(), [userId]);
   const resolvedSize = useMemo(
     () => (Number.isFinite(size) ? Math.max(16, Math.min(96, Math.floor(size))) : 32),
     [size]
   );
-
-  useEffect(() => {
-    setAvatarLoadFailed(false);
-  }, [safeAvatarUrl]);
 
   const handlePress = () => {
     if (disabled || !normalizedUserId) return;
@@ -54,20 +47,7 @@ export function UserAvatar({
       style={[styles.container, style]}
       android_ripple={{ color: pTheme.colors.surfaceDisabled, borderless: true }}
     >
-      <View style={[styles.avatarContainer, { width: resolvedSize, height: resolvedSize, borderRadius: resolvedSize / 2 }]}>
-        {safeAvatarUrl && !avatarLoadFailed ? (
-          <Image
-            source={{ uri: safeAvatarUrl }}
-            style={[styles.avatar, { width: resolvedSize, height: resolvedSize, borderRadius: resolvedSize / 2 }]}
-            resizeMode="cover"
-            onError={() => setAvatarLoadFailed(true)}
-          />
-        ) : (
-          <View style={[styles.avatarPlaceholder, { backgroundColor: pTheme.colors.surfaceVariant, width: resolvedSize, height: resolvedSize, borderRadius: resolvedSize / 2 }]}>
-            <Ionicons name="person" size={resolvedSize * 0.6} color={pTheme.colors.onSurfaceVariant} />
-          </View>
-        )}
-      </View>
+      <CachedAvatar uri={avatar_url} size={resolvedSize} />
       {show_name && (
         <Text
           variant={name_variant}
@@ -85,17 +65,6 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  avatarContainer: {
-    overflow: 'hidden',
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   name: {
     marginLeft: 8,

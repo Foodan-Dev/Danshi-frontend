@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, Pressable, StyleSheet, Image, Alert, type GestureResponderEvent } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Pressable, StyleSheet, Alert, type GestureResponderEvent } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
@@ -8,7 +8,7 @@ import type { Notification } from '@/src/repositories/notifications_repository';
 import { notificationsService } from '@/src/services/notifications_service';
 import { formatRelativeTime } from '@/src/utils/time_format';
 import { useNotifications } from '@/src/context/notifications_context';
-import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { CachedAvatar } from '@/src/components/cached_avatar';
 
 // ==================== Props ====================
 
@@ -32,14 +32,8 @@ export function NotificationItem({
 }: NotificationItemProps) {
   const theme = useTheme();
   const { decrementUnreadCount, refreshUnreadCount } = useNotifications();
-  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
 
   const { id, type, sender, content, is_read, created_at, related_type } = notification;
-  const safeSenderAvatarUrl = getSafeRemoteUrl(sender.avatar_url);
-
-  useEffect(() => {
-    setAvatarLoadFailed(false);
-  }, [safeSenderAvatarUrl]);
 
   // 获取动作文案
   const actionText = notificationsService.getNotificationTypeLabel(type);
@@ -126,17 +120,7 @@ export function NotificationItem({
           <View style={[styles.unreadDot, { backgroundColor: theme.colors.primary }]} />
         )}
         <Pressable onPress={handleAvatarPress} style={styles.avatarContainer}>
-          {safeSenderAvatarUrl && !avatarLoadFailed ? (
-            <Image
-              source={{ uri: safeSenderAvatarUrl }}
-              style={[styles.avatar, { opacity: readOpacity }]}
-              onError={() => setAvatarLoadFailed(true)}
-            />
-          ) : (
-            <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.surfaceVariant, opacity: readOpacity }]}>
-              <Ionicons name="person" size={20} color={theme.colors.onSurfaceVariant} />
-            </View>
-          )}
+          <CachedAvatar uri={sender.avatar_url} size={44} style={{ opacity: readOpacity }} iconSize={20} />
         </Pressable>
       </View>
 
@@ -222,18 +206,6 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   avatarContainer: {
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  avatarPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     flex: 1,

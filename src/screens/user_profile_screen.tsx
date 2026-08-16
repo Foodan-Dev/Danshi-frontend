@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, Image, Pressable, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Text, useTheme as usePaperTheme, ActivityIndicator } from 'react-native-paper';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
@@ -15,7 +15,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { PostCard } from '@/src/components/post_card';
 import { HOMETOWN_OPTIONS, findOptionLabel } from '@/src/constants/selects';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
-import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { CachedAvatar } from '@/src/components/cached_avatar';
 
 
 const formatCount = (value?: number | null) => {
@@ -49,8 +49,6 @@ export default function UserProfileScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [isProfileExpanded, setIsProfileExpanded] = useState(false);
-  const [avatarLoadError, setAvatarLoadError] = useState(false);
-  const safeAvatarUrl = useMemo(() => getSafeRemoteUrl(profile?.avatar_url), [profile?.avatar_url]);
 
   const isCurrentUser = currentUser?.id === userId;
   const handleBack = useCallback(() => {
@@ -60,11 +58,6 @@ export default function UserProfileScreen() {
     }
     router.replace('/explore');
   }, []);
-
-  // 当头像 URL 变化时重置加载错误状态
-  useEffect(() => {
-    setAvatarLoadError(false);
-  }, [safeAvatarUrl]);
 
   // 加载用户资料
   const loadUserData = useCallback(async () => {
@@ -240,17 +233,13 @@ export default function UserProfileScreen() {
               {/* 头像和用户信息并排 */}
               <View style={styles.profileHeaderRow}>
                 <View style={[styles.avatarContainer, { backgroundColor: theme.colors.primaryContainer }]}>
-                  {safeAvatarUrl && !avatarLoadError ? (
-                    <Image 
-                      source={{ uri: safeAvatarUrl }}
-                      style={styles.avatar}
-                      onError={() => setAvatarLoadError(true)}
-                    />
-                  ) : (
-                    <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.primaryContainer }]}>
-                      <Ionicons name="person" size={40} color={theme.colors.primary} />
-                    </View>
-                  )}
+                  <CachedAvatar
+                    uri={profile.avatar_url}
+                    size={88}
+                    backgroundColor={theme.colors.primaryContainer}
+                    iconColor={theme.colors.primary}
+                    iconSize={40}
+                  />
                 </View>
                 <View style={styles.userInfoColumn}>
                   <View style={styles.userInfoRow}>
@@ -494,16 +483,6 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: 44,
     overflow: 'hidden',
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarPlaceholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   userInfoColumn: {
     flex: 1,

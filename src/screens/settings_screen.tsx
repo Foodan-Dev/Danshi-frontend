@@ -4,7 +4,6 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Image,
   TextInput,
   Alert,
   Platform,
@@ -26,6 +25,7 @@ import { uploadService } from '@/src/services/upload_service';
 import { HOMETOWN_OPTIONS, findOptionLabel } from '@/src/constants/selects';
 import type { UserProfile } from '@/src/repositories/users_repository';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { CachedAvatar } from '@/src/components/cached_avatar';
 
 
 export default function SettingsScreen() {
@@ -441,13 +441,14 @@ export default function SettingsScreen() {
                 } : {})}
               >
                 <Pressable style={styles.avatarContainer} onPress={handlePickAvatar} disabled={uploadingAvatar}>
-                  {displayAvatarUri ? (
-                    <Image source={{ uri: displayAvatarUri }} style={styles.avatar} />
-                  ) : (
-                    <View style={[styles.avatarPlaceholder, { backgroundColor: pTheme.colors.primaryContainer }]}>
-                      <Ionicons name="person" size={48} color={pTheme.colors.primary} />
-                    </View>
-                  )}
+                  <CachedAvatar
+                    uri={displayAvatarUri}
+                    size={96}
+                    allowLocalUri={!!localAvatarUri}
+                    backgroundColor={pTheme.colors.primaryContainer}
+                    iconColor={pTheme.colors.primary}
+                    iconSize={48}
+                  />
                   {uploadingAvatar ? (
                     <View style={styles.avatarOverlay}>
                       <ActivityIndicator size="small" color={pTheme.colors.onPrimary} />
@@ -699,18 +700,6 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     position: 'relative',
-  },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-  },
-  avatarPlaceholder: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   avatarOverlay: {
     ...StyleSheet.absoluteFill,
