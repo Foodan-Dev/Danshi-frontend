@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
-import { StyleSheet, View, StyleProp, ViewStyle, Image, Pressable, Alert, Platform } from 'react-native';
+import { StyleSheet, View, StyleProp, ViewStyle, Pressable, Alert, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { Text, useTheme as usePaperTheme, IconButton, Menu } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { Post } from '@/src/models/Post';
@@ -221,7 +222,9 @@ export const PostCard: React.FC<PostCardProps> = ({
               styles.coverImage,
               { aspectRatio: fixedAspectRatio },
             ]}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={`${post.id}:${firstImage}`}
           />
         ) : (
           // 文字海报 - 莫兰迪色全填充 + 装饰引号水印

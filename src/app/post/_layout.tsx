@@ -20,7 +20,7 @@ export default function PostStackLayout() {
         }}
       >
         <Stack.Screen name="[postId]" />
-        <Stack.Screen name="edit" options={{ headerShown: false }} />
+        <Stack.Screen name="edit/[postId]" options={{ headerShown: false }} />
       </Stack>
     </View>
   );
