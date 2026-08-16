@@ -8,7 +8,7 @@ import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { useAuth } from '@/src/context/auth_context';
 import { usersService } from '@/src/services/users_service';
 import type { UserProfile } from '@/src/repositories/users_repository';
-import type { UserAggregateStats } from '@/src/models/Stats';
+import type { UserStats } from '@/src/models/User';
 import type { Post } from '@/src/models/Post';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Masonry } from '@/src/components/md3/masonry';
@@ -40,7 +40,7 @@ export default function UserProfileScreen() {
   const horizontalPadding = pickByBreakpoint(bp, { base: 4, sm: 6, md: 12, lg: 16, xl: 20 });
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [stats, setStats] = useState<UserAggregateStats | null>(null);
+  const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
@@ -76,15 +76,7 @@ export default function UserProfileScreen() {
       const profileData = await usersService.getUser(userId);
       setProfile(profileData);
       if (profileData.stats) {
-        setStats({
-          post_count: profileData.stats.post_count,
-          follower_count: profileData.stats.follower_count,
-          following_count: profileData.stats.following_count,
-          total_likes: 0,
-          total_favorites: 0,
-          total_views: 0,
-          comment_count: 0,
-        });
+        setStats(profileData.stats);
       } else {
         setStats(null);
       }
