@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, ScrollView, RefreshControl, Pressable, useWindowDimensions } from 'react-native';
-import { Masonry } from '@/src/components/md3/masonry';
-import { useWaterfallSettings } from '@/src/context/waterfall_context';
+import { FlashList } from '@shopify/flash-list';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { breakpoints, pickByBreakpoint } from '@/src/constants/breakpoints';
 import {
@@ -19,7 +18,7 @@ import type { Post, ShareType } from '@/src/models/Post';
 import { configService, type ExploreConfig, type PostTypeSubType } from '@/src/services/config_service';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { BottomSheet } from '@/src/components/overlays/bottom_sheet';
-import { PostCard, estimatePostCardHeight } from '@/src/components/post_card';
+import { PostCard } from '@/src/components/post_card';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { LoaderState } from '@/src/constants/post_labels';
 
@@ -56,7 +55,6 @@ const SORT_OPTIONS: { value: SortValue; label: string; description: string }[] =
 const FILTERS_SUPPORTED = false;
 
 export default function ExploreScreen() {
-  const { minHeight, maxHeight } = useWaterfallSettings();
   const bp = useBreakpoint();
   const { width: windowWidth } = useWindowDimensions();
   
@@ -66,6 +64,7 @@ export default function ExploreScreen() {
   const gap = pickByBreakpoint(bp, { base: 2.5, sm: 6, md: 10, lg: 14, xl: 16 });
   const verticalGap = pickByBreakpoint(bp, { base: 4, sm: 6, md: 10, lg: 14, xl: 16 });
   const horizontalPadding = pickByBreakpoint(bp, { base: 4, sm: 6, md: 12, lg: 16, xl: 20 });
+  const numColumns = pickByBreakpoint(bp, { base: 2, md: 2, lg: 3, xl: 4 });
   const insets = useSafeAreaInsets();
   const pTheme = usePaperTheme();
   const tabBarHeight = windowWidth >= breakpoints.md ? 0 : 56 + Math.max(insets.bottom, 12);
@@ -173,13 +172,6 @@ export default function ExploreScreen() {
     fetchPosts('refresh');
   }, [fetchPosts]);
 
-  const estimateHeight = useCallback(
-    (post: Post) => {
-      return estimatePostCardHeight(post, minHeight, maxHeight);
-    },
-    [maxHeight, minHeight]
-  );
-
   const onPress = useCallback(
     (postId: string) => {
       const href: Href = { pathname: '/post/[postId]', params: { postId } } as const;
@@ -189,6 +181,15 @@ export default function ExploreScreen() {
   );
 
   const content = useMemo(() => posts, [posts]);
+
+  const renderPost = useCallback(
+    ({ item }: { item: Post }) => (
+      <View style={{ marginHorizontal: gap / 2, marginBottom: verticalGap }}>
+        <PostCard post={item} onPress={onPress} />
+      </View>
+    ),
+    [gap, onPress, verticalGap]
+  );
 
   const postTypeOptions = useMemo(() => {
     if (!config.postTypes.length) {
@@ -305,15 +306,19 @@ export default function ExploreScreen() {
       </View>
 
       {/* 主内容区 */}
-      <ScrollView
+      <FlashList
         style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingHorizontal: horizontalPadding,
-            paddingBottom: bottomContentPadding,
-          },
-        ]}
+        contentContainerStyle={{
+          paddingTop: 4,
+          paddingHorizontal: horizontalPadding,
+          paddingBottom: bottomContentPadding,
+        }}
+        data={content}
+        masonry
+        optimizeItemArrangement={false}
+        numColumns={numColumns}
+        keyExtractor={(item) => item.id}
+        renderItem={renderPost}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -325,62 +330,48 @@ export default function ExploreScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
-      >
-        {/* 筛选标签展示 */}
-        {activeFilterChips.length > 0 && (
-          <View style={styles.activeFiltersRow}>
-            {activeFilterChips.map((chip) => (
-              <Chip key={chip.key} mode="outlined" onClose={chip.onClear} compact>
-                {chip.label}
-              </Chip>
-            ))}
-          </View>
-        )}
-
-        {/* 加载状态 */}
-        {isInitialLoading && (
-          <View style={styles.loadingWrapper}>
-            <ActivityIndicator size="large" color={pTheme.colors.primary} />
-            <Text style={[styles.loadingText, { color: pTheme.colors.onSurfaceVariant }]}>正在加载精彩内容…</Text>
-          </View>
-        )}
-
-        {/* 错误状态 */}
-        {error && !isInitialLoading && (
-          <View style={styles.errorWrapper}>
-            <Ionicons name="cloud-offline-outline" size={48} color={pTheme.colors.error} />
-            <Text style={[styles.errorText, { color: pTheme.colors.error }]}>{error}</Text>
-            <Pressable style={[styles.retryBtn, { backgroundColor: pTheme.colors.primaryContainer }]} onPress={() => fetchPosts('initial')}>
-              <Ionicons name="refresh" size={18} color={pTheme.colors.primary} />
-              <Text style={[styles.retryText, { color: pTheme.colors.primary }]}>重新加载</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* 空状态 */}
-        {!isInitialLoading && !content.length && !error && (
-          <View style={styles.emptyWrapper}>
-            <View style={[styles.emptyIcon, { backgroundColor: pTheme.colors.surfaceVariant }]}>
-              <Ionicons name="restaurant" size={40} color={pTheme.colors.outline} />
+        ListHeaderComponent={
+          activeFilterChips.length > 0 || (error && !isInitialLoading) ? (
+            <View style={styles.listHeader}>
+              {activeFilterChips.length > 0 && (
+                <View style={styles.activeFiltersRow}>
+                  {activeFilterChips.map((chip) => (
+                    <Chip key={chip.key} mode="outlined" onClose={chip.onClear} compact>
+                      {chip.label}
+                    </Chip>
+                  ))}
+                </View>
+              )}
+              {error && !isInitialLoading && (
+                <View style={styles.errorWrapper}>
+                  <Ionicons name="cloud-offline-outline" size={48} color={pTheme.colors.error} />
+                  <Text style={[styles.errorText, { color: pTheme.colors.error }]}>{error}</Text>
+                  <Pressable style={[styles.retryBtn, { backgroundColor: pTheme.colors.primaryContainer }]} onPress={() => fetchPosts('initial')}>
+                    <Ionicons name="refresh" size={18} color={pTheme.colors.primary} />
+                    <Text style={[styles.retryText, { color: pTheme.colors.primary }]}>重新加载</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
-            <Text style={[styles.emptyTitle, { color: pTheme.colors.onSurface }]}>暂无内容</Text>
-            <Text style={[styles.emptyText, { color: pTheme.colors.onSurfaceVariant }]}>去发布第一条美食分享吧～</Text>
-          </View>
-        )}
-
-        {/* 瀑布流列表 */}
-        {content.length > 0 && (
-          <Masonry
-            data={content}
-            columns={{ base: 2, md: 2, lg: 3, xl: 4 }}
-            gap={gap}
-            verticalGap={verticalGap}
-            getItemHeight={(item) => estimateHeight(item)}
-            keyExtractor={(item) => item.id}
-            renderItem={(item) => <PostCard post={item} onPress={onPress} />}
-          />
-        )}
-      </ScrollView>
+          ) : null
+        }
+        ListEmptyComponent={
+          isInitialLoading ? (
+            <View style={styles.loadingWrapper}>
+              <ActivityIndicator size="large" color={pTheme.colors.primary} />
+              <Text style={[styles.loadingText, { color: pTheme.colors.onSurfaceVariant }]}>正在加载精彩内容…</Text>
+            </View>
+          ) : !error ? (
+            <View style={styles.emptyWrapper}>
+              <View style={[styles.emptyIcon, { backgroundColor: pTheme.colors.surfaceVariant }]}>
+                <Ionicons name="restaurant" size={40} color={pTheme.colors.outline} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: pTheme.colors.onSurface }]}>暂无内容</Text>
+              <Text style={[styles.emptyText, { color: pTheme.colors.onSurfaceVariant }]}>去发布第一条美食分享吧～</Text>
+            </View>
+          ) : null
+        }
+      />
 
       {/* 筛选面板 */}
       {FILTERS_SUPPORTED && (
@@ -591,9 +582,9 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  scrollContent: {
-    paddingTop: 4,
+  listHeader: {
     gap: 12,
+    marginBottom: 12,
   },
 
   // ==================== 状态展示 ====================
