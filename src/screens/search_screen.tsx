@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, ScrollView, Pressable, TextInput as RNTextInput, Image, TextStyle, type StyleProp, useWindowDimensions } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import {
   ActivityIndicator,
   Text,
@@ -14,9 +15,7 @@ import { useAuth } from '@/src/context/auth_context';
 import { showAlert } from '@/src/utils/alert';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
-import { Masonry } from '@/src/components/md3/masonry';
-import { PostCard, estimatePostCardHeight } from '@/src/components/post_card';
-import { useWaterfallSettings } from '@/src/context/waterfall_context';
+import { PostCard } from '@/src/components/post_card';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WEB_NO_OUTLINE } from '@/src/utils';
@@ -103,7 +102,6 @@ export default function SearchScreen() {
   const router = useRouter();
   const theme = usePaperTheme();
   const bp = useBreakpoint();
-  const { minHeight, maxHeight } = useWaterfallSettings();
   const { width: windowWidth } = useWindowDimensions();
   
   // 判断是否宽屏
@@ -113,6 +111,7 @@ export default function SearchScreen() {
   const spacing = pickByBreakpoint(bp, { base: 14, sm: 16, md: 18, lg: 20, xl: 24 });
   const gridGap = pickByBreakpoint(bp, { base: 6, sm: 8, md: 10, lg: 14, xl: 18 });
   const gridVerticalGap = gridGap + 8;
+  const numColumns = pickByBreakpoint(bp, { base: 2, md: 2, lg: 3, xl: 4 });
 
   const { user: currentUser } = useAuth();
 
@@ -258,6 +257,29 @@ export default function SearchScreen() {
       setFollowLoadingMap(prev => ({ ...prev, [userId]: false }));
     }
   }, [currentUser]);
+
+  const renderPost = useCallback(
+    ({ item }: { item: SearchPost }) => {
+      const snippet = extractMatchSnippet(item.highlight?.content);
+      const showSnippet = snippet && !item.highlight?.title;
+
+      return (
+        <View style={{ marginHorizontal: gridGap / 2, marginBottom: gridVerticalGap }}>
+          <PostCard post={item} onPress={handlePostPress} appearance="flat" />
+          {showSnippet && (
+            <View style={[styles.snippetContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <HighlightedText
+                value={snippet}
+                style={[styles.snippetText, { color: theme.colors.onSurfaceVariant }]}
+                numberOfLines={2}
+              />
+            </View>
+          )}
+        </View>
+      );
+    },
+    [gridGap, gridVerticalGap, handlePostPress, theme]
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -411,14 +433,32 @@ export default function SearchScreen() {
         </View>
 
         {/* ==================== 内容区域 ==================== */}
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ 
-            paddingHorizontal: isWideScreen ? 0 : horizontalPadding, 
-            paddingBottom: insets.bottom + spacing * 2,
-            paddingTop: spacing,
-          }}
-        >
+        {activeTab === 'posts' && !loading && hasSearched && !error && posts.length > 0 ? (
+          <FlashList
+            style={styles.resultsList}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              paddingHorizontal: isWideScreen ? 0 : horizontalPadding,
+              paddingBottom: insets.bottom + spacing * 2,
+              paddingTop: spacing,
+            }}
+            data={posts}
+            masonry
+            optimizeItemArrangement={false}
+            numColumns={numColumns}
+            keyExtractor={(item) => item.id}
+            renderItem={renderPost}
+            showsVerticalScrollIndicator={false}
+          />
+        ) : (
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              paddingHorizontal: isWideScreen ? 0 : horizontalPadding,
+              paddingBottom: insets.bottom + spacing * 2,
+              paddingTop: spacing,
+            }}
+          >
           {/* 错误提示 */}
           {error ? (
             <View style={[styles.errorCard, { backgroundColor: theme.colors.errorContainer }]}>
@@ -430,40 +470,7 @@ export default function SearchScreen() {
         {/* 搜索结果 */}
         {!loading && hasSearched && !error ? (
           activeTab === 'posts' ? (
-            posts.length ? (
-              <Masonry
-                data={posts}
-                columns={{ base: 2, md: 2, lg: 3, xl: 4 }}
-                gap={gridGap}
-                verticalGap={gridVerticalGap}
-                keyExtractor={(item) => item.id}
-                getItemHeight={(item) => estimatePostCardHeight(item, minHeight, maxHeight)}
-                renderItem={(item) => {
-                  // 智能摘要：如果关键词在正文中匹配，显示摘要
-                  const snippet = extractMatchSnippet(item.highlight?.content);
-                  const showSnippet = snippet && !item.highlight?.title; // 只有标题没匹配时才显示正文摘要
-                  
-                  return (
-                    <View>
-                      <PostCard
-                        post={item}
-                        onPress={handlePostPress}
-                        appearance="flat"
-                      />
-                      {showSnippet && (
-                        <View style={[styles.snippetContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
-                          <HighlightedText
-                            value={snippet}
-                            style={[styles.snippetText, { color: theme.colors.onSurfaceVariant }]}
-                            numberOfLines={2}
-                          />
-                        </View>
-                      )}
-                    </View>
-                  );
-                }}
-              />
-            ) : (
+            posts.length ? null : (
               <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>未找到相关帖子</Text>
             )
           ) : users.length ? (
@@ -585,7 +592,8 @@ export default function SearchScreen() {
             )}
           </View>
         ) : null}
-      </ScrollView>
+          </ScrollView>
+        )}
       </View>
     </View>
   );
@@ -598,6 +606,9 @@ const styles = StyleSheet.create({
   
   // ==================== 宽屏容器 ====================
   contentWrapper: {
+    flex: 1,
+  },
+  resultsList: {
     flex: 1,
   },
   wideContentWrapper: {
