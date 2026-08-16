@@ -1,12 +1,11 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Pressable, StyleSheet, Image, Alert, type GestureResponderEvent } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import { router, type Href, useFocusEffect } from 'expo-router';
+import { router, type Href } from 'expo-router';
 
 import type { Notification } from '@/src/repositories/notifications_repository';
 import { notificationsService } from '@/src/services/notifications_service';
-import { usersService } from '@/src/services/users_service';
 import { formatRelativeTime } from '@/src/utils/time_format';
 import { useNotifications } from '@/src/context/notifications_context';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
@@ -17,19 +16,23 @@ interface NotificationItemProps {
   notification: Notification;
   /** 乐观更新回调：同步通知已读状态 */
   onReadStateChange?: (notificationId: string, isRead: boolean) => void;
-  /** 刷新标记：父组件下拉刷新时递增 */
-  refreshKey?: number;
+  isFollowing: boolean;
+  followLoading: boolean;
+  onFollowToggle: (userId: string) => void;
 }
 
 // ==================== Component ====================
 
-export function NotificationItem({ notification, onReadStateChange, refreshKey }: NotificationItemProps) {
+export function NotificationItem({
+  notification,
+  onReadStateChange,
+  isFollowing,
+  followLoading,
+  onFollowToggle,
+}: NotificationItemProps) {
   const theme = useTheme();
   const { decrementUnreadCount, refreshUnreadCount } = useNotifications();
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
-  const followStatusRequestIdRef = useRef(0);
 
   const { id, type, sender, content, is_read, created_at, related_type } = notification;
   const safeSenderAvatarUrl = getSafeRemoteUrl(sender.avatar_url);
@@ -37,31 +40,6 @@ export function NotificationItem({ notification, onReadStateChange, refreshKey }
   useEffect(() => {
     setAvatarLoadFailed(false);
   }, [safeSenderAvatarUrl]);
-
-  // 对 follow 类型通知，检查是否已关注该用户
-  const refreshFollowStatus = useCallback(() => {
-    if (type !== 'follow') return;
-    const requestId = ++followStatusRequestIdRef.current;
-    let cancelled = false;
-    usersService.getUser(sender.id)
-      .then((profile) => {
-        if (!cancelled && followStatusRequestIdRef.current === requestId) {
-          setIsFollowing(!!profile.is_following);
-        }
-      })
-      .catch((e) => {
-        if (__DEV__) console.warn('[NotificationItem] Failed to check follow status:', e);
-      });
-    return () => { cancelled = true; };
-  }, [type, sender.id]);
-
-  useEffect(() => refreshFollowStatus(), [refreshFollowStatus, refreshKey]);
-
-  useFocusEffect(
-    useCallback(() => {
-      return refreshFollowStatus();
-    }, [refreshFollowStatus])
-  );
 
   // 获取动作文案
   const actionText = notificationsService.getNotificationTypeLabel(type);
@@ -115,28 +93,10 @@ export function NotificationItem({ notification, onReadStateChange, refreshKey }
   }, [sender.id]);
 
   // 处理关注按钮点击
-  const handleFollowPress = useCallback(async () => {
+  const handleFollowPress = useCallback(() => {
     if (followLoading) return;
-    setFollowLoading(true);
-    const requestId = ++followStatusRequestIdRef.current;
-    try {
-      if (isFollowing) {
-        await usersService.unfollowUser(sender.id);
-        if (followStatusRequestIdRef.current === requestId) {
-          setIsFollowing(false);
-        }
-      } else {
-        await usersService.followUser(sender.id);
-        if (followStatusRequestIdRef.current === requestId) {
-          setIsFollowing(true);
-        }
-      }
-    } catch (e) {
-      if (__DEV__) console.warn('[NotificationItem] Failed to toggle follow:', e);
-    } finally {
-      setFollowLoading(false);
-    }
-  }, [sender.id, isFollowing, followLoading]);
+    onFollowToggle(sender.id);
+  }, [followLoading, onFollowToggle, sender.id]);
 
   const handleFollowButtonPress = useCallback((event: GestureResponderEvent) => {
     event.stopPropagation();
