@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, Image, ScrollView, Pressable, RefreshControl } from 'react-native';
+import { View, StyleSheet, Image, Pressable, RefreshControl } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Text, useTheme as usePaperTheme, ActivityIndicator } from 'react-native-paper';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,9 +12,7 @@ import type { UserProfile } from '@/src/repositories/users_repository';
 import type { UserStats } from '@/src/models/User';
 import type { Post } from '@/src/models/Post';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Masonry } from '@/src/components/md3/masonry';
-import { PostCard, estimatePostCardHeight } from '@/src/components/post_card';
-import { useWaterfallSettings } from '@/src/context/waterfall_context';
+import { PostCard } from '@/src/components/post_card';
 import { HOMETOWN_OPTIONS, findOptionLabel } from '@/src/constants/selects';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
@@ -31,13 +30,13 @@ export default function UserProfileScreen() {
   const { user: currentUser } = useAuth();
   const insets = useSafeAreaInsets();
   const theme = usePaperTheme();
-  const { minHeight, maxHeight } = useWaterfallSettings();
 
   // 响应式间距 - 与探索界面保持一致
   const bp = useBreakpoint();
   const gap = pickByBreakpoint(bp, { base: 4, sm: 6, md: 10, lg: 14, xl: 16 });
   const verticalGap = pickByBreakpoint(bp, { base: 4, sm: 6, md: 10, lg: 14, xl: 16 });
   const horizontalPadding = pickByBreakpoint(bp, { base: 4, sm: 6, md: 12, lg: 16, xl: 20 });
+  const numColumns = pickByBreakpoint(bp, { base: 2, md: 2, lg: 3, xl: 4 });
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -163,9 +162,13 @@ export default function UserProfileScreen() {
     router.push({ pathname: '/post/[postId]', params: { postId } });
   }, []);
 
-  const estimateHeight = useCallback(
-    (post: Post) => estimatePostCardHeight(post, minHeight, maxHeight),
-    [minHeight, maxHeight]
+  const renderPost = useCallback(
+    ({ item }: { item: Post }) => (
+      <View style={{ marginHorizontal: gap / 2, marginBottom: verticalGap }}>
+        <PostCard post={item} onPress={handlePostPress} />
+      </View>
+    ),
+    [gap, handlePostPress, verticalGap]
   );
 
   if (!userId) {
@@ -187,14 +190,21 @@ export default function UserProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView
+      <FlashList
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={{ paddingHorizontal: horizontalPadding, paddingBottom: insets.bottom + 24 }}
+        data={profile && !postsLoading ? posts : []}
+        masonry
+        optimizeItemArrangement={false}
+        numColumns={numColumns}
+        keyExtractor={(item) => item.id}
+        renderItem={renderPost}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[theme.colors.primary]} tintColor={theme.colors.primary} progressBackgroundColor={theme.colors.surface} progressViewOffset={0} />
         }
-      >
+        ListHeaderComponent={
+          <View style={{ marginHorizontal: -horizontalPadding }}>
         {/* ==================== 顶部操作栏 ==================== */}
         <View style={[styles.headerBar, { paddingTop: insets.top + 8, backgroundColor: theme.colors.surface }]}>
           <Pressable style={styles.backBtn} onPress={handleBack}>
@@ -348,7 +358,19 @@ export default function UserProfileScreen() {
             </View>
 
             {/* ==================== 帖子列表 ==================== */}
-            <View style={[styles.contentSection, { backgroundColor: theme.colors.surface }]}>
+            {postsError && posts.length > 0 ? (
+              <View style={[styles.inlineError, { backgroundColor: theme.colors.errorContainer, marginHorizontal: horizontalPadding, marginVertical: 12 }]}>
+                <Text style={{ color: theme.colors.error }}>{postsError}</Text>
+              </View>
+            ) : null}
+            {posts.length > 0 ? <View style={styles.listTopSpacing} /> : null}
+          </>
+        ) : null}
+          </View>
+        }
+        ListEmptyComponent={
+          profile ? (
+            <View style={[styles.contentSection, { backgroundColor: theme.colors.surface, marginHorizontal: -horizontalPadding }]}>
               {postsLoading ? (
                 <View style={styles.loadingWrap}>
                   <ActivityIndicator size="small" color={theme.colors.primary} />
@@ -372,28 +394,11 @@ export default function UserProfileScreen() {
                     还没有发布帖子
                   </Text>
                 </View>
-              ) : (
-                <View style={[styles.postsGrid, { paddingHorizontal: horizontalPadding }]}>
-                  {postsError ? (
-                    <View style={[styles.inlineError, { backgroundColor: theme.colors.errorContainer, marginBottom: 12 }]}>
-                      <Text style={{ color: theme.colors.error }}>{postsError}</Text>
-                    </View>
-                  ) : null}
-                  <Masonry
-                    data={posts}
-                    columns={{ base: 2, md: 2, lg: 3, xl: 4 }}
-                    gap={gap}
-                    verticalGap={verticalGap}
-                    getItemHeight={estimateHeight}
-                    keyExtractor={(item) => item.id}
-                    renderItem={(item) => <PostCard post={item} onPress={handlePostPress} />}
-                  />
-                </View>
-              )}
+              ) : null}
             </View>
-          </>
-        ) : null}
-      </ScrollView>
+          ) : null
+        }
+      />
     </View>
   );
 }
@@ -617,7 +622,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 14,
   },
-  postsGrid: {
-    paddingBottom: 8,
+  listTopSpacing: {
+    height: 4,
   },
 });
