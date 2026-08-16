@@ -29,6 +29,7 @@ import { TYPE_LABEL, SHARE_LABEL, type LoaderState } from '@/src/constants/post_
 import { BottomSheet } from '@/src/components/overlays/bottom_sheet';
 import { useAuth } from '@/src/context/auth_context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { usePostActions } from '@/src/hooks/use_post_actions';
 import { usePostComments, flattenReplies, REPLY_PREVIEW_COUNT } from '@/src/hooks/use_post_comments';
 import { breakpoints } from '@/src/constants/breakpoints';
@@ -846,8 +847,9 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           onPress={handleToggleFavorite}
           disabled={actionLoading.favorite || !post}
         >
-          <Ionicons
-            name={post?.is_favorited ? 'star' : 'star-outline'}
+          <FontAwesome5
+            name="star"
+            solid={post?.is_favorited}
             size={22}
             color={post?.is_favorited ? theme.colors.primary : theme.colors.onSurfaceVariant}
           />

@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { router, type Href, useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Button, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -433,8 +434,9 @@ export default function MyselfScreen() {
               style={[styles.tabItem, activeTab === 'favorites' && [styles.tabItemActive, { borderBottomColor: theme.colors.primary }]]}
               onPress={() => setActiveTab('favorites')}
             >
-              <Ionicons
-                name={activeTab === 'favorites' ? 'star' : 'star-outline'}
+              <FontAwesome5
+                name="star"
+                solid={activeTab === 'favorites'}
                 size={20}
                 color={activeTab === 'favorites' ? theme.colors.primary : theme.colors.onSurfaceVariant}
               />
@@ -474,11 +476,11 @@ export default function MyselfScreen() {
             </View>
           ) : currentPosts.length === 0 ? (
             <View style={styles.emptyWrap}>
-              <Ionicons
-                name={activeTab === 'posts' ? 'document-text-outline' : 'star-outline'}
-                size={48}
-                color={theme.colors.outlineVariant}
-              />
+              {activeTab === 'posts' ? (
+                <Ionicons name="document-text-outline" size={48} color={theme.colors.outlineVariant} />
+              ) : (
+                <FontAwesome5 name="star" size={48} color={theme.colors.outlineVariant} />
+              )}
               <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
                 {activeTab === 'posts' ? '还没有发布帖子' : '还没有收藏内容'}
               </Text>
