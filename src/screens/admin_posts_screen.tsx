@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, ScrollView, Image, RefreshControl, Pressable, Alert } from 'react-native';
+import { View, StyleSheet, Image, RefreshControl, Pressable, Alert } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { ActivityIndicator, Appbar, Card, Text, useTheme as usePaperTheme, Button, Menu } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -190,6 +191,122 @@ export default function AdminPostsScreen() {
   // 格式化时间（使用统一工具函数）
   const formatShortDate = (dateStr: string) => formatDate(dateStr, 'short');
 
+  const renderPost = ({ item: post }: { item: AdminPendingPostSummary }) => {
+    const safePreviewImage = post.images?.map((item) => getSafeRemoteUrl(item)).find((item): item is string => !!item);
+    const hasImage = !!safePreviewImage;
+    const statusDotColor = getStatusDotColor(post.status);
+    const isPending = post.status === 'pending';
+
+    return (
+      <Pressable
+        onPress={() => router.push(`/post/${post.id}`)}
+        style={dynamicStyles.listTile}
+      >
+        <View style={styles.topRow}>
+          <View style={[styles.statusDot, { backgroundColor: statusDotColor }]} />
+          <Text style={dynamicStyles.titleText} numberOfLines={1}>
+            {post.title}
+          </Text>
+          <Menu
+            visible={menuVisible === post.id}
+            onDismiss={() => setMenuVisible(null)}
+            anchor={
+              <Pressable
+                style={styles.moreBtn}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setMenuVisible(post.id);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="ellipsis-vertical" size={18} color={pTheme.colors.onSurfaceVariant} />
+              </Pressable>
+            }
+          >
+            {isPending && (
+              <>
+                <Menu.Item
+                  onPress={() => {
+                    setMenuVisible(null);
+                    confirmReview(post.id, 'approve', post.title);
+                  }}
+                  title="通过"
+                  leadingIcon="check-circle"
+                />
+                <Menu.Item
+                  onPress={() => {
+                    setMenuVisible(null);
+                    confirmReview(post.id, 'reject', post.title);
+                  }}
+                  title="拒绝"
+                  leadingIcon="close-circle"
+                />
+              </>
+            )}
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                router.push(`/post/${post.id}`);
+              }}
+              title="查看详情"
+              leadingIcon="eye"
+            />
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                confirmDelete(post.id, post.title);
+              }}
+              title="删除"
+              leadingIcon="delete"
+              titleStyle={{ color: pTheme.colors.error }}
+            />
+          </Menu>
+        </View>
+
+        <View style={styles.contentRow}>
+          <Text
+            style={[dynamicStyles.summaryText, hasImage && styles.summaryTextWithImage]}
+            numberOfLines={2}
+          >
+            {post.content}
+          </Text>
+          {hasImage && (
+            <View style={styles.thumbnailWrap}>
+              <Image
+                source={{ uri: safePreviewImage }}
+                style={styles.thumbnail}
+                resizeMode="cover"
+              />
+              {post.images!.length > 1 && (
+                <View style={styles.imageCount}>
+                  <Text style={dynamicStyles.imageCountText}>{post.images!.length}</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+
+        <View style={styles.metaRow}>
+          <View style={styles.metaLeft}>
+            <Ionicons name="person-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
+            <Text style={dynamicStyles.metaText}>{post.author?.name || '未知'}</Text>
+            <Text style={dynamicStyles.metaSeparator}>·</Text>
+            <Ionicons name="time-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
+            <Text style={dynamicStyles.metaText}>{formatShortDate(post.created_at)}</Text>
+          </View>
+          <View style={[
+            styles.typeTag,
+            post.post_type === 'seeking' ? dynamicStyles.typeTagSeeking : dynamicStyles.typeTagShare
+          ]}>
+            <Text style={dynamicStyles.typeTagText}>
+              {post.post_type === 'seeking' ? '求推荐' : '分享'}
+            </Text>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
@@ -229,14 +346,17 @@ export default function AdminPostsScreen() {
         <Appbar.Content title="帖子管理" />
       </Appbar.Header>
 
-      <ScrollView
-        style={{ backgroundColor: pTheme.colors.background }}
+      <FlashList
+        style={{ flex: 1, backgroundColor: pTheme.colors.background }}
         contentContainerStyle={{
           paddingTop: 8,
           paddingBottom: 24,
           paddingHorizontal: contentHorizontalPadding,
-          gap: 8
         }}
+        data={posts}
+        keyExtractor={(post) => post.id}
+        renderItem={renderPost}
+        extraData={menuVisible}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -246,31 +366,9 @@ export default function AdminPostsScreen() {
             progressBackgroundColor={pTheme.colors.surface}
           />
         }
-      >
-        {loading && posts.length === 0 ? (
-          <Card mode="contained">
-            <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <Text>加载中...</Text>
-            </Card.Content>
-          </Card>
-        ) : loadError && posts.length === 0 ? (
-          <Card mode="contained">
-            <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <Text style={{ color: pTheme.colors.error }}>{loadError}</Text>
-              <Button mode="text" onPress={() => void loadPosts()} style={{ marginTop: 8 }}>
-                重试
-              </Button>
-            </Card.Content>
-          </Card>
-        ) : posts.length === 0 ? (
-          <Card mode="contained">
-            <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <Ionicons name="document-text-outline" size={48} color={pTheme.colors.onSurfaceDisabled} />
-              <Text style={{ marginTop: 12, color: pTheme.colors.onSurfaceVariant }}>暂无帖子</Text>
-            </Card.Content>
-          </Card>
-        ) : (
-          <>
+        ListHeaderComponent={
+          posts.length > 0 && (loadError || actionError) ? (
+            <>
             {loadError ? (
               <Card mode="contained" style={{ marginBottom: 8 }}>
                 <Card.Content>
@@ -285,125 +383,35 @@ export default function AdminPostsScreen() {
                 </Card.Content>
               </Card>
             ) : null}
-            {posts.map((post) => {
-              const safePreviewImage = post.images?.map((item) => getSafeRemoteUrl(item)).find((item): item is string => !!item);
-              const hasImage = !!safePreviewImage;
-              const statusDotColor = getStatusDotColor(post.status);
-              const isPending = post.status === 'pending';
-
-              return (
-                <Pressable
-                  key={post.id}
-                  onPress={() => router.push(`/post/${post.id}`)}
-                  style={dynamicStyles.listTile}
-                >
-                  <View style={styles.topRow}>
-                    <View style={[styles.statusDot, { backgroundColor: statusDotColor }]} />
-                    <Text style={dynamicStyles.titleText} numberOfLines={1}>
-                      {post.title}
-                    </Text>
-                    <Menu
-                      visible={menuVisible === post.id}
-                      onDismiss={() => setMenuVisible(null)}
-                      anchor={
-                        <Pressable
-                          style={styles.moreBtn}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            setMenuVisible(post.id);
-                          }}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Ionicons name="ellipsis-vertical" size={18} color={pTheme.colors.onSurfaceVariant} />
-                        </Pressable>
-                      }
-                    >
-                      {isPending && (
-                        <>
-                          <Menu.Item
-                            onPress={() => {
-                              setMenuVisible(null);
-                              confirmReview(post.id, 'approve', post.title);
-                            }}
-                            title="通过"
-                            leadingIcon="check-circle"
-                          />
-                          <Menu.Item
-                            onPress={() => {
-                              setMenuVisible(null);
-                              confirmReview(post.id, 'reject', post.title);
-                            }}
-                            title="拒绝"
-                            leadingIcon="close-circle"
-                          />
-                        </>
-                      )}
-                      <Menu.Item
-                        onPress={() => {
-                          setMenuVisible(null);
-                          router.push(`/post/${post.id}`);
-                        }}
-                        title="查看详情"
-                        leadingIcon="eye"
-                      />
-                      <Menu.Item
-                        onPress={() => {
-                          setMenuVisible(null);
-                          confirmDelete(post.id, post.title);
-                        }}
-                        title="删除"
-                        leadingIcon="delete"
-                        titleStyle={{ color: pTheme.colors.error }}
-                      />
-                    </Menu>
-                  </View>
-
-                  <View style={styles.contentRow}>
-                    <Text
-                      style={[dynamicStyles.summaryText, hasImage && styles.summaryTextWithImage]}
-                      numberOfLines={2}
-                    >
-                      {post.content}
-                    </Text>
-                    {hasImage && (
-                      <View style={styles.thumbnailWrap}>
-                        <Image
-                          source={{ uri: safePreviewImage }}
-                          style={styles.thumbnail}
-                          resizeMode="cover"
-                        />
-                        {post.images!.length > 1 && (
-                          <View style={styles.imageCount}>
-                            <Text style={dynamicStyles.imageCountText}>{post.images!.length}</Text>
-                          </View>
-                        )}
-                      </View>
-                    )}
-                  </View>
-
-                  <View style={styles.metaRow}>
-                    <View style={styles.metaLeft}>
-                      <Ionicons name="person-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
-                      <Text style={dynamicStyles.metaText}>{post.author?.name || '未知'}</Text>
-                      <Text style={dynamicStyles.metaSeparator}>·</Text>
-                      <Ionicons name="time-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
-                      <Text style={dynamicStyles.metaText}>{formatShortDate(post.created_at)}</Text>
-                    </View>
-                    <View style={[
-                      styles.typeTag,
-                      post.post_type === 'seeking' ? dynamicStyles.typeTagSeeking : dynamicStyles.typeTagShare
-                    ]}>
-                      <Text style={dynamicStyles.typeTagText}>
-                        {post.post_type === 'seeking' ? '求推荐' : '分享'}
-                      </Text>
-                    </View>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </>
-        )}
-      </ScrollView>
+            </>
+          ) : null
+        }
+        ListEmptyComponent={
+          loading ? (
+            <Card mode="contained">
+              <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Text>加载中...</Text>
+              </Card.Content>
+            </Card>
+          ) : loadError ? (
+            <Card mode="contained">
+              <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Text style={{ color: pTheme.colors.error }}>{loadError}</Text>
+                <Button mode="text" onPress={() => void loadPosts()} style={{ marginTop: 8 }}>
+                  重试
+                </Button>
+              </Card.Content>
+            </Card>
+          ) : (
+            <Card mode="contained">
+              <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Ionicons name="document-text-outline" size={48} color={pTheme.colors.onSurfaceDisabled} />
+                <Text style={{ marginTop: 12, color: pTheme.colors.onSurfaceVariant }}>暂无帖子</Text>
+              </Card.Content>
+            </Card>
+          )
+        }
+      />
     </View>
   );
 }
