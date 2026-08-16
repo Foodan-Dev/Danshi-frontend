@@ -38,6 +38,11 @@ const formatCount = (value?: number | null) => {
 
 type TabType = 'posts' | 'favorites';
 
+type InFlightRequest = {
+  userId: string;
+  promise: Promise<void>;
+};
+
 // ==================== 管理员徽章组件 ====================
 type RoleBadgeProps = {
   role: string;
@@ -155,7 +160,15 @@ export default function MyselfScreen() {
   const [favoritesError, setFavoritesError] = useState('');
   const [isProfileExpanded, setIsProfileExpanded] = useState(false);
   const [avatarLoadError, setAvatarLoadError] = useState(false);
-  const favoritesInFlightRef = useRef(false);
+  const currentUserRef = useRef(user);
+  const currentProfileRef = useRef<UserProfile | null>(null);
+  const activeTabRef = useRef<TabType>(activeTab);
+  const profileInFlightRef = useRef<InFlightRequest | null>(null);
+  const postsInFlightRef = useRef<InFlightRequest | null>(null);
+  const favoritesInFlightRef = useRef<InFlightRequest | null>(null);
+
+  currentUserRef.current = user;
+  activeTabRef.current = activeTab;
 
   const displayName = useMemo(
     () => profile?.name ?? user?.name ?? '未登录',
@@ -177,86 +190,133 @@ export default function MyselfScreen() {
   }, [safeAvatarUrl]);
 
   // 加载用户资料
-  const loadProfile = useCallback(async () => {
-    if (!user?.id) return;
+  const loadProfile = useCallback((): Promise<void> => {
+    const userId = user?.id;
+    if (!userId) return Promise.resolve();
+    if (profileInFlightRef.current?.userId === userId) {
+      return profileInFlightRef.current.promise;
+    }
+
     setLoading(true);
     setProfileError('');
-    try {
-      const fetchedProfile = await usersService.getUser(user.id);
-      setProfile(fetchedProfile);
-      if (fetchedProfile.stats) {
-        setStats(fetchedProfile.stats);
-      } else {
-        setStats(null);
-      }
-    } catch (error) {
-      setProfileError(error instanceof Error ? error.message : '加载个人资料失败，请稍后重试');
-      if (__DEV__) console.warn('Load profile failed:', error);
-    } finally {
-      setLoading(false);
-    }
+    const promise = usersService.getUser(userId)
+      .then((fetchedProfile) => {
+        if (currentUserRef.current?.id !== userId) return;
+        currentProfileRef.current = fetchedProfile;
+        setProfile(fetchedProfile);
+        setStats(fetchedProfile.stats ?? null);
+      })
+      .catch((error) => {
+        if (currentUserRef.current?.id !== userId) return;
+        setProfileError(error instanceof Error ? error.message : '加载个人资料失败，请稍后重试');
+        if (__DEV__) console.warn('Load profile failed:', error);
+      })
+      .finally(() => {
+        if (profileInFlightRef.current?.promise === promise) {
+          profileInFlightRef.current = null;
+          setLoading(false);
+        }
+      });
+
+    profileInFlightRef.current = { userId, promise };
+    return promise;
   }, [user?.id]);
 
   // 加载我的帖子
-  const loadPosts = useCallback(async () => {
-    if (!user?.id) return;
+  const loadPosts = useCallback((): Promise<void> => {
+    const userId = user?.id;
+    if (!userId) return Promise.resolve();
+    if (postsInFlightRef.current?.userId === userId) {
+      return postsInFlightRef.current.promise;
+    }
+
     setPostsLoading(true);
     setPostsError('');
-    try {
-      const res = await usersService.getUserPosts(user.id, { limit: 20 });
-      // 过滤掉不支持的帖子类型（如 companion）
-      const supportedPosts = res.posts.filter((item: any) =>
-        !item.post_type || item.post_type === 'share' || item.post_type === 'seeking'
-      );
-      // 传递当前用户作为作者信息
-      const authorInfo = {
-        id: user.id,
-        name: profile?.name || user.name || '未知用户',
-        avatar_url: profile?.avatar_url || user.avatar_url || undefined,
-      };
-      setPosts(supportedPosts.map((item) => mapUserPostListItemToPost(item, { author: authorInfo })));
-    } catch (error: any) {
-      // 忽略 companion 类型相关的验证错误
-      if (error?.message?.includes('companion') || error?.message?.includes('PostType')) {
-        if (__DEV__) console.warn('后端返回了不支持的帖子类型，已忽略');
-        setPosts([]);
-      } else {
-        setPostsError(error?.message ?? '加载帖子失败，请稍后重试');
-        if (__DEV__) console.warn('Load posts failed:', error);
-      }
-    } finally {
-      setPostsLoading(false);
-    }
-  }, [user?.id, user?.name, user?.avatar_url, profile?.name, profile?.avatar_url]);
+    const promise = usersService.getUserPosts(userId, { limit: 20 })
+      .then(async (res) => {
+        const profileRequest = profileInFlightRef.current;
+        if (profileRequest?.userId === userId) {
+          await profileRequest.promise;
+        }
+        if (currentUserRef.current?.id !== userId) return;
+
+        // 过滤掉不支持的帖子类型（如 companion）
+        const supportedPosts = res.posts.filter((item: any) =>
+          !item.post_type || item.post_type === 'share' || item.post_type === 'seeking'
+        );
+        // 传递当前用户作为作者信息
+        const currentUser = currentUserRef.current;
+        const currentProfile = currentProfileRef.current?.id === userId ? currentProfileRef.current : null;
+        const authorInfo = {
+          id: userId,
+          name: currentProfile?.name || currentUser?.name || '未知用户',
+          avatar_url: currentProfile?.avatar_url || currentUser?.avatar_url || undefined,
+        };
+        setPosts(supportedPosts.map((item) => mapUserPostListItemToPost(item, { author: authorInfo })));
+      })
+      .catch((error: any) => {
+        if (currentUserRef.current?.id !== userId) return;
+        // 忽略 companion 类型相关的验证错误
+        if (error?.message?.includes('companion') || error?.message?.includes('PostType')) {
+          if (__DEV__) console.warn('后端返回了不支持的帖子类型，已忽略');
+          setPosts([]);
+        } else {
+          setPostsError(error?.message ?? '加载帖子失败，请稍后重试');
+          if (__DEV__) console.warn('Load posts failed:', error);
+        }
+      })
+      .finally(() => {
+        if (postsInFlightRef.current?.promise === promise) {
+          postsInFlightRef.current = null;
+          setPostsLoading(false);
+        }
+      });
+
+    postsInFlightRef.current = { userId, promise };
+    return promise;
+  }, [user?.id]);
 
   // 加载收藏的帖子
-  const loadFavorites = useCallback(async () => {
-    if (!user?.id || favoritesInFlightRef.current) return;
-    favoritesInFlightRef.current = true;
+  const loadFavorites = useCallback((): Promise<void> => {
+    const userId = user?.id;
+    if (!userId) return Promise.resolve();
+    if (favoritesInFlightRef.current?.userId === userId) {
+      return favoritesInFlightRef.current.promise;
+    }
+
     setFavoritesLoading(true);
     setFavoritesError('');
-    try {
-      const res = await usersService.getUserFavorites(user.id, { limit: 20 });
-      // 过滤掉不支持的帖子类型（如 companion）
-      const supportedPosts = res.posts.filter((item: any) =>
-        !item.post_type || item.post_type === 'share' || item.post_type === 'seeking'
-      );
-      setFavorites(
-        supportedPosts.map((item) => mapUserPostListItemToPost(item, { forceFavorite: true }))
-      );
-    } catch (error: any) {
-      // 忽略 companion 类型相关的验证错误
-      if (error?.message?.includes('companion') || error?.message?.includes('PostType')) {
-        if (__DEV__) console.warn('后端返回了不支持的帖子类型，已忽略');
-        setFavorites([]);
-      } else {
-        setFavoritesError(error?.message ?? '加载收藏失败，请稍后重试');
-        if (__DEV__) console.warn('Load favorites failed:', error);
-      }
-    } finally {
-      favoritesInFlightRef.current = false;
-      setFavoritesLoading(false);
-    }
+    const promise = usersService.getUserFavorites(userId, { limit: 20 })
+      .then((res) => {
+        if (currentUserRef.current?.id !== userId) return;
+        // 过滤掉不支持的帖子类型（如 companion）
+        const supportedPosts = res.posts.filter((item: any) =>
+          !item.post_type || item.post_type === 'share' || item.post_type === 'seeking'
+        );
+        setFavorites(
+          supportedPosts.map((item) => mapUserPostListItemToPost(item, { forceFavorite: true }))
+        );
+      })
+      .catch((error: any) => {
+        if (currentUserRef.current?.id !== userId) return;
+        // 忽略 companion 类型相关的验证错误
+        if (error?.message?.includes('companion') || error?.message?.includes('PostType')) {
+          if (__DEV__) console.warn('后端返回了不支持的帖子类型，已忽略');
+          setFavorites([]);
+        } else {
+          setFavoritesError(error?.message ?? '加载收藏失败，请稍后重试');
+          if (__DEV__) console.warn('Load favorites failed:', error);
+        }
+      })
+      .finally(() => {
+        if (favoritesInFlightRef.current?.promise === promise) {
+          favoritesInFlightRef.current = null;
+          setFavoritesLoading(false);
+        }
+      });
+
+    favoritesInFlightRef.current = { userId, promise };
+    return promise;
   }, [user?.id]);
 
   // 页面获得焦点时刷新数据
@@ -264,10 +324,10 @@ export default function MyselfScreen() {
     useCallback(() => {
       loadProfile();
       loadPosts();
-      if (activeTab === 'favorites') {
+      if (activeTabRef.current === 'favorites') {
         loadFavorites();
       }
-    }, [loadProfile, loadPosts, loadFavorites, activeTab])
+    }, [loadProfile, loadPosts, loadFavorites])
   );
 
   // 切换到收藏 tab 时加载收藏
