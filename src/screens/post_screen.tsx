@@ -31,6 +31,7 @@ import CanteenPicker from '@/src/components/overlays/center_picker';
 import ImageUploadGrid from '@/src/components/image_upload_grid';
 import ImageViewer from '@/src/components/image_viewer';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useAuth } from '@/src/context/auth_context';
 import { formatCurrentDate } from '@/src/utils/time_format';
 import { WEB_NO_OUTLINE } from '@/src/utils';
@@ -1579,7 +1580,7 @@ export default function PostScreen({
 							<Text style={[styles.previewActionCount, { color: theme.colors.onSurfaceVariant }]}>0</Text>
 						</View>
 						<View style={styles.previewActionBtn}>
-							<Ionicons name="bookmark-outline" size={20} color={theme.colors.onSurfaceVariant} />
+							<FontAwesome5 name="star" size={20} color={theme.colors.onSurfaceVariant} />
 							<Text style={[styles.previewActionCount, { color: theme.colors.onSurfaceVariant }]}>0</Text>
 						</View>
 						<View style={styles.previewActionBtn}>

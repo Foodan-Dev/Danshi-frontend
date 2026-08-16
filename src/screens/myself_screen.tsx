@@ -9,13 +9,14 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { router, type Href, useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Button, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/src/context/auth_context';
 import { useNotifications, formatUnreadCount } from '@/src/context/notifications_context';
 import { usersService } from '@/src/services/users_service';
-import type { UserAggregateStats } from '@/src/models/Stats';
+import type { UserStats } from '@/src/models/User';
 import type { UserProfile } from '@/src/repositories/users_repository';
 import type { Post } from '@/src/models/Post';
 import { ROLES } from '@/src/constants/app';
@@ -143,7 +144,7 @@ export default function MyselfScreen() {
   const horizontalPadding = pickByBreakpoint(bp, { base: 4, sm: 6, md: 12, lg: 16, xl: 20 });
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [stats, setStats] = useState<UserAggregateStats | null>(null);
+  const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('posts');
@@ -186,15 +187,7 @@ export default function MyselfScreen() {
       const fetchedProfile = await usersService.getUser(user.id);
       setProfile(fetchedProfile);
       if (fetchedProfile.stats) {
-        setStats({
-          post_count: fetchedProfile.stats.post_count,
-          follower_count: fetchedProfile.stats.follower_count,
-          following_count: fetchedProfile.stats.following_count,
-          total_likes: 0,
-          total_favorites: 0,
-          total_views: 0,
-          comment_count: 0,
-        });
+        setStats(fetchedProfile.stats);
       } else {
         setStats(null);
       }
@@ -441,8 +434,9 @@ export default function MyselfScreen() {
               style={[styles.tabItem, activeTab === 'favorites' && [styles.tabItemActive, { borderBottomColor: theme.colors.primary }]]}
               onPress={() => setActiveTab('favorites')}
             >
-              <Ionicons
-                name={activeTab === 'favorites' ? 'bookmark' : 'bookmark-outline'}
+              <FontAwesome5
+                name="star"
+                solid={activeTab === 'favorites'}
                 size={20}
                 color={activeTab === 'favorites' ? theme.colors.primary : theme.colors.onSurfaceVariant}
               />
@@ -482,11 +476,11 @@ export default function MyselfScreen() {
             </View>
           ) : currentPosts.length === 0 ? (
             <View style={styles.emptyWrap}>
-              <Ionicons
-                name={activeTab === 'posts' ? 'document-text-outline' : 'bookmark-outline'}
-                size={48}
-                color={theme.colors.outlineVariant}
-              />
+              {activeTab === 'posts' ? (
+                <Ionicons name="document-text-outline" size={48} color={theme.colors.outlineVariant} />
+              ) : (
+                <FontAwesome5 name="star" size={48} color={theme.colors.outlineVariant} />
+              )}
               <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
                 {activeTab === 'posts' ? '还没有发布帖子' : '还没有收藏内容'}
               </Text>
