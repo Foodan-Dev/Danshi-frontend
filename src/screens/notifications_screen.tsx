@@ -10,7 +10,7 @@ import {
 import { Text, useTheme, ActivityIndicator, type MD3Theme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
@@ -21,6 +21,7 @@ import type {
   ListNotificationsResponse,
 } from '@/src/repositories/notifications_repository';
 import { notificationsService } from '@/src/services/notifications_service';
+import { usersService } from '@/src/services/users_service';
 import { NotificationItem } from '@/src/components/notifications/notification_item';
 import { useNotifications } from '@/src/context/notifications_context';
 
@@ -42,6 +43,10 @@ const TABS: Tab[] = [
 
 const PAGE_SIZE = 20;
 const INTERACTION_TYPES: NotificationType[] = ['like_post', 'like_comment', 'comment', 'reply', 'mention'];
+
+const getFollowSenderIds = (items: Notification[]) => (
+  [...new Set(items.filter((item) => item.type === 'follow').map((item) => item.sender.id))]
+);
 
 // ==================== 骨架屏组件 ====================
 
@@ -131,12 +136,20 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [refreshSeq, setRefreshSeq] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [markAllLoading, setMarkAllLoading] = useState(false);
+  const [followStatusByUserId, setFollowStatusByUserId] = useState<Record<string, boolean>>({});
+  const [followLoadingByUserId, setFollowLoadingByUserId] = useState<Record<string, boolean>>({});
   const requestSeqRef = useRef(0);
+  const notificationsRef = useRef<Notification[]>([]);
+  const followStatusRef = useRef<Record<string, boolean>>({});
+  const followStatusRequestsRef = useRef(new Map<string, Promise<boolean>>());
+  const followStatusVersionRef = useRef(new Map<string, number>());
+  const followActionsRef = useRef(new Set<string>());
+
+  notificationsRef.current = notifications;
 
   // 小圆点消失动画
   const dotsOpacity = useRef(new Animated.Value(1)).current;
@@ -158,6 +171,48 @@ export default function NotificationsScreen() {
     }
     return data;
   }, []);
+
+  const updateFollowStatus = useCallback((userId: string, isFollowing: boolean) => {
+    followStatusRef.current = { ...followStatusRef.current, [userId]: isFollowing };
+    setFollowStatusByUserId((prev) => (
+      Object.prototype.hasOwnProperty.call(prev, userId) && prev[userId] === isFollowing
+        ? prev
+        : { ...prev, [userId]: isFollowing }
+    ));
+  }, []);
+
+  const loadFollowStatus = useCallback(async (userId: string, force = false): Promise<boolean> => {
+    if (!force && Object.prototype.hasOwnProperty.call(followStatusRef.current, userId)) {
+      return followStatusRef.current[userId];
+    }
+
+    const pendingRequest = followStatusRequestsRef.current.get(userId);
+    if (pendingRequest) {
+      return pendingRequest;
+    }
+
+    const requestVersion = followStatusVersionRef.current.get(userId) ?? 0;
+    const request = (async () => {
+      try {
+        const profile = await usersService.getUser(userId);
+        const isFollowing = !!profile.is_following;
+        if ((followStatusVersionRef.current.get(userId) ?? 0) === requestVersion) {
+          updateFollowStatus(userId, isFollowing);
+        }
+        return isFollowing;
+      } finally {
+        followStatusRequestsRef.current.delete(userId);
+      }
+    })();
+
+    followStatusRequestsRef.current.set(userId, request);
+    return request;
+  }, [updateFollowStatus]);
+
+  const refreshFollowStatuses = useCallback(async (items: Notification[], force = false) => {
+    const senderIds = getFollowSenderIds(items);
+    await Promise.allSettled(senderIds.map((userId) => loadFollowStatus(userId, force)));
+  }, [loadFollowStatus]);
 
   // 加载通知列表
   const loadNotifications = useCallback(
@@ -200,6 +255,7 @@ export default function NotificationsScreen() {
 
         setHasMore(lastPagination.page < lastPagination.total_pages);
         setPage(lastPagination.page);
+        return collected;
       } catch (err) {
         if (requestSeqRef.current !== requestId) {
           return;
@@ -221,14 +277,26 @@ export default function NotificationsScreen() {
     loadNotifications(activeTab, 1, true).finally(() => setLoading(false));
   }, [activeTab, loadNotifications]);
 
+  useEffect(() => {
+    void refreshFollowStatuses(notifications);
+  }, [notifications, refreshFollowStatuses]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshFollowStatuses(notificationsRef.current, true);
+    }, [refreshFollowStatuses])
+  );
+
   // 下拉刷新
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    setRefreshSeq((prev) => prev + 1);
-    await loadNotifications(activeTab, 1, true);
-    await refreshUnreadCount();
+    const refreshedNotifications = await loadNotifications(activeTab, 1, true);
+    await Promise.all([
+      refreshFollowStatuses(refreshedNotifications ?? [], true),
+      refreshUnreadCount(),
+    ]);
     setRefreshing(false);
-  }, [activeTab, loadNotifications, refreshUnreadCount]);
+  }, [activeTab, loadNotifications, refreshFollowStatuses, refreshUnreadCount]);
 
   // 加载更多
   const handleLoadMore = useCallback(async () => {
@@ -275,6 +343,26 @@ export default function NotificationsScreen() {
     );
   }, []);
 
+  const handleFollowToggle = useCallback(async (userId: string) => {
+    if (followActionsRef.current.has(userId)) return;
+    followActionsRef.current.add(userId);
+    setFollowLoadingByUserId((prev) => ({ ...prev, [userId]: true }));
+
+    try {
+      const isFollowing = await loadFollowStatus(userId);
+      const result = isFollowing
+        ? await usersService.unfollowUser(userId)
+        : await usersService.followUser(userId);
+      followStatusVersionRef.current.set(userId, (followStatusVersionRef.current.get(userId) ?? 0) + 1);
+      updateFollowStatus(userId, result.is_following);
+    } catch (error) {
+      if (__DEV__) console.warn('[NotificationsScreen] Failed to toggle follow:', error);
+    } finally {
+      followActionsRef.current.delete(userId);
+      setFollowLoadingByUserId((prev) => ({ ...prev, [userId]: false }));
+    }
+  }, [loadFollowStatus, updateFollowStatus]);
+
   // Tab 切换
   const handleTabChange = useCallback((tab: TabValue) => {
     if (tab === activeTab) return;
@@ -317,9 +405,15 @@ export default function NotificationsScreen() {
   // 渲染列表项
   const renderItem = useCallback(
     ({ item }: { item: Notification }) => (
-      <NotificationItem notification={item} onReadStateChange={handleReadStateChange} refreshKey={refreshSeq} />
+      <NotificationItem
+        notification={item}
+        onReadStateChange={handleReadStateChange}
+        isFollowing={followStatusByUserId[item.sender.id] ?? false}
+        followLoading={!!followLoadingByUserId[item.sender.id]}
+        onFollowToggle={handleFollowToggle}
+      />
     ),
-    [handleReadStateChange, refreshSeq]
+    [followLoadingByUserId, followStatusByUserId, handleFollowToggle, handleReadStateChange]
   );
 
   // 列表底部
