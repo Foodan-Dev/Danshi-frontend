@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
+import { View, StyleSheet, RefreshControl, Pressable } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { ActivityIndicator, Appbar, Card, Text, useTheme as usePaperTheme, Button, Menu, IconButton, Divider } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -138,6 +139,109 @@ export default function AdminUsersScreen() {
 
   const formatFullDate = (dateStr: string) => formatDate(dateStr, 'full');
 
+  const renderUser = ({ item: listedUser }: { item: AdminUserSummary }) => (
+    <Pressable
+      style={[styles.userTile, { backgroundColor: colors.surfaceContainer }]}
+    >
+      <UserAvatar
+        userId={listedUser.id}
+        name={listedUser.name}
+        avatar_url={listedUser.avatar_url}
+        size={44}
+      />
+
+      <View style={styles.userInfo}>
+        <View style={styles.userNameRow}>
+          <Text style={[styles.userName, { color: pTheme.colors.onSurface }]} numberOfLines={1}>
+            {listedUser.name}
+          </Text>
+          <RoleBadge role={listedUser.role} />
+          {!listedUser.is_active && (
+            <View style={[styles.statusBadge, { backgroundColor: pTheme.colors.errorContainer }]}>
+              <Text style={[styles.statusBadgeText, { color: pTheme.colors.error }]}>已禁用</Text>
+            </View>
+          )}
+        </View>
+
+        <Text style={[styles.userEmail, { color: pTheme.colors.onSurfaceVariant }]} numberOfLines={1}>
+          {listedUser.email}
+        </Text>
+
+        <View style={styles.userMeta}>
+          <Ionicons name="document-text-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
+          <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
+            {listedUser.stats?.post_count || 0}
+          </Text>
+          <Text style={[styles.metaSeparator, { color: pTheme.colors.outline }]}>·</Text>
+          <Ionicons name="people-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
+          <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
+            {listedUser.stats?.follower_count || 0}
+          </Text>
+          <Text style={[styles.metaSeparator, { color: pTheme.colors.outline }]}>·</Text>
+          <Ionicons name="time-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
+          <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
+            {formatFullDate(listedUser.created_at)}
+          </Text>
+        </View>
+      </View>
+
+      <Menu
+        visible={menuVisible === listedUser.id}
+        onDismiss={() => setMenuVisible(null)}
+        anchor={
+          <IconButton
+            icon="dots-vertical"
+            size={18}
+            onPress={() => setMenuVisible(listedUser.id)}
+            style={styles.moreBtn}
+          />
+        }
+      >
+        {canManageRole && (
+          <>
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                void handleUpdateRole(listedUser.id, ROLES.USER);
+              }}
+              title="设为普通用户"
+              leadingIcon="account"
+              disabled={listedUser.role === ROLES.USER}
+            />
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                void handleUpdateRole(listedUser.id, ROLES.ADMIN);
+              }}
+              title="设为管理员"
+              leadingIcon="shield-account"
+              disabled={listedUser.role === ROLES.ADMIN}
+            />
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                void handleUpdateRole(listedUser.id, ROLES.SUPER_ADMIN);
+              }}
+              title="设为超级管理员"
+              leadingIcon="shield-crown"
+              disabled={listedUser.role === ROLES.SUPER_ADMIN}
+            />
+            <Divider />
+          </>
+        )}
+        <Menu.Item
+          onPress={() => {
+            setMenuVisible(null);
+            void handleUpdateStatus(listedUser.id, !listedUser.is_active);
+          }}
+          title={listedUser.is_active ? '禁用用户' : '启用用户'}
+          leadingIcon={listedUser.is_active ? 'account-cancel' : 'account-check'}
+          titleStyle={listedUser.is_active ? { color: pTheme.colors.error } : undefined}
+        />
+      </Menu>
+    </Pressable>
+  );
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
@@ -177,14 +281,17 @@ export default function AdminUsersScreen() {
         <Appbar.Content title="用户管理" />
       </Appbar.Header>
 
-      <ScrollView
-        style={{ backgroundColor: pTheme.colors.background }}
+      <FlashList
+        style={{ flex: 1, backgroundColor: pTheme.colors.background }}
         contentContainerStyle={{
           paddingTop: 12,
           paddingBottom: 24,
           paddingHorizontal: contentHorizontalPadding,
-          gap: 8
         }}
+        data={users}
+        keyExtractor={(listedUser) => listedUser.id}
+        renderItem={renderUser}
+        extraData={{ menuVisible, canManageRole }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -194,31 +301,9 @@ export default function AdminUsersScreen() {
             progressBackgroundColor={pTheme.colors.surface}
           />
         }
-      >
-        {loading && users.length === 0 ? (
-          <Card mode="contained">
-            <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <Text>加载中...</Text>
-            </Card.Content>
-          </Card>
-        ) : loadError && users.length === 0 ? (
-          <Card mode="contained">
-            <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <Text style={{ color: pTheme.colors.error }}>{loadError}</Text>
-              <Button mode="text" onPress={() => void loadUsers()} style={{ marginTop: 8 }}>
-                重试
-              </Button>
-            </Card.Content>
-          </Card>
-        ) : users.length === 0 ? (
-          <Card mode="contained">
-            <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <Ionicons name="people-outline" size={48} color={pTheme.colors.onSurfaceDisabled} />
-              <Text style={{ marginTop: 12, color: pTheme.colors.onSurfaceVariant }}>暂无用户</Text>
-            </Card.Content>
-          </Card>
-        ) : (
-          <>
+        ListHeaderComponent={
+          users.length > 0 && (loadError || actionError) ? (
+            <>
             {loadError ? (
               <Card mode="contained" style={{ marginBottom: 8 }}>
                 <Card.Content>
@@ -233,112 +318,35 @@ export default function AdminUsersScreen() {
                 </Card.Content>
               </Card>
             ) : null}
-            {users.map((u) => (
-              <Pressable
-                key={u.id}
-                style={[styles.userTile, { backgroundColor: colors.surfaceContainer }]}
-              >
-                <UserAvatar
-                  userId={u.id}
-                  name={u.name}
-                  avatar_url={u.avatar_url}
-                  size={44}
-                />
-
-                <View style={styles.userInfo}>
-                  <View style={styles.userNameRow}>
-                    <Text style={[styles.userName, { color: pTheme.colors.onSurface }]} numberOfLines={1}>
-                      {u.name}
-                    </Text>
-                    <RoleBadge role={u.role} />
-                    {!u.is_active && (
-                      <View style={[styles.statusBadge, { backgroundColor: pTheme.colors.errorContainer }]}>
-                        <Text style={[styles.statusBadgeText, { color: pTheme.colors.error }]}>已禁用</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  <Text style={[styles.userEmail, { color: pTheme.colors.onSurfaceVariant }]} numberOfLines={1}>
-                    {u.email}
-                  </Text>
-
-                  <View style={styles.userMeta}>
-                    <Ionicons name="document-text-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
-                    <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
-                      {u.stats?.post_count || 0}
-                    </Text>
-                    <Text style={[styles.metaSeparator, { color: pTheme.colors.outline }]}>·</Text>
-                    <Ionicons name="people-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
-                    <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
-                      {u.stats?.follower_count || 0}
-                    </Text>
-                    <Text style={[styles.metaSeparator, { color: pTheme.colors.outline }]}>·</Text>
-                    <Ionicons name="time-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
-                    <Text style={[styles.metaText, { color: pTheme.colors.onSurfaceVariant }]}>
-                      {formatFullDate(u.created_at)}
-                    </Text>
-                  </View>
-                </View>
-
-                <Menu
-                  visible={menuVisible === u.id}
-                  onDismiss={() => setMenuVisible(null)}
-                  anchor={
-                    <IconButton
-                      icon="dots-vertical"
-                      size={18}
-                      onPress={() => setMenuVisible(u.id)}
-                      style={styles.moreBtn}
-                    />
-                  }
-                >
-                  {canManageRole && (
-                    <>
-                      <Menu.Item
-                        onPress={() => {
-                          setMenuVisible(null);
-                          void handleUpdateRole(u.id, ROLES.USER);
-                        }}
-                        title="设为普通用户"
-                        leadingIcon="account"
-                        disabled={u.role === ROLES.USER}
-                      />
-                      <Menu.Item
-                        onPress={() => {
-                          setMenuVisible(null);
-                          void handleUpdateRole(u.id, ROLES.ADMIN);
-                        }}
-                        title="设为管理员"
-                        leadingIcon="shield-account"
-                        disabled={u.role === ROLES.ADMIN}
-                      />
-                      <Menu.Item
-                        onPress={() => {
-                          setMenuVisible(null);
-                          void handleUpdateRole(u.id, ROLES.SUPER_ADMIN);
-                        }}
-                        title="设为超级管理员"
-                        leadingIcon="shield-crown"
-                        disabled={u.role === ROLES.SUPER_ADMIN}
-                      />
-                      <Divider />
-                    </>
-                  )}
-                  <Menu.Item
-                    onPress={() => {
-                      setMenuVisible(null);
-                      void handleUpdateStatus(u.id, !u.is_active);
-                    }}
-                    title={u.is_active ? '禁用用户' : '启用用户'}
-                    leadingIcon={u.is_active ? 'account-cancel' : 'account-check'}
-                    titleStyle={u.is_active ? { color: pTheme.colors.error } : undefined}
-                  />
-                </Menu>
-              </Pressable>
-            ))}
-          </>
-        )}
-      </ScrollView>
+            </>
+          ) : null
+        }
+        ListEmptyComponent={
+          loading ? (
+            <Card mode="contained">
+              <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Text>加载中...</Text>
+              </Card.Content>
+            </Card>
+          ) : loadError ? (
+            <Card mode="contained">
+              <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Text style={{ color: pTheme.colors.error }}>{loadError}</Text>
+                <Button mode="text" onPress={() => void loadUsers()} style={{ marginTop: 8 }}>
+                  重试
+                </Button>
+              </Card.Content>
+            </Card>
+          ) : (
+            <Card mode="contained">
+              <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Ionicons name="people-outline" size={48} color={pTheme.colors.onSurfaceDisabled} />
+                <Text style={{ marginTop: 12, color: pTheme.colors.onSurfaceVariant }}>暂无用户</Text>
+              </Card.Content>
+            </Card>
+          )
+        }
+      />
     </View>
   );
 }
@@ -351,6 +359,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     gap: 12,
+    marginBottom: 8,
   },
   userInfo: {
     flex: 1,
