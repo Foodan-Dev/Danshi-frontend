@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert, Pressable } from 'react-native';
+import { View, StyleSheet, RefreshControl, Alert, Pressable } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { ActivityIndicator, Appbar, Text, useTheme as usePaperTheme, Button, Card, Menu } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -158,6 +159,87 @@ export default function AdminCommentsScreen() {
     );
   };
 
+  const renderComment = ({ item: comment }: { item: AdminCommentSummary }) => (
+    <View style={dynamicStyles.commentCard}>
+      <View style={styles.headerRow}>
+        <View style={styles.userInfo}>
+          <CachedAvatar
+            uri={(comment.author as any).avatar_url}
+            size={32}
+            backgroundColor={pTheme.colors.surfaceVariant}
+            iconColor={pTheme.colors.onSurfaceVariant}
+            iconSize={16}
+          />
+          <View style={styles.userTextContainer}>
+            <Text style={dynamicStyles.userName}>{comment.author.name}</Text>
+            <Text style={dynamicStyles.userEmail} numberOfLines={1}>
+              {comment.author.email || `ID: ${comment.author.id.slice(0, 8)}...`}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.headerRight}>
+          <Text style={dynamicStyles.timeText}>{formatTime(comment.created_at)}</Text>
+          <Menu
+            visible={menuVisible === comment.id}
+            onDismiss={() => setMenuVisible(null)}
+            anchor={
+              <Pressable
+                style={styles.menuBtn}
+                onPress={() => setMenuVisible(comment.id)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="ellipsis-vertical" size={16} color={pTheme.colors.onSurfaceVariant} />
+              </Pressable>
+            }
+          >
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                router.push(`/post/${comment.post_id}`);
+              }}
+              title="查看帖子"
+              leadingIcon="eye"
+            />
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                confirmDelete(comment.id);
+              }}
+              title="删除"
+              leadingIcon="delete"
+              titleStyle={{ color: pTheme.colors.error }}
+            />
+          </Menu>
+        </View>
+      </View>
+
+      <View style={styles.contentSection}>
+        {comment.parent_id ? (
+          <Text style={dynamicStyles.contentText}>
+            <Text style={{ color: pTheme.colors.onSurfaceVariant }}>回复 </Text>
+            <Text style={dynamicStyles.replyName}>@{(comment as any).parent_author_name || '用户'}</Text>
+            <Text style={{ color: pTheme.colors.onSurfaceVariant }}> : </Text>
+            {comment.content}
+          </Text>
+        ) : (
+          <Text style={dynamicStyles.contentText}>{comment.content}</Text>
+        )}
+      </View>
+
+      <Pressable
+        style={dynamicStyles.sourceCard}
+        onPress={() => router.push(`/post/${comment.post_id}`)}
+      >
+        <Ionicons name="document-text-outline" size={16} color={pTheme.colors.onSurfaceVariant} />
+        <Text style={dynamicStyles.sourceText} numberOfLines={1}>
+          来自帖子: {(comment as any).post_title || '查看原帖...'}
+        </Text>
+        <Ionicons name="chevron-forward" size={14} color={pTheme.colors.outline} />
+      </Pressable>
+    </View>
+  );
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center' }}>
@@ -197,13 +279,17 @@ export default function AdminCommentsScreen() {
         <Appbar.Content title="评论管理" />
       </Appbar.Header>
 
-      <ScrollView
-        style={{ backgroundColor: pTheme.colors.background }}
+      <FlashList
+        style={{ flex: 1, backgroundColor: pTheme.colors.background }}
         contentContainerStyle={{
           paddingTop: 12,
           paddingBottom: 24,
           paddingHorizontal: contentHorizontalPadding,
         }}
+        data={comments}
+        keyExtractor={(comment) => comment.id}
+        renderItem={renderComment}
+        extraData={menuVisible}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -213,31 +299,9 @@ export default function AdminCommentsScreen() {
             progressBackgroundColor={pTheme.colors.surface}
           />
         }
-      >
-        {loading && comments.length === 0 ? (
-          <Card mode="contained">
-            <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <Text>加载中...</Text>
-            </Card.Content>
-          </Card>
-        ) : loadError && comments.length === 0 ? (
-          <Card mode="contained">
-            <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <Text style={{ color: pTheme.colors.error }}>{loadError}</Text>
-              <Button mode="text" onPress={() => void loadComments()} style={{ marginTop: 8 }}>
-                重试
-              </Button>
-            </Card.Content>
-          </Card>
-        ) : comments.length === 0 ? (
-          <Card mode="contained">
-            <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <Ionicons name="chatbox-outline" size={48} color={pTheme.colors.onSurfaceDisabled} />
-              <Text style={{ marginTop: 12, color: pTheme.colors.onSurfaceVariant }}>暂无评论</Text>
-            </Card.Content>
-          </Card>
-        ) : (
-          <>
+        ListHeaderComponent={
+          comments.length > 0 && (loadError || actionError) ? (
+            <>
             {loadError ? (
               <Card mode="contained" style={{ marginBottom: 8 }}>
                 <Card.Content>
@@ -252,91 +316,35 @@ export default function AdminCommentsScreen() {
                 </Card.Content>
               </Card>
             ) : null}
-            {comments.map((comment) => {
-              return (
-                <View key={comment.id} style={dynamicStyles.commentCard}>
-                  <View style={styles.headerRow}>
-                    <View style={styles.userInfo}>
-                      <CachedAvatar
-                        uri={(comment.author as any).avatar_url}
-                        size={32}
-                        backgroundColor={pTheme.colors.surfaceVariant}
-                        iconColor={pTheme.colors.onSurfaceVariant}
-                        iconSize={16}
-                      />
-                      <View style={styles.userTextContainer}>
-                        <Text style={dynamicStyles.userName}>{comment.author.name}</Text>
-                        <Text style={dynamicStyles.userEmail} numberOfLines={1}>
-                          {comment.author.email || `ID: ${comment.author.id.slice(0, 8)}...`}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.headerRight}>
-                      <Text style={dynamicStyles.timeText}>{formatTime(comment.created_at)}</Text>
-                      <Menu
-                        visible={menuVisible === comment.id}
-                        onDismiss={() => setMenuVisible(null)}
-                        anchor={
-                          <Pressable
-                            style={styles.menuBtn}
-                            onPress={() => setMenuVisible(comment.id)}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          >
-                            <Ionicons name="ellipsis-vertical" size={16} color={pTheme.colors.onSurfaceVariant} />
-                          </Pressable>
-                        }
-                      >
-                        <Menu.Item
-                          onPress={() => {
-                            setMenuVisible(null);
-                            router.push(`/post/${comment.post_id}`);
-                          }}
-                          title="查看帖子"
-                          leadingIcon="eye"
-                        />
-                        <Menu.Item
-                          onPress={() => {
-                            setMenuVisible(null);
-                            confirmDelete(comment.id);
-                          }}
-                          title="删除"
-                          leadingIcon="delete"
-                          titleStyle={{ color: pTheme.colors.error }}
-                        />
-                      </Menu>
-                    </View>
-                  </View>
-
-                  <View style={styles.contentSection}>
-                    {comment.parent_id ? (
-                      <Text style={dynamicStyles.contentText}>
-                        <Text style={{ color: pTheme.colors.onSurfaceVariant }}>回复 </Text>
-                        <Text style={dynamicStyles.replyName}>@{(comment as any).parent_author_name || '用户'}</Text>
-                        <Text style={{ color: pTheme.colors.onSurfaceVariant }}> : </Text>
-                        {comment.content}
-                      </Text>
-                    ) : (
-                      <Text style={dynamicStyles.contentText}>{comment.content}</Text>
-                    )}
-                  </View>
-
-                  <Pressable
-                    style={dynamicStyles.sourceCard}
-                    onPress={() => router.push(`/post/${comment.post_id}`)}
-                  >
-                    <Ionicons name="document-text-outline" size={16} color={pTheme.colors.onSurfaceVariant} />
-                    <Text style={dynamicStyles.sourceText} numberOfLines={1}>
-                      来自帖子: {(comment as any).post_title || '查看原帖...'}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={14} color={pTheme.colors.outline} />
-                  </Pressable>
-                </View>
-              );
-            })}
-          </>
-        )}
-      </ScrollView>
+            </>
+          ) : null
+        }
+        ListEmptyComponent={
+          loading ? (
+            <Card mode="contained">
+              <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Text>加载中...</Text>
+              </Card.Content>
+            </Card>
+          ) : loadError ? (
+            <Card mode="contained">
+              <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Text style={{ color: pTheme.colors.error }}>{loadError}</Text>
+                <Button mode="text" onPress={() => void loadComments()} style={{ marginTop: 8 }}>
+                  重试
+                </Button>
+              </Card.Content>
+            </Card>
+          ) : (
+            <Card mode="contained">
+              <Card.Content style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Ionicons name="chatbox-outline" size={48} color={pTheme.colors.onSurfaceDisabled} />
+                <Text style={{ marginTop: 12, color: pTheme.colors.onSurfaceVariant }}>暂无评论</Text>
+              </Card.Content>
+            </Card>
+          )
+        }
+      />
     </View>
   );
 }
