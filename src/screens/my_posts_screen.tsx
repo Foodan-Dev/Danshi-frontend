@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, RefreshControl, ScrollView } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { ActivityIndicator, Appbar, Text, useTheme as usePaperTheme, Chip, FAB, Dialog, Portal, Button } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
@@ -8,11 +9,9 @@ import { useAuth } from '@/src/context/auth_context';
 import { usersService } from '@/src/services/users_service';
 import { postsService } from '@/src/services/posts_service';
 import { AppError } from '@/src/lib/errors/app_error';
-import { Masonry } from '@/src/components/md3/masonry';
-import { useWaterfallSettings } from '@/src/context/waterfall_context';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
-import { PostCard, estimatePostCardHeight } from '@/src/components/post_card';
+import { PostCard } from '@/src/components/post_card';
 import type { UserPostListItem } from '@/src/repositories/users_repository';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
 
@@ -32,12 +31,12 @@ export const MyPostsScreen: React.FC = () => {
   // 本页会隐藏 TabBar，因此只按安全区预留底部空间
   const bottomContentPadding = useMemo(() => insets.bottom + 24, [insets.bottom]);
 
-  const { minHeight, maxHeight } = useWaterfallSettings();
   const bp = useBreakpoint();
   // 与探索界面保持一致的响应式间距
   const gap = pickByBreakpoint(bp, { base: 4, sm: 6, md: 10, lg: 14, xl: 16 });
   const verticalGap = pickByBreakpoint(bp, { base: 4, sm: 6, md: 10, lg: 14, xl: 16 });
   const horizontalPadding = pickByBreakpoint(bp, { base: 4, sm: 6, md: 12, lg: 16, xl: 20 });
+  const numColumns = pickByBreakpoint(bp, { base: 2, md: 2, lg: 3, xl: 4 });
 
   const loadPosts = useCallback(
     async (isRefresh = false) => {
@@ -91,14 +90,6 @@ export const MyPostsScreen: React.FC = () => {
       }
       void loadPosts();
     }, [loadPosts, user?.id])
-  );
-
-  const estimateHeight = useCallback(
-    (item: UserPostListItem) => {
-      const post = mapUserPostListItemToPost(item);
-      return estimatePostCardHeight(post, minHeight, maxHeight);
-    },
-    [maxHeight, minHeight]
   );
 
   const handlePostPress = useCallback(
@@ -155,50 +146,52 @@ export const MyPostsScreen: React.FC = () => {
   const content = useMemo(() => posts, [posts]);
 
   const renderPostCard = useCallback(
-    (item: UserPostListItem) => {
+    ({ item }: { item: UserPostListItem }) => {
       const post = mapUserPostListItemToPost(item);
       return (
-        <PostCard
-          post={post}
-          onPress={handlePostPress}
-          appearance="flat"
-          showActions={true}
-          onEdit={handleEditPost}
-          onDelete={handleDeletePost}
-          footer={
-            item.status && item.status !== 'approved' ? (
-              <View style={styles.statusFooter}>
-                <Chip
-                  compact
-                  style={[
-                    styles.statusChip,
-                    {
-                      backgroundColor:
+        <View style={{ marginHorizontal: gap / 2, marginBottom: verticalGap }}>
+          <PostCard
+            post={post}
+            onPress={handlePostPress}
+            appearance="flat"
+            showActions={true}
+            onEdit={handleEditPost}
+            onDelete={handleDeletePost}
+            footer={
+              item.status && item.status !== 'approved' ? (
+                <View style={styles.statusFooter}>
+                  <Chip
+                    compact
+                    style={[
+                      styles.statusChip,
+                      {
+                        backgroundColor:
+                          item.status === 'pending'
+                            ? theme.colors.secondaryContainer
+                            : item.status === 'rejected'
+                            ? theme.colors.errorContainer
+                            : theme.colors.surfaceVariant,
+                      },
+                    ]}
+                    textStyle={{
+                      color:
                         item.status === 'pending'
-                          ? theme.colors.secondaryContainer
+                          ? theme.colors.onSecondaryContainer
                           : item.status === 'rejected'
-                          ? theme.colors.errorContainer
-                          : theme.colors.surfaceVariant,
-                    },
-                  ]}
-                  textStyle={{
-                    color:
-                      item.status === 'pending'
-                        ? theme.colors.onSecondaryContainer
-                        : item.status === 'rejected'
-                        ? theme.colors.onErrorContainer
-                        : theme.colors.onSurfaceVariant,
-                  }}
-                >
-                  {item.status === 'pending' ? '审核中' : item.status === 'rejected' ? '未通过' : '草稿'}
-                </Chip>
-              </View>
-            ) : null
-          }
-        />
+                          ? theme.colors.onErrorContainer
+                          : theme.colors.onSurfaceVariant,
+                    }}
+                  >
+                    {item.status === 'pending' ? '审核中' : item.status === 'rejected' ? '未通过' : '草稿'}
+                  </Chip>
+                </View>
+              ) : null
+            }
+          />
+        </View>
       );
     },
-    [handlePostPress, handleEditPost, handleDeletePost, theme]
+    [gap, handlePostPress, handleEditPost, handleDeletePost, theme, verticalGap]
   );
 
   const handleBack = useCallback(() => {
@@ -273,8 +266,14 @@ export const MyPostsScreen: React.FC = () => {
           </Text>
         </ScrollView>
       ) : (
-        <ScrollView
+        <FlashList
           contentContainerStyle={{ paddingHorizontal: horizontalPadding, paddingTop: 12, paddingBottom: bottomContentPadding }}
+          data={content}
+          masonry
+          optimizeItemArrangement={false}
+          numColumns={numColumns}
+          keyExtractor={(item) => item.id}
+          renderItem={renderPostCard}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -286,17 +285,7 @@ export const MyPostsScreen: React.FC = () => {
             />
           }
           showsVerticalScrollIndicator={false}
-        >
-          <Masonry<UserPostListItem>
-            data={content}
-            columns={{ base: 2, md: 2, lg: 3, xl: 4 }}
-            getItemHeight={estimateHeight}
-            renderItem={renderPostCard}
-            keyExtractor={(item) => item.id}
-            gap={gap}
-            verticalGap={verticalGap}
-          />
-        </ScrollView>
+        />
       )}
       {error ? (
         <View style={[styles.errorContainer, { bottom: insets.bottom + 16 }]}

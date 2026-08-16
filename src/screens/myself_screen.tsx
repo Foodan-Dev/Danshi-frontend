@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
   RefreshControl,
   useWindowDimensions,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { router, type Href, useFocusEffect } from 'expo-router';
@@ -20,9 +20,7 @@ import type { UserStats } from '@/src/models/User';
 import type { UserProfile } from '@/src/repositories/users_repository';
 import type { Post } from '@/src/models/Post';
 import { ROLES } from '@/src/constants/app';
-import { Masonry } from '@/src/components/md3/masonry';
-import { PostCard, estimatePostCardHeight } from '@/src/components/post_card';
-import { useWaterfallSettings } from '@/src/context/waterfall_context';
+import { PostCard } from '@/src/components/post_card';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { breakpoints, pickByBreakpoint } from '@/src/constants/breakpoints';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
@@ -132,7 +130,6 @@ export default function MyselfScreen() {
   const { unreadCount } = useNotifications();
   const insets = useSafeAreaInsets();
   const theme = usePaperTheme();
-  const { minHeight, maxHeight } = useWaterfallSettings();
   const { width: windowWidth } = useWindowDimensions();
   const tabBarHeight = windowWidth >= breakpoints.md ? 0 : 56 + Math.max(insets.bottom, 12);
   const bottomContentPadding = useMemo(() => tabBarHeight + 24, [tabBarHeight]);
@@ -142,6 +139,7 @@ export default function MyselfScreen() {
   const gap = pickByBreakpoint(bp, { base: 4, sm: 6, md: 10, lg: 14, xl: 16 });
   const verticalGap = pickByBreakpoint(bp, { base: 4, sm: 6, md: 10, lg: 14, xl: 16 });
   const horizontalPadding = pickByBreakpoint(bp, { base: 4, sm: 6, md: 12, lg: 16, xl: 20 });
+  const numColumns = pickByBreakpoint(bp, { base: 2, md: 2, lg: 3, xl: 4 });
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -289,25 +287,36 @@ export default function MyselfScreen() {
     router.push({ pathname: '/post/[postId]', params: { postId } });
   }, []);
 
-  const estimateHeight = useCallback(
-    (post: Post) => estimatePostCardHeight(post, minHeight, maxHeight),
-    [minHeight, maxHeight]
-  );
-
   const currentPosts = activeTab === 'posts' ? posts : favorites;
   const currentLoading = activeTab === 'posts' ? postsLoading : favoritesLoading;
   const currentError = activeTab === 'posts' ? postsError : favoritesError;
 
+  const renderPost = useCallback(
+    ({ item }: { item: Post }) => (
+      <View style={{ marginHorizontal: gap / 2, marginBottom: verticalGap }}>
+        <PostCard post={item} onPress={handlePostPress} />
+      </View>
+    ),
+    [gap, handlePostPress, verticalGap]
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView
+      <FlashList
         style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: bottomContentPadding }}
+        contentContainerStyle={{ paddingHorizontal: horizontalPadding, paddingBottom: bottomContentPadding }}
+        data={currentLoading ? [] : currentPosts}
+        masonry
+        optimizeItemArrangement={false}
+        numColumns={numColumns}
+        keyExtractor={(item) => item.id}
+        renderItem={renderPost}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[theme.colors.primary]} tintColor={theme.colors.primary} progressBackgroundColor={theme.colors.surface} progressViewOffset={0} />
         }
-      >
+        ListHeaderComponent={
+          <View style={{ marginHorizontal: -horizontalPadding }}>
         {/* ==================== 顶部操作栏 ==================== */}
         <View style={[styles.headerBar, { paddingTop: insets.top + 8, backgroundColor: theme.colors.surface }]}>
           <Text style={[styles.headerTitle, { color: theme.colors.onSurface }]}>个人中心</Text>
@@ -447,9 +456,18 @@ export default function MyselfScreen() {
           </View>
         </View>
 
-        {/* ==================== 内容列表 ==================== */}
-        <View style={[styles.contentSection, { backgroundColor: theme.colors.surface }]}>
-          {currentLoading ? (
+            {/* ==================== 内容列表 ==================== */}
+            {currentError && currentPosts.length > 0 ? (
+              <View style={[styles.errorBanner, { backgroundColor: theme.colors.errorContainer, marginHorizontal: horizontalPadding, marginVertical: 12 }]}>
+                <Text style={{ color: theme.colors.error }}>{currentError}</Text>
+              </View>
+            ) : null}
+            {currentPosts.length > 0 ? <View style={styles.listTopSpacing} /> : null}
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={[styles.contentSection, { backgroundColor: theme.colors.surface, marginHorizontal: -horizontalPadding }]}>
+            {currentLoading ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator size="small" color={theme.colors.primary} />
               <Text style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>加载中...</Text>
@@ -493,26 +511,10 @@ export default function MyselfScreen() {
                 </Pressable>
               )}
             </View>
-          ) : (
-            <View style={[styles.postsGrid, { paddingHorizontal: horizontalPadding }]}>
-              {currentError ? (
-                <View style={[styles.errorBanner, { backgroundColor: theme.colors.errorContainer, marginBottom: 12 }]}>
-                  <Text style={{ color: theme.colors.error }}>{currentError}</Text>
-                </View>
-              ) : null}
-              <Masonry
-                data={currentPosts}
-                columns={{ base: 2, md: 2, lg: 3, xl: 4 }}
-                gap={gap}
-                verticalGap={verticalGap}
-                getItemHeight={estimateHeight}
-                keyExtractor={(item) => item.id}
-                renderItem={(item) => <PostCard post={item} onPress={handlePostPress} />}
-              />
-            </View>
-          )}
-        </View>
-      </ScrollView>
+            ) : null}
+          </View>
+        }
+      />
     </View>
   );
 }
@@ -722,8 +724,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  postsGrid: {
-    paddingBottom: 8,
+  listTopSpacing: {
+    height: 16,
   },
 
   // ==================== User Name Row (with Badge) ====================
