@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
@@ -24,6 +24,7 @@ import {
   type SuggestionStatus,
 } from '@/src/services/dictionary_suggestions_service';
 import { formatDate } from '@/src/utils/time_format';
+import { configService, type CanteenConfig } from '@/src/services/config_service';
 
 const KIND_OPTIONS: { value: SuggestionKind; label: string }[] = [
   { value: 'flavor', label: '口味' },
@@ -54,7 +55,8 @@ export default function DictionarySuggestionsScreen() {
   const [kind, setKind] = useState<SuggestionKind>('flavor');
   const [stance, setStance] = useState<FlavorStance>('has');
   const [name, setName] = useState('');
-  const [parentCanteenId, setParentCanteenId] = useState<number | null>(null);
+  const [canteens, setCanteens] = useState<CanteenConfig[]>([]);
+  const [parentCanteenCode, setParentCanteenCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -66,8 +68,12 @@ export default function DictionarySuggestionsScreen() {
     else setLoading(true);
     setError(null);
     try {
-      const result = await dictionarySuggestionsService.mine();
+      const [result, configuredCanteens] = await Promise.all([
+        dictionarySuggestionsService.mine(),
+        configService.getCanteens(refresh),
+      ]);
       setSuggestions(result.suggestions);
+      setCanteens(configuredCanteens);
     } catch (caught: unknown) {
       setError(AppError.from(caught, '读取建议失败').message);
     } finally {
@@ -80,13 +86,6 @@ export default function DictionarySuggestionsScreen() {
     void load();
   }, [load]);
 
-  const approvedCanteens = useMemo(
-    () => suggestions.filter(
-      (item) => item.kind === 'canteen' && item.status === 'approved' && item.resultingCanteenId !== null,
-    ),
-    [suggestions],
-  );
-
   const submit = useCallback(async () => {
     setSubmitting(true);
     setError(null);
@@ -96,7 +95,7 @@ export default function DictionarySuggestionsScreen() {
         kind,
         proposedName: name,
         flavorStance: kind === 'flavor' ? stance : undefined,
-        parentCanteenId: kind === 'canteen_window' ? parentCanteenId ?? undefined : undefined,
+        parentCanteenCode: kind === 'canteen_window' ? parentCanteenCode ?? undefined : undefined,
       });
       setSuggestions((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setName('');
@@ -106,7 +105,7 @@ export default function DictionarySuggestionsScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [kind, name, parentCanteenId, stance]);
+  }, [kind, name, parentCanteenCode, stance]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -171,21 +170,21 @@ export default function DictionarySuggestionsScreen() {
             {kind === 'canteen_window' ? (
               <View style={styles.fieldGroup}>
                 <Text variant="labelLarge">所属食堂</Text>
-                {approvedCanteens.length ? (
+                {canteens.length ? (
                   <View style={styles.chips}>
-                    {approvedCanteens.map((item) => (
+                    {canteens.map((item) => (
                       <Chip
-                        key={item.id}
-                        selected={parentCanteenId === item.resultingCanteenId}
-                        onPress={() => setParentCanteenId(item.resultingCanteenId)}
+                        key={item.code}
+                        selected={parentCanteenCode === item.code}
+                        onPress={() => setParentCanteenCode(item.code)}
                       >
-                        {item.proposedName}
+                        {item.name}
                       </Chip>
                     ))}
                   </View>
                 ) : (
                   <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    当前接口只提供数字食堂 ID。请先提交食堂建议并等待通过，再为该食堂建议窗口。
+                    暂无可选食堂，请稍后刷新配置。
                   </Text>
                 )}
               </View>
@@ -195,7 +194,7 @@ export default function DictionarySuggestionsScreen() {
             <Button
               mode="contained"
               loading={submitting}
-              disabled={submitting || !name.trim() || (kind === 'canteen_window' && !parentCanteenId)}
+              disabled={submitting || !name.trim() || (kind === 'canteen_window' && !parentCanteenCode)}
               onPress={() => void submit()}
             >
               提交建议

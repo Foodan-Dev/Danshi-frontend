@@ -5,7 +5,15 @@ import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import type { User, Gender, UserStats } from '@/src/models/User';
 import type { Post } from '@/src/models/Post';
 import { API_ENDPOINTS } from '@/src/constants/app';
-import { requireNumber, requireString, toPagination, toPost } from '@/src/repositories/api_mappers';
+import {
+  requireNumber,
+  requireString,
+  toCursorPagination,
+  toPagination,
+  toPost,
+  type CursorPagination,
+} from '@/src/repositories/api_mappers';
+import { normalizeRoles, primaryRole } from '@/src/lib/auth/roles';
 
 const appendQueryParam = (qs: URLSearchParams, key: string, value: unknown) => {
   if (value == null) return;
@@ -17,9 +25,10 @@ const appendQueryParam = (qs: URLSearchParams, key: string, value: unknown) => {
   qs.set(key, String(value));
 };
 
-export type UserProfile = Omit<User, 'email' | 'role' | 'stats' | 'created_at'> & {
+export type UserProfile = Omit<User, 'email' | 'role' | 'roles' | 'stats' | 'created_at'> & {
   email?: string | null;
   role?: User['role'] | null;
+  roles: User['roles'];
   stats: UserStats;
   is_following: boolean;
   created_at: string;
@@ -42,7 +51,7 @@ export type UserPostListItem = Post;
 export type UserPostListResponse = { posts: UserPostListItem[]; pagination: Pagination };
 export type UserFavoriteListParams = { page?: number; limit?: number };
 export type UserFavoriteListResponse = UserPostListResponse;
-export type UserFollowListParams = { page?: number; limit?: number };
+export type UserFollowListParams = { cursor?: string; limit?: number };
 
 export type FollowUserItem = {
   id: number;
@@ -53,7 +62,7 @@ export type FollowUserItem = {
   is_following?: boolean;
 };
 
-export type UserFollowListResponse = { users: FollowUserItem[]; pagination: Pagination };
+export type UserFollowListResponse = { users: FollowUserItem[]; pagination: CursorPagination };
 export type FollowActionResponse = { is_following: boolean; follower_count: number };
 
 export type UpdateUserInput = {
@@ -72,9 +81,7 @@ const toUserStats = (stats: components['schemas']['UserStats'] | undefined): Use
 });
 
 const toUserProfile = (profile: components['schemas']['UserProfile']): UserProfile => {
-  const role = profile.role === 'user' || profile.role === 'admin' || profile.role === 'super_admin'
-    ? profile.role
-    : null;
+  const roles = normalizeRoles(profile.roles);
   const gender = profile.gender === 'male' || profile.gender === 'female' || profile.gender === 'other'
     ? profile.gender
     : null;
@@ -82,7 +89,8 @@ const toUserProfile = (profile: components['schemas']['UserProfile']): UserProfi
     id: requireNumber(profile.id, '用户 ID'),
     name: requireString(profile.name, '用户名称'),
     email: profile.email ?? null,
-    role,
+    role: primaryRole(roles),
+    roles,
     gender,
     avatar_url: profile.avatar_url ?? null,
     bio: profile.bio ?? null,
@@ -178,7 +186,7 @@ export class ApiUsersRepository implements UsersRepository {
     const data = unwrapApiResponse(res);
     return {
       users: (data.users ?? []).map(toFollowUser),
-      pagination: toPagination(data.pagination),
+      pagination: toCursorPagination(data.pagination),
     };
   }
 

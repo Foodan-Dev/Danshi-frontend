@@ -63,11 +63,13 @@ const RoleBadge: React.FC<RoleBadgeProps> = ({ role }) => {
       </LinearGradient>
     );
   }
-  if (normalized === 'admin') {
+  if (normalized === 'moderator' || normalized === 'dict_reviewer') {
     return (
       <View style={[styles.adminBadge, { backgroundColor: theme.colors.primaryContainer, borderColor: theme.colors.primary }]}>
         <Ionicons name="shield" size={12} color={theme.colors.primary} />
-        <Text style={[styles.adminBadgeText, { color: theme.colors.primary }]}>管理员</Text>
+        <Text style={[styles.adminBadgeText, { color: theme.colors.primary }]}>
+          {normalized === 'dict_reviewer' ? '词条审核员' : '内容管理员'}
+        </Text>
       </View>
     );
   }
@@ -82,7 +84,7 @@ type AdminConsoleCardProps = {
 const AdminConsoleCard: React.FC<AdminConsoleCardProps> = ({ role }) => {
   const theme = usePaperTheme();
   const normalized = String(role).toLowerCase();
-  const userIsAdmin = normalized === 'admin' || normalized === 'super_admin';
+  const userIsAdmin = normalized === 'moderator' || normalized === 'dict_reviewer' || normalized === 'super_admin';
   
   if (!userIsAdmin) return null;
   

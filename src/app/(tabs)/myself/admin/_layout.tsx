@@ -7,7 +7,7 @@ export default function AdminLayout() {
 
   if (isLoading) return null;
   if (!userToken) return <Redirect href="/login" />;
-  if (!user || !isAdmin(user.role)) return <Redirect href="/(tabs)/myself" />;
+  if (!user || !isAdmin(user.roles)) return <Redirect href="/(tabs)/myself" />;
 
   return (
     <Stack screenOptions={{ headerShown: false, animation: 'none' }}>

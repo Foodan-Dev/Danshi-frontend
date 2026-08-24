@@ -35,7 +35,7 @@ export type CommentActionItem = {
 
 type UsePostCommentsParams = {
   postId: number;
-  currentUser: { id: number; role?: string } | null;
+  currentUser: { id: number } | null;
   /** 调用者用此回调更新 post.stats.comment_count */
   onCommentCountChange: (delta: number) => void;
 };
@@ -45,10 +45,9 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentSort, setCommentSort] = useState<'latest' | 'hot'>('latest');
   const [commentPagination, setCommentPagination] = useState<CommentsPagination>({
-    page: 1,
     limit: 10,
-    total: 0,
-    total_pages: 1,
+    next_cursor: null,
+    has_more: false,
   });
   const [commentLoading, setCommentLoading] = useState(false);
   const [commentSubmitting, setCommentSubmitting] = useState(false);
@@ -72,7 +71,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
   const commentsRef = useRef<Comment[]>(comments);
   const commentRepliesRef = useRef<Record<string, CommentReply[]>>(commentReplies);
   const threadRootCommentRef = useRef<Comment | null>(threadRootComment);
-  const fetchRepliesForCommentRef = useRef<(commentId: number, page?: number, append?: boolean) => Promise<void>>(
+  const fetchRepliesForCommentRef = useRef<(commentId: number, cursor?: string, append?: boolean) => Promise<void>>(
     async () => {}
   );
 
@@ -148,15 +147,15 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
     }
   }, []);
 
-  const fetchRepliesForComment = useCallback(async (commentId: number, page = 1, append = false) => {
-    const requestKey = `${commentId}:${page}:${append ? 'append' : 'replace'}`;
+  const fetchRepliesForComment = useCallback(async (commentId: number, cursor?: string, append = false) => {
+    const requestKey = `${commentId}:${cursor ?? 'first'}:${append ? 'append' : 'replace'}`;
     if (replyRequestKeysRef.current.has(requestKey)) {
       return;
     }
     replyRequestKeysRef.current.add(requestKey);
     setCommentRepliesLoading((prev) => ({ ...prev, [commentId]: true }));
     try {
-      const res = await commentsService.listReplies(commentId, { limit: 20, page });
+      const res = await commentsService.listReplies(commentId, { limit: 20, cursor });
       const repliesWithParentId = (res.replies ?? []).map((reply) => ({
         ...reply,
         parent_id: commentId,
@@ -443,29 +442,10 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
           parent_id: rootCommentId,
         };
 
-        let updatedReplyLength = 0;
         setCommentReplies((prev) => {
           const prevList = prev[rootCommentId] ?? [];
           const merged = [newReply, ...prevList];
-          updatedReplyLength = merged.length;
           return { ...prev, [rootCommentId]: merged };
-        });
-        setCommentRepliesPagination((prev) => {
-          const prevPagination = prev[rootCommentId];
-          const limit = prevPagination?.limit ?? 20;
-          const total = prevPagination?.total != null
-            ? prevPagination.total + 1
-            : updatedReplyLength;
-          const total_pages = Math.max(1, Math.ceil(total / limit));
-          return {
-            ...prev,
-            [rootCommentId]: {
-              page: prevPagination?.page ?? 1,
-              limit,
-              total,
-              total_pages,
-            },
-          };
         });
         setComments((prev) => prev.map((comment) => {
           if (comment.id !== rootCommentId) return comment;
@@ -480,12 +460,6 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
       } else if (!isReply && createdEntity) {
         const newComment = createdEntity as Comment;
         setComments((prev) => [newComment, ...prev]);
-        setCommentPagination((prev) => {
-          const limit = (prev as CommentsPagination).limit ?? 10;
-          const total = (prev.total ?? 0) + 1;
-          const total_pages = Math.max(1, Math.ceil(total / limit));
-          return { ...prev, limit, total, total_pages };
-        });
       }
 
       setCommentInput('');
@@ -545,9 +519,8 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
     if (!threadRootComment) return;
     if (commentRepliesLoading[threadRootComment.id]) return;
     const pagination = commentRepliesPagination[threadRootComment.id];
-    const nextPage = (pagination?.page ?? 1) + 1;
-    if (pagination && nextPage > (pagination.total_pages ?? Infinity)) return;
-    fetchRepliesForComment(threadRootComment.id, nextPage, true).catch(() => {});
+    if (!pagination?.has_more || !pagination.next_cursor) return;
+    fetchRepliesForComment(threadRootComment.id, pagination.next_cursor, true).catch(() => {});
   }, [threadRootComment, commentRepliesLoading, commentRepliesPagination, fetchRepliesForComment]);
 
   const handleReloadThreadReplies = useCallback(() => {
@@ -569,11 +542,11 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
   const threadRepliesList = threadRootComment ? commentReplies[threadRootComment.id] ?? [] : [];
   const threadPaginationInfo = threadRootComment ? commentRepliesPagination[threadRootComment.id] : undefined;
   const threadReplyTotal = Math.max(
-    threadPaginationInfo?.total ?? threadRootComment?.reply_count ?? 0,
+    threadRootComment?.reply_count ?? 0,
     threadRepliesList.length,
   );
   const threadLoading = threadRootComment ? !!commentRepliesLoading[threadRootComment.id] : false;
-  const threadHasMore = threadReplyTotal > threadRepliesList.length;
+  const threadHasMore = threadPaginationInfo?.has_more ?? threadReplyTotal > threadRepliesList.length;
 
   return {
     // State

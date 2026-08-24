@@ -10,16 +10,16 @@ import type {
   CommentSort,
   CreateCommentInput,
 } from '@/src/models/Comment';
-import { toComment, toPagination } from '@/src/repositories/api_mappers';
+import { toComment, toCursorPagination } from '@/src/repositories/api_mappers';
 
 export type CommentListParams = {
-  page?: number;
+  cursor?: string;
   limit?: number;
   sortBy?: CommentSort;
 };
 
 export type CommentRepliesParams = {
-  page?: number;
+  cursor?: string;
   limit?: number;
 };
 
@@ -41,8 +41,8 @@ class ApiCommentsRepository implements CommentsRepository {
     const qs = new URLSearchParams();
     if (!params) return '';
     Object.entries(params).forEach(([key, value]) => {
-      if (value == null || !['page', 'limit', 'sortBy'].includes(key)) return;
-      qs.append(key, String(value));
+      if (value == null || !['cursor', 'limit', 'sortBy'].includes(key)) return;
+      qs.append(key === 'sortBy' ? 'sort_by' : key, String(value));
     });
     return qs.size ? `?${qs.toString()}` : '';
   }
@@ -55,7 +55,7 @@ class ApiCommentsRepository implements CommentsRepository {
     const data = unwrapApiResponse(resp);
     return {
       comments: (data.comments ?? []).map(toComment),
-      pagination: toPagination(data.pagination),
+      pagination: toCursorPagination(data.pagination),
     };
   }
 
@@ -67,7 +67,7 @@ class ApiCommentsRepository implements CommentsRepository {
     const data = unwrapApiResponse(resp);
     return {
       replies: (data.replies ?? []).map(toComment),
-      pagination: toPagination(data.pagination),
+      pagination: toCursorPagination(data.pagination),
     };
   }
 

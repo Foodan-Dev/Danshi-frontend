@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { useAuth } from '@/src/context/auth_context';
-import { isAdmin } from '@/src/lib/auth/roles';
+import { canReviewContent } from '@/src/lib/auth/roles';
 import { adminService } from '@/src/services/admin_service';
 import type { AdminCommentSummary } from '@/src/repositories/admin_repository';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -102,7 +102,7 @@ export default function AdminCommentsScreen() {
   }, []);
 
   const loadComments = useCallback(async (isRefresh = false) => {
-    if (!user || !isAdmin(user.role)) return;
+    if (!user || !canReviewContent(user.roles)) return;
     const requestId = ++requestSeqRef.current;
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -128,7 +128,7 @@ export default function AdminCommentsScreen() {
   }, [user]);
 
   useEffect(() => {
-    if (isLoading || !user || !isAdmin(user.role)) {
+    if (isLoading || !user || !canReviewContent(user.roles)) {
       return;
     }
     void loadComments();
@@ -260,7 +260,7 @@ export default function AdminCommentsScreen() {
     );
   }
 
-  if (!isAdmin(user.role)) {
+  if (!canReviewContent(user.roles)) {
     return (
       <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
         <Text style={{ color: pTheme.colors.onSurface, marginBottom: 8 }}>当前账号没有评论管理权限</Text>

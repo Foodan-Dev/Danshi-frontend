@@ -28,7 +28,7 @@ export type CreateSuggestionInput = {
   kind: SuggestionKind;
   proposedName: string;
   flavorStance?: FlavorStance;
-  parentCanteenId?: number;
+  parentCanteenCode?: string;
   parentSuggestionId?: number;
   postId?: number;
 };
@@ -79,10 +79,9 @@ export const dictionarySuggestionsService = {
     if (proposedName.length > 50) throw new AppError('建议名称不能超过 50 个字');
     if (input.kind === 'flavor' && !input.flavorStance) throw new AppError('请选择口味用途');
     if (input.kind !== 'flavor' && input.flavorStance) throw new AppError('只有口味建议可以选择用途');
-    if (input.kind === 'canteen_window' && !input.parentCanteenId && !input.parentSuggestionId) {
+    if (input.kind === 'canteen_window' && !input.parentCanteenCode && !input.parentSuggestionId) {
       throw new AppError('请选择窗口所属食堂');
     }
-    validateId(input.parentCanteenId, '食堂 ID');
     validateId(input.parentSuggestionId, '上级建议 ID');
     validateId(input.postId, '帖子 ID');
 
@@ -90,7 +89,7 @@ export const dictionarySuggestionsService = {
       kind: input.kind,
       proposed_name: proposedName,
       flavor_stance: input.flavorStance ?? null,
-      parent_canteen_id: input.parentCanteenId ?? null,
+      parent_canteen_code: input.parentCanteenCode?.trim() || null,
       parent_suggestion_id: input.parentSuggestionId ?? null,
       post_id: input.postId ?? null,
     };

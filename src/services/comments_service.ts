@@ -9,13 +9,13 @@ import type { CreateCommentInput, CommentSort } from '@/src/models/Comment';
 
 const MAX_COMMENT_LENGTH = 500;
 
-function sanitizePagination<T extends { page?: number; limit?: number; sortBy?: CommentSort }>(params: T): T {
-  const page = params.page && params.page > 0 ? Math.floor(params.page) : undefined;
+function sanitizePagination<T extends { cursor?: string; limit?: number; sortBy?: CommentSort }>(params: T): T {
+  const cursor = params.cursor?.trim() || undefined;
   const limit = params.limit && params.limit > 0 ? Math.floor(params.limit) : undefined;
   const sortBy = params.sortBy && ['latest', 'hot'].includes(params.sortBy) ? params.sortBy : undefined;
   return {
     ...params,
-    ...(page ? { page } : {}),
+    ...(cursor ? { cursor } : {}),
     ...(limit ? { limit } : {}),
     ...(sortBy ? { sortBy: sortBy as CommentSort } : {}),
   } as T;

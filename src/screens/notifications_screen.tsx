@@ -138,7 +138,7 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(1);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [markAllLoading, setMarkAllLoading] = useState(false);
   const [followStatusByUserId, setFollowStatusByUserId] = useState<Record<number, boolean>>({});
   const [followLoadingByUserId, setFollowLoadingByUserId] = useState<Record<number, boolean>>({});
@@ -216,9 +216,9 @@ export default function NotificationsScreen() {
 
   // 加载通知列表
   const loadNotifications = useCallback(
-    async (tab: TabValue, pageNum: number, isRefresh = false) => {
+    async (tab: TabValue, cursor: string | null, isRefresh = false) => {
       const requestId = ++requestSeqRef.current;
-      let currentPage = pageNum;
+      let currentCursor = cursor;
       let lastPagination: ListNotificationsResponse['pagination'] | null = null;
       let collected: Notification[] = [];
 
@@ -226,7 +226,7 @@ export default function NotificationsScreen() {
         setError(null);
         while (true) {
           const params: ListNotificationsParams = {
-            page: currentPage,
+            cursor: currentCursor ?? undefined,
             limit: PAGE_SIZE,
             type: getCurrentTypeFilter(tab),
           };
@@ -236,25 +236,27 @@ export default function NotificationsScreen() {
           }
           lastPagination = pagination;
           collected = collected.concat(filterNotificationsByTab(tab, data));
-          const reachedPageEnd = pagination.page >= pagination.total_pages;
-          if (tab !== 'interactions' || reachedPageEnd || collected.length >= PAGE_SIZE) {
+          if (tab !== 'interactions' || !pagination.has_more || !pagination.next_cursor || collected.length >= PAGE_SIZE) {
             break;
           }
-          currentPage += 1;
+          currentCursor = pagination.next_cursor;
         }
 
         if (!lastPagination || requestSeqRef.current !== requestId) {
           return;
         }
 
-        if (isRefresh || pageNum === 1) {
+        if (isRefresh || cursor === null) {
           setNotifications(collected);
         } else {
-          setNotifications((prev) => [...prev, ...collected]);
+          setNotifications((prev) => [
+            ...prev,
+            ...collected.filter((item) => !prev.some((existing) => existing.id === item.id)),
+          ]);
         }
 
-        setHasMore(lastPagination.page < lastPagination.total_pages);
-        setPage(lastPagination.page);
+        setHasMore(lastPagination.has_more);
+        setNextCursor(lastPagination.next_cursor);
         return collected;
       } catch (err) {
         if (requestSeqRef.current !== requestId) {
@@ -262,7 +264,7 @@ export default function NotificationsScreen() {
         }
         if (__DEV__) console.warn('[NotificationsScreen] Failed to load notifications:', err);
         // 仅首页加载失败时显示错误状态，加载更多失败不覆盖已有数据
-        if (isRefresh || pageNum === 1) {
+        if (isRefresh || cursor === null) {
           setError((err as Error)?.message || '加载通知失败，请稍后重试');
         }
       }
@@ -273,8 +275,8 @@ export default function NotificationsScreen() {
   // 初始加载
   useEffect(() => {
     setLoading(true);
-    setPage(1);
-    loadNotifications(activeTab, 1, true).finally(() => setLoading(false));
+    setNextCursor(null);
+    loadNotifications(activeTab, null, true).finally(() => setLoading(false));
   }, [activeTab, loadNotifications]);
 
   useEffect(() => {
@@ -290,7 +292,7 @@ export default function NotificationsScreen() {
   // 下拉刷新
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    const refreshedNotifications = await loadNotifications(activeTab, 1, true);
+    const refreshedNotifications = await loadNotifications(activeTab, null, true);
     await Promise.all([
       refreshFollowStatuses(refreshedNotifications ?? [], true),
       refreshUnreadCount(),
@@ -300,11 +302,11 @@ export default function NotificationsScreen() {
 
   // 加载更多
   const handleLoadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    if (loadingMore || !hasMore || !nextCursor) return;
     setLoadingMore(true);
-    await loadNotifications(activeTab, page + 1);
+    await loadNotifications(activeTab, nextCursor);
     setLoadingMore(false);
-  }, [activeTab, loadingMore, hasMore, page, loadNotifications]);
+  }, [activeTab, loadingMore, hasMore, nextCursor, loadNotifications]);
 
   // 全部已读
   const handleMarkAllRead = useCallback(async () => {
@@ -369,7 +371,7 @@ export default function NotificationsScreen() {
     setLoading(true); // 立即显示加载动画，避免闪现空状态
     setActiveTab(tab);
     setNotifications([]);
-    setPage(1);
+    setNextCursor(null);
     setHasMore(true);
   }, [activeTab]);
 
@@ -497,7 +499,7 @@ export default function NotificationsScreen() {
                 style={[styles.emptyButton, { borderColor: theme.colors.primary }]}
                 onPress={() => {
                   setLoading(true);
-                  loadNotifications(activeTab, 1, true).finally(() => setLoading(false));
+                  loadNotifications(activeTab, null, true).finally(() => setLoading(false));
                 }}
               >
                 <Text style={[styles.emptyButtonText, { color: theme.colors.primary }]}>

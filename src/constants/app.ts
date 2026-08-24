@@ -118,12 +118,20 @@ export const API_ENDPOINTS = {
 // Role literals and their order (low -> high privilege)
 export const ROLES = {
   USER: 'user',
-  ADMIN: 'admin',
+  DICT_REVIEWER: 'dict_reviewer',
+  MODERATOR: 'moderator',
+  // 兼容旧界面命名；API v2 的内容管理员角色名为 moderator。
+  ADMIN: 'moderator',
   SUPER_ADMIN: 'super_admin',
 } as const;
 
 export type RoleLiteral = typeof ROLES[keyof typeof ROLES];
-export const ROLE_ORDER: RoleLiteral[] = [ROLES.USER, ROLES.ADMIN, ROLES.SUPER_ADMIN];
+export const ROLE_ORDER: RoleLiteral[] = [
+  ROLES.USER,
+  ROLES.DICT_REVIEWER,
+  ROLES.MODERATOR,
+  ROLES.SUPER_ADMIN,
+];
 
 // Common regex patterns
 export const REGEX = {

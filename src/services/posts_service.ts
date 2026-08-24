@@ -84,9 +84,13 @@ export const postsService = {
       : undefined;
     const cleaned: PostListFilters = {
       sortBy,
-      page: filters.page && filters.page > 0 ? Math.floor(filters.page) : 1,
       limit: filters.limit && filters.limit > 0 ? Math.floor(filters.limit) : 20,
     };
+    if (!sortBy || sortBy === 'latest') {
+      if (filters.cursor?.trim()) cleaned.cursor = filters.cursor.trim();
+    } else {
+      cleaned.page = filters.page && filters.page > 0 ? Math.floor(filters.page) : 1;
+    }
     return postsRepository.list(cleaned);
   },
 

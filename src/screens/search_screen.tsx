@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, ScrollView, Pressable, TextInput as RNTextInput, TextStyle, type StyleProp, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
 import {
   ActivityIndicator,
   Text,
@@ -15,12 +16,11 @@ import { useAuth } from '@/src/context/auth_context';
 import { showAlert } from '@/src/utils/alert';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
-import { PostCard } from '@/src/components/post_card';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WEB_NO_OUTLINE } from '@/src/utils';
 import { CachedAvatar } from '@/src/components/cached_avatar';
-import type { Post } from '@/src/models/Post';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 // 宽屏断点
 const WIDE_BREAKPOINT = 768;
@@ -263,24 +263,53 @@ export default function SearchScreen() {
     ({ item }: { item: SearchPost }) => {
       const snippet = extractMatchSnippet(item.highlight?.content);
       const showSnippet = snippet && !item.highlight?.title;
-      const post: Post = {
-        ...item,
-        post_type: 'seeking',
-        images: item.images ?? [],
-      };
+      const previewImage = getSafeRemoteUrl(item.images[0]);
 
       return (
         <View style={{ marginHorizontal: gridGap / 2, marginBottom: gridVerticalGap }}>
-          <PostCard post={post} onPress={handlePostPress} appearance="flat" />
-          {showSnippet && (
-            <View style={[styles.snippetContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
-              <HighlightedText
-                value={snippet}
-                style={[styles.snippetText, { color: theme.colors.onSurfaceVariant }]}
-                numberOfLines={2}
+          <Pressable
+            style={[styles.searchPostCard, { backgroundColor: theme.colors.surface }]}
+            onPress={() => handlePostPress(item.id)}
+          >
+            {previewImage ? (
+              <Image
+                source={{ uri: previewImage }}
+                style={styles.searchPostImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={`${item.id}:${previewImage}`}
               />
+            ) : null}
+            <View style={styles.searchPostBody}>
+              {item.highlight?.title ? (
+                <HighlightedText
+                  value={item.highlight.title}
+                  style={[styles.searchPostTitle, { color: theme.colors.onSurface }]}
+                  numberOfLines={2}
+                />
+              ) : (
+                <Text style={[styles.searchPostTitle, { color: theme.colors.onSurface }]} numberOfLines={2}>
+                  {item.title}
+                </Text>
+              )}
+              <Text style={[styles.searchPostMeta, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
+                {item.author?.name || '未知作者'} · {item.category === 'food' ? '美食' : '食谱'}
+              </Text>
+              {showSnippet ? (
+                <View style={[styles.snippetContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
+                  <HighlightedText
+                    value={snippet}
+                    style={[styles.snippetText, { color: theme.colors.onSurfaceVariant }]}
+                    numberOfLines={2}
+                  />
+                </View>
+              ) : null}
+              <View style={styles.searchPostStats}>
+                <Text style={{ color: theme.colors.onSurfaceVariant }}>♡ {item.stats.like_count}</Text>
+                <Text style={{ color: theme.colors.onSurfaceVariant }}>评论 {item.stats.comment_count}</Text>
+              </View>
             </View>
-          )}
+          </Pressable>
         </View>
       );
     },

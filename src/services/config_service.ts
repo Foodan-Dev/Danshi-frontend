@@ -67,14 +67,14 @@ const mapCanteen = (item: components['schemas']['CanteenConfig']): CanteenConfig
     code: item.id,
     name: item.name,
     campus: item.campus,
-    isActive: item.is_active ?? false,
+    isActive: true,
     windows: (item.windows ?? []).flatMap((window) => (
       typeof window.id === 'number' && window.name
         ? [{
             id: window.id,
             name: window.name,
             floor: window.floor ?? null,
-            isActive: window.is_active ?? false,
+            isActive: true,
           }]
         : []
     )),

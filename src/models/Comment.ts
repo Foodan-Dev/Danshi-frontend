@@ -36,10 +36,9 @@ export interface Comment extends CommentBase {
 export type CommentEntity = Comment | CommentReply;
 
 export interface CommentsPagination {
-  page: number;
   limit: number;
-  total: number;
-  total_pages: number;
+  next_cursor: string | null;
+  has_more: boolean;
 }
 
 export interface CommentsListResponse {

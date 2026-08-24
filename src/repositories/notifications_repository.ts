@@ -3,7 +3,7 @@ import { AppError } from '@/src/lib/errors/app_error';
 import { httpAuth } from '@/src/lib/http/http_auth';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import { API_ENDPOINTS } from '@/src/constants/app';
-import { requireNumber, requireString, toPagination } from '@/src/repositories/api_mappers';
+import { requireNumber, requireString, toCursorPagination, type CursorPagination } from '@/src/repositories/api_mappers';
 
 export type NotificationType =
   | 'comment'
@@ -33,16 +33,15 @@ export type Notification = {
   created_at: string;
 };
 
-export type Pagination = { page: number; limit: number; total: number; total_pages: number };
 export type ListNotificationsParams = {
-  page?: number;
+  cursor?: string;
   limit?: number;
   is_read?: boolean;
   type?: NotificationType;
 };
 export type ListNotificationsResponse = {
   notifications: Notification[];
-  pagination: Pagination;
+  pagination: CursorPagination;
   unread_count: number;
 };
 export type UnreadCountResponse = { unread_count: number };
@@ -94,7 +93,7 @@ export class ApiNotificationsRepository implements NotificationsRepository {
     const data = unwrapApiResponse(res);
     return {
       notifications: (data.notifications ?? []).map(toNotification),
-      pagination: toPagination(data.pagination),
+      pagination: toCursorPagination(data.pagination),
       unread_count: data.unread_count ?? 0,
     };
   }

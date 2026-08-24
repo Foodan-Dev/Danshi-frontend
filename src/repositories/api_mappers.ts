@@ -6,6 +6,7 @@ import type { Post, PostAuthor, PostCanteen, PostCanteenWindow } from '@/src/mod
 type PostContract = components['schemas']['PostListItem'] | components['schemas']['PostDetail'];
 type CommentContract = components['schemas']['CommentItem'];
 type MetaContract = components['schemas']['Meta'];
+type CursorMetaContract = components['schemas']['CursorMeta'];
 
 export const requireString = (value: string | null | undefined, field: string): string => {
   if (typeof value !== 'string' || !value) throw new AppError(`服务端响应缺少 ${field}`);
@@ -24,6 +25,18 @@ export const toPagination = (meta: MetaContract | undefined) => ({
   limit: meta?.limit ?? 20,
   total: meta?.total ?? 0,
   total_pages: meta?.total_pages ?? 1,
+});
+
+export type CursorPagination = {
+  limit: number;
+  next_cursor: string | null;
+  has_more: boolean;
+};
+
+export const toCursorPagination = (meta: CursorMetaContract | undefined): CursorPagination => ({
+  limit: meta?.limit ?? 20,
+  next_cursor: meta?.next_cursor ?? null,
+  has_more: meta?.has_more ?? false,
 });
 
 const toPostAuthor = (
@@ -144,7 +157,6 @@ export function toComment(comment: CommentContract): Comment {
       ? { id: comment.reply_to.id, name: comment.reply_to.name }
       : null,
     created_at: requireString(comment.created_at, '评论创建时间'),
-    is_deleted: comment.is_deleted ?? false,
     is_edited: comment.is_edited ?? false,
     reply_count: comment.reply_count ?? 0,
     replies: (comment.replies ?? []).map(toComment),

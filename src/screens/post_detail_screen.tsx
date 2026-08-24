@@ -116,13 +116,13 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
 
   const commentsHook = usePostComments({
     postId,
-    currentUser: currentUser ? { id: currentUser.id, role: currentUser.role } : null,
+    currentUser: currentUser ? { id: currentUser.id } : null,
     onCommentCountChange,
   });
 
   const {
-    comments, commentSort, commentPagination, commentLoading, commentError,
-    commentReplies, commentRepliesLoading, commentRepliesPagination, commentRepliesExpanded,
+    comments, commentSort, commentLoading, commentError,
+    commentReplies, commentRepliesLoading, commentRepliesExpanded,
     commentSheetVisible, threadVisible, threadRootComment,
     commentInput, setCommentInput, commentReplyTarget, commentEditTarget, commentSubmitting,
     threadRepliesList, threadReplyTotal, threadLoading, threadHasMore,
@@ -306,7 +306,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const likeCount = post?.stats?.like_count ?? 0;
   const favoriteCount = post?.stats?.favorite_count ?? 0;
   const viewCount = post?.stats?.view_count ?? 0;
-  const commentCount = post?.stats?.comment_count ?? commentPagination.total;
+  const commentCount = post?.stats?.comment_count ?? comments.length;
 
   const threadSheet = (
     <BottomSheet
@@ -739,7 +739,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
             const collapsedReplies = availableReplies.slice(0, REPLY_PREVIEW_COUNT);
             const expanded = !!commentRepliesExpanded[item.id];
             const repliesPreview = expanded ? availableReplies : collapsedReplies;
-            const backendReplyTotal = commentRepliesPagination[item.id]?.total ?? item.reply_count ?? 0;
+            const backendReplyTotal = item.reply_count ?? 0;
             const totalReplyCount = Math.max(backendReplyTotal, availableReplies.length, previewReplies.length);
             const showReplySummary = !isDesktop && totalReplyCount > REPLY_PREVIEW_COUNT;
             const shouldInlineReplies = totalReplyCount > 0 && totalReplyCount <= REPLY_PREVIEW_COUNT;

@@ -5,6 +5,8 @@ import { AppError } from '@/src/lib/errors/app_error';
 import { httpAuth } from '@/src/lib/http/http_auth';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import type { Category, PostType } from '@/src/models/Post';
+import type { ManagementRole } from '@/src/models/User';
+import { normalizeRoles, primaryRole } from '@/src/lib/auth/roles';
 import { requireNumber, requireString, toPagination } from '@/src/repositories/api_mappers';
 
 type AdminPostListContract = components['schemas']['AdminPostList'];
@@ -42,23 +44,30 @@ export type AdminPostReviewResult = {
   post_id: number;
   status: 'draft' | 'pending' | 'approved' | 'rejected';
   reviewed_at: string;
-  moderation_record_id: number;
+  moderation_record_ids: number[];
 };
 
-export type AdminUserListParams = { page?: number; limit?: number; role?: Role; is_active?: boolean };
+export type AdminUserListParams = { page?: number; limit?: number; role?: ManagementRole; is_active?: boolean };
 export type AdminUserSummary = {
   id: number;
   name: string;
   email: string;
   avatar_url: string | null;
   role: Role;
+  roles: ManagementRole[];
   is_active: boolean;
   stats: { post_count: number; follower_count: number };
   created_at: string;
 };
 export type AdminUsersResponse = { users: AdminUserSummary[]; pagination: Pagination };
-export type AdminUserRoleInput = { role: Role };
-export type AdminUserRoleResult = { user_id: number; role: Role };
+export type AdminUserRoleInput = { role: ManagementRole; action: 'grant' | 'revoke' };
+export type AdminUserRoleResult = {
+  user_id: number;
+  role: ManagementRole;
+  action: 'grant' | 'revoke';
+  roles: ManagementRole[];
+  changed: boolean;
+};
 export type AdminUserStatusInput = { is_active: boolean; reason?: string };
 export type AdminUserStatusResult = { user_id: number; is_active: boolean };
 
@@ -75,8 +84,8 @@ export type AdminCommentSummary = {
 };
 export type AdminCommentsResponse = { comments: AdminCommentSummary[]; pagination: Pagination };
 
-const isRole = (value: string | undefined): value is Role =>
-  value === 'user' || value === 'admin' || value === 'super_admin';
+const isRole = (value: string | undefined): value is ManagementRole =>
+  value === 'dict_reviewer' || value === 'moderator' || value === 'super_admin';
 
 const toAdminPost = (post: AdminPostContract): AdminPendingPostSummary => {
   if (post.category !== 'food' && post.category !== 'recipe') {
@@ -122,14 +131,15 @@ const toAdminComment = (comment: AdminCommentContract): AdminCommentSummary => (
 });
 
 const toAdminUser = (user: AdminUserContract): AdminUserSummary => {
-  if (!isRole(user.role)) throw new AppError('服务端返回了无效的用户角色');
+  const roles = normalizeRoles(user.roles);
   if (typeof user.is_active !== 'boolean') throw new AppError('服务端响应缺少用户状态');
   return {
     id: requireNumber(user.id, '用户 ID'),
     name: requireString(user.name, '用户名称'),
     email: requireString(user.email, '用户邮箱'),
     avatar_url: user.avatar_url ?? null,
-    role: user.role,
+    role: primaryRole(roles),
+    roles,
     is_active: user.is_active,
     stats: {
       post_count: user.stats?.post_count ?? 0,
@@ -197,7 +207,9 @@ class ApiAdminRepository implements AdminRepository {
       post_id: requireNumber(result.post_id, '帖子 ID'),
       status: result.status,
       reviewed_at: requireString(result.reviewed_at, '审核时间'),
-      moderation_record_id: requireNumber(result.moderation_record_id, '审核记录 ID'),
+      moderation_record_ids: (result.moderation_record_ids ?? []).filter(
+        (id): id is number => Number.isSafeInteger(id) && id > 0,
+      ),
     };
   }
 
@@ -229,7 +241,16 @@ class ApiAdminRepository implements AdminRepository {
     const res = await httpAuth.put<ApiResponse<components['schemas']['AdminUserRoleResult']>>(path, input);
     const result = unwrapApiResponse(res);
     if (!isRole(result.role)) throw new AppError('服务端返回了无效的用户角色');
-    return { user_id: requireNumber(result.user_id, '用户 ID'), role: result.role };
+    if (result.action !== 'grant' && result.action !== 'revoke') {
+      throw new AppError('服务端返回了无效的角色操作');
+    }
+    return {
+      user_id: requireNumber(result.user_id, '用户 ID'),
+      role: result.role,
+      action: result.action,
+      roles: normalizeRoles(result.roles),
+      changed: result.changed ?? false,
+    };
   }
 
   async updateUserStatus(userId: number, input: AdminUserStatusInput) {

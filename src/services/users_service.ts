@@ -45,7 +45,7 @@ export const usersService = {
   async getUserFollowing(userId: number, params: UserFollowListParams = {}): Promise<UserFollowListResponse> {
     if (!isValidId(userId)) throw new AppError('缺少有效的用户ID');
     const sanitized: UserFollowListParams = {};
-    if (params.page !== undefined) sanitized.page = Math.max(1, Math.floor(params.page));
+    if (params.cursor?.trim()) sanitized.cursor = params.cursor.trim();
     if (params.limit !== undefined) sanitized.limit = Math.min(50, Math.max(1, Math.floor(params.limit)));
     return usersRepository.listUserFollowing(userId, sanitized);
   },
@@ -53,7 +53,7 @@ export const usersService = {
   async getUserFollowers(userId: number, params: UserFollowListParams = {}): Promise<UserFollowListResponse> {
     if (!isValidId(userId)) throw new AppError('缺少有效的用户ID');
     const sanitized: UserFollowListParams = {};
-    if (params.page !== undefined) sanitized.page = Math.max(1, Math.floor(params.page));
+    if (params.cursor?.trim()) sanitized.cursor = params.cursor.trim();
     if (params.limit !== undefined) sanitized.limit = Math.min(50, Math.max(1, Math.floor(params.limit)));
     return usersRepository.listUserFollowers(userId, sanitized);
   },

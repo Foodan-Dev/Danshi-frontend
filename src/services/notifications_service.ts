@@ -13,10 +13,10 @@ import {
 
 const isValidId = (value: number) => Number.isSafeInteger(value) && value > 0;
 
-const sanitizePagination = <T extends { page?: number; limit?: number }>(params: T): T => {
+const sanitizePagination = <T extends { cursor?: string; limit?: number }>(params: T): T => {
   const result = { ...params };
-  if (result.page !== undefined) {
-    result.page = Math.max(1, Math.floor(result.page));
+  if (result.cursor !== undefined) {
+    result.cursor = result.cursor.trim() || undefined;
   }
   if (result.limit !== undefined) {
     result.limit = Math.min(50, Math.max(1, Math.floor(result.limit)));

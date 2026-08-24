@@ -4,7 +4,12 @@ import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import { httpAuth } from '@/src/lib/http/http_auth';
 import { AppError } from '@/src/lib/errors/app_error';
 import type { Post, PostCreateInput, PostCreateResult } from '@/src/models/Post';
-import { toPagination, toPost } from '@/src/repositories/api_mappers';
+import {
+  toCursorPagination,
+  toPagination,
+  toPost,
+  type CursorPagination,
+} from '@/src/repositories/api_mappers';
 
 type PostLikeResult = { is_liked: boolean; like_count: number };
 type PostFavoriteResult = { is_favorited: boolean; favorite_count: number };
@@ -52,13 +57,14 @@ export type SortBy = 'latest' | 'hot' | 'trending';
 
 export type PostListFilters = {
   sortBy?: SortBy;
+  cursor?: string;
   page?: number;
   limit?: number;
 };
 
 export type PostsListResponse = {
   posts: Post[];
-  pagination: { page: number; limit: number; total: number; total_pages: number };
+  pagination: CursorPagination | { page: number; limit: number; total: number; total_pages: number };
 };
 
 class ApiPostsRepository implements PostsRepository {
@@ -73,14 +79,16 @@ class ApiPostsRepository implements PostsRepository {
   async list(filters: PostListFilters = {}): Promise<PostsListResponse> {
     const qs = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {
-      if (value != null) qs.set(key, String(value));
+      if (value != null) qs.set(key === 'sortBy' ? 'sort_by' : key, String(value));
     }
     const path = `${API_ENDPOINTS.POSTS.GETPOSTPRE}${qs.size ? `?${qs.toString()}` : ''}`;
-    const resp = await httpAuth.get<ApiResponse<components['schemas']['PostList']>>(path);
+    const resp = await httpAuth.get<ApiResponse<components['schemas']['PostFeedList']>>(path);
     const data = unwrapApiResponse(resp);
     return {
       posts: (data.posts ?? []).map(toPost),
-      pagination: toPagination(data.pagination),
+      pagination: data.pagination && 'has_more' in data.pagination
+        ? toCursorPagination(data.pagination)
+        : toPagination(data.pagination),
     };
   }
 

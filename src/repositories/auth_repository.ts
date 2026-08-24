@@ -5,6 +5,7 @@ import type { User } from '@/src/models/User';
 import { API_ENDPOINTS } from '@/src/constants/app';
 import { AppError } from '@/src/lib/errors/app_error';
 import type { components } from '@/src/generated/openapi';
+import { normalizeRoles, primaryRole } from '@/src/lib/auth/roles';
 
 type LoginContract = components['schemas']['loginRequest'];
 type RegisterContract = components['schemas']['registerRequest'];
@@ -49,10 +50,6 @@ export type Session = {
   expiresAt: string;
 };
 
-function isUserRole(role: string | null | undefined): role is User['role'] {
-  return role === 'user' || role === 'admin' || role === 'super_admin';
-}
-
 function isGender(gender: string | null | undefined): gender is NonNullable<User['gender']> {
   return gender === 'male' || gender === 'female' || gender === 'other';
 }
@@ -70,16 +67,15 @@ function requireNumber(value: number | null | undefined, field: string): number 
 }
 
 function toUser(user: UserContract): User {
-  if (!isUserRole(user.role)) {
-    throw new AppError('服务端返回了无效的用户角色');
-  }
+  const roles = normalizeRoles(user.roles);
   const email = requireString(user.email, '用户邮箱');
   const gender = isGender(user.gender) ? user.gender : null;
   return {
     id: requireNumber(user.id, '用户 ID'),
     email,
     name: user.name?.trim() || email.split('@')[0],
-    role: user.role,
+    role: primaryRole(roles),
+    roles,
     avatar_url: user.avatar_url ?? null,
     bio: user.bio ?? null,
     gender,
