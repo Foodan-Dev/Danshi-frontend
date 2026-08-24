@@ -17,7 +17,7 @@ export function applyPostLikePatch(post: Post, patch: PostLikePatch): Post {
   };
 }
 
-export function patchPostListLike(posts: Post[], postId: string, patch: PostLikePatch): Post[] {
+export function patchPostListLike(posts: Post[], postId: number, patch: PostLikePatch): Post[] {
   return posts.map((post) => (post.id === postId ? applyPostLikePatch(post, patch) : post));
 }
 
@@ -25,7 +25,6 @@ export function patchUserPostListItemLike(item: UserPostListItem, patch: PostLik
   return {
     ...item,
     is_liked: patch.is_liked,
-    like_count: patch.like_count,
     stats: {
       ...(item.stats ?? {}),
       like_count: patch.like_count,

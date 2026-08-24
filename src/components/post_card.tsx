@@ -5,7 +5,6 @@ import { Text, useTheme as usePaperTheme, IconButton, Menu } from 'react-native-
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { Post } from '@/src/models/Post';
 import { UserAvatar } from '@/src/components/user_avatar';
-import { SHARE_LABEL } from '@/src/constants/post_labels';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
 import { useAuth } from '@/src/context/auth_context';
 import { postsService } from '@/src/services/posts_service';
@@ -25,14 +24,14 @@ const POSTER_COLORS = [
 
 type PostCardProps = {
   post: Post;
-  onPress?: (postId: string) => void;
-  onLikeChange?: (postId: string, patch: PostLikePatch) => void;
+  onPress?: (postId: number) => void;
+  onLikeChange?: (postId: number, patch: PostLikePatch) => void;
   style?: StyleProp<ViewStyle>;
   footer?: React.ReactNode;
   appearance?: 'flat' | 'elevated' | 'outlined';
   showActions?: boolean;
-  onEdit?: (postId: string) => void;
-  onDelete?: (postId: string) => void;
+  onEdit?: (postId: number) => void;
+  onDelete?: (postId: number) => void;
 };
 
 export const PostCard: React.FC<PostCardProps> = ({
@@ -51,7 +50,10 @@ export const PostCard: React.FC<PostCardProps> = ({
   const [menuVisible, setMenuVisible] = useState(false);
   const [isLiked, setIsLiked] = useState(post.is_liked ?? false);
   const [likeCount, setLikeCount] = useState(post.stats?.like_count ?? 0);
+  const [isFavorited, setIsFavorited] = useState(post.is_favorited ?? false);
+  const [favoriteCount, setFavoriteCount] = useState(post.stats?.favorite_count ?? 0);
   const likeLoadingRef = useRef(false);
+  const favoriteLoadingRef = useRef(false);
   const firstImage = useMemo(
     () => post.images?.map((item) => getSafeRemoteUrl(item)).find((item): item is string => !!item),
     [post.images]
@@ -86,7 +88,9 @@ export const PostCard: React.FC<PostCardProps> = ({
   useEffect(() => {
     setIsLiked(post.is_liked ?? false);
     setLikeCount(post.stats?.like_count ?? 0);
-  }, [post.id, post.is_liked, post.stats?.like_count]);
+    setIsFavorited(post.is_favorited ?? false);
+    setFavoriteCount(post.stats?.favorite_count ?? 0);
+  }, [post.id, post.is_liked, post.is_favorited, post.stats?.like_count, post.stats?.favorite_count]);
 
   const syncLikeState = useCallback((patch: PostLikePatch) => {
     setIsLiked(patch.is_liked);
@@ -129,11 +133,34 @@ export const PostCard: React.FC<PostCardProps> = ({
     }
   }, [user?.id, isLiked, likeCount, post.id, syncLikeState]);
 
+  const handleFavoritePress = useCallback(async () => {
+    if (favoriteLoadingRef.current) return;
+    if (!user?.id) {
+      showAlert('请先登录', '登录后才能收藏帖子');
+      return;
+    }
+    favoriteLoadingRef.current = true;
+    const previousFavorited = isFavorited;
+    const previousCount = favoriteCount;
+    setIsFavorited(!previousFavorited);
+    setFavoriteCount(Math.max(0, previousCount + (previousFavorited ? -1 : 1)));
+    try {
+      const result = previousFavorited
+        ? await postsService.unfavorite(post.id)
+        : await postsService.favorite(post.id);
+      setIsFavorited(result.is_favorited);
+      setFavoriteCount(result.favorite_count);
+    } catch {
+      setIsFavorited(previousFavorited);
+      setFavoriteCount(previousCount);
+    } finally {
+      favoriteLoadingRef.current = false;
+    }
+  }, [favoriteCount, isFavorited, post.id, user?.id]);
+
   // 使用伪随机比例保持瀑布流参差不齐效果
   const seed = useMemo(() => {
-    return post.id
-      ? Array.from(post.id).reduce((acc, char) => acc + char.charCodeAt(0), 0)
-      : 0;
+    return Math.abs(post.id);
   }, [post.id]);
 
   const fixedAspectRatio = useMemo(() => {
@@ -148,8 +175,8 @@ export const PostCard: React.FC<PostCardProps> = ({
 
   // 价格显示逻辑
   const priceLabel = useMemo(() => {
-    if (post.post_type === 'share' && post.share_type === 'recommend' && typeof post.price === 'number') {
-      return `¥${post.price.toFixed(0)}`;
+    if (post.post_type === 'share' && post.share_type === 'recommend' && post.price) {
+      return `¥${post.price}`;
     }
     return null;
   }, [post]);
@@ -160,7 +187,10 @@ export const PostCard: React.FC<PostCardProps> = ({
 
     // 位置标签
     if (post.canteen) {
-      tags.push({ key: 'location', label: post.canteen, variant: 'location' });
+      const location = post.canteen_window
+        ? `${post.canteen.name} · ${post.canteen_window.name}`
+        : post.canteen.name;
+      tags.push({ key: 'location', label: location, variant: 'location' });
     }
 
     // 类型标签
@@ -232,8 +262,8 @@ export const PostCard: React.FC<PostCardProps> = ({
             {/* 左上角装饰引号水印 */}
             <Text style={[styles.quoteWatermark, { color: posterColor.text }]}>{'"'}</Text>
             {/* 主体文字 */}
-            <Text 
-              style={[styles.posterText, { color: posterColor.text }]} 
+            <Text
+              style={[styles.posterText, { color: posterColor.text }]}
               numberOfLines={4}
             >
               {displayTitle}
@@ -316,6 +346,20 @@ export const PostCard: React.FC<PostCardProps> = ({
           )}
         </View>
 
+        {(priceLabel || post.is_edited || post.status === 'pending') ? (
+          <View style={styles.stateLabels}>
+            {priceLabel ? (
+              <Text style={[styles.stateLabel, { color: theme.colors.primary }]}>{priceLabel}</Text>
+            ) : null}
+            {post.is_edited ? (
+              <Text style={[styles.stateLabel, { color: theme.colors.onSurfaceVariant }]}>已编辑</Text>
+            ) : null}
+            {post.status === 'pending' ? (
+              <Text style={[styles.stateLabel, { color: theme.colors.primary }]}>审核中</Text>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* 底部栏：头像+昵称 | 爱心+点赞数 */}
         <View style={styles.footerRow}>
           <View style={styles.authorWrap}>
@@ -337,27 +381,48 @@ export const PostCard: React.FC<PostCardProps> = ({
             )}
           </View>
 
-          <Pressable
-            style={({ pressed }) => [styles.likeWrap, pressed && styles.likePressed]}
-            onPress={(event) => {
-              if (Platform.OS === 'web') event.stopPropagation?.();
-              void handleLikePress();
-            }}
-            hitSlop={6}
-            accessibilityLabel={isLiked ? '取消点赞' : '点赞'}
-            accessibilityRole="button"
-          >
-            <Ionicons
-              name={isLiked ? 'heart' : 'heart-outline'}
-              size={14}
-              color={isLiked ? theme.colors.error : theme.colors.onSurfaceVariant}
-            />
-            <View style={styles.likeCountSlot}>
-              <Text style={[styles.likeCount, { color: isLiked ? theme.colors.error : theme.colors.onSurfaceVariant }]}>
-                {likeCount > 0 ? likeCount : '赞'}
-              </Text>
-            </View>
-          </Pressable>
+          <View style={styles.cardActions}>
+            <Pressable
+              style={({ pressed }) => [styles.likeWrap, pressed && styles.likePressed]}
+              onPress={(event) => {
+                if (Platform.OS === 'web') event.stopPropagation?.();
+                void handleFavoritePress();
+              }}
+              hitSlop={6}
+              accessibilityLabel={isFavorited ? '取消收藏' : '收藏'}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={isFavorited ? 'bookmark' : 'bookmark-outline'}
+                size={14}
+                color={isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant}
+              />
+              {favoriteCount > 0 ? (
+                <Text style={[styles.likeCount, { color: theme.colors.onSurfaceVariant }]}>{favoriteCount}</Text>
+              ) : null}
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.likeWrap, pressed && styles.likePressed]}
+              onPress={(event) => {
+                if (Platform.OS === 'web') event.stopPropagation?.();
+                void handleLikePress();
+              }}
+              hitSlop={6}
+              accessibilityLabel={isLiked ? '取消点赞' : '点赞'}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={isLiked ? 'heart' : 'heart-outline'}
+                size={14}
+                color={isLiked ? theme.colors.error : theme.colors.onSurfaceVariant}
+              />
+              <View style={styles.likeCountSlot}>
+                <Text style={[styles.likeCount, { color: isLiked ? theme.colors.error : theme.colors.onSurfaceVariant }]}>
+                  {likeCount > 0 ? likeCount : '赞'}
+                </Text>
+              </View>
+            </Pressable>
+          </View>
         </View>
 
         {footer ? <View style={styles.customFooter}>{footer}</View> : null}
@@ -380,9 +445,7 @@ export function estimatePostCardHeight(post: Post, minHeight: number, maxHeight:
 
   if (post.images?.length) {
     // 根据帖子 ID 生成伪随机比例，产生参差不齐的瀑布流效果
-    const seed = post.id
-      ? Array.from(post.id).reduce((acc, char) => acc + char.charCodeAt(0), 0)
-      : 0;
+    const seed = Math.abs(post.id);
     // 更大的变化范围，让瀑布流更有层次感
     const ratioVariants = [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.35, 1.5];
     const ratio = ratioVariants[seed % ratioVariants.length];
@@ -397,10 +460,8 @@ export function estimatePostCardHeight(post: Post, minHeight: number, maxHeight:
  * 根据帖子 ID 生成固定的伪随机宽高比
  * 用于保持瀑布流参差不齐的效果
  */
-export function getPostImageAspectRatio(postId: string): number {
-  const seed = postId
-    ? Array.from(postId).reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    : 0;
+export function getPostImageAspectRatio(postId: number): number {
+  const seed = Math.abs(postId);
   const ratioVariants = [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.35, 1.5];
   return ratioVariants[seed % ratioVariants.length];
 }
@@ -507,6 +568,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 20,
   },
+  stateLabels: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  stateLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
   actionBtn: {
     margin: 0,
     marginTop: -4,
@@ -535,6 +604,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   likePressed: {
     opacity: 0.7,

@@ -5,7 +5,12 @@ export type ShareType = 'recommend' | 'warning';
 
 export type Category = 'food' | 'recipe';
 
-export type PostAuthor = Pick<User, 'id' | 'name' | 'avatar_url'>;
+export type PostAuthor = Pick<User, 'id' | 'name' | 'avatar_url'> & {
+  is_following?: boolean | null;
+};
+
+export type PostCanteen = { code: string; name: string; campus: string };
+export type PostCanteenWindow = { id: number; name: string; floor?: string | null };
 
 export interface PostStats {
   like_count?: number;
@@ -15,12 +20,13 @@ export interface PostStats {
 }
 
 export interface PostBase {
-  id: string;
+  id: number;
   post_type: PostType;
   title: string;
   content: string;
   category: Category;
-  canteen?: string;
+  canteen?: PostCanteen | null;
+  canteen_window?: PostCanteenWindow | null;
   tags?: string[];
   images?: string[];
   author?: PostAuthor;
@@ -29,6 +35,8 @@ export interface PostBase {
   is_favorited?: boolean;
   created_at?: string; // ISO
   updated_at?: string; // ISO
+  status?: 'draft' | 'pending' | 'approved' | 'rejected';
+  is_edited?: boolean;
 }
 
 export interface SharePost extends Omit<PostBase, 'images'> {
@@ -36,7 +44,7 @@ export interface SharePost extends Omit<PostBase, 'images'> {
   share_type: ShareType;
   cuisine?: string;
   flavors?: string[];
-  price?: number;
+  price?: string;
   images: string[]; // 1-9
 }
 
@@ -54,7 +62,8 @@ export type CommonCreateBase = {
   title: string;
   content: string;
   category: Category;
-  canteen?: string;
+  canteen_code?: string | null;
+  canteen_window_id?: number | null;
   tags?: string[];
   images?: string[];
 };
@@ -64,7 +73,7 @@ export type SharePostCreateInput = CommonCreateBase & {
   share_type: ShareType;
   cuisine?: string;
   flavors?: string[];
-  price?: number;
+  price?: string;
   images: string[]; // required for share
 };
 
@@ -79,7 +88,7 @@ export type PostCreateInput =
   | SeekingPostCreateInput;
 
 export type PostCreateResult = {
-  id: string;
+  id: number;
   post_type: PostType;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'draft' | 'pending' | 'approved' | 'rejected';
 };

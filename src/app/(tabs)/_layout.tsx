@@ -153,7 +153,7 @@ export default function TabsLayout() {
       tabBarActiveTintColor: theme.colors.primary,
       tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
       tabBarLabelStyle: { fontSize: 11, fontWeight: '600' as const },
-      tabBarButton: (props: any) => <HapticTab {...props} />,
+      tabBarButton: (props: React.ComponentProps<typeof HapticTab>) => <HapticTab {...props} />,
       animation: 'none' as const,
       lazy: true,
       freezeOnBlur: true,

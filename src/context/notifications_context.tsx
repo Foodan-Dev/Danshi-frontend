@@ -31,7 +31,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const activeUserIdRef = useRef<string | null>(user?.id ?? null);
+  const activeUserIdRef = useRef<number | null>(user?.id ?? null);
   const requestSeqRef = useRef(0);
   const activeRequestRef = useRef<Promise<void> | null>(null);
 

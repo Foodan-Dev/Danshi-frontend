@@ -1,4 +1,8 @@
-import { authRepository, type RegisterInput } from '@/src/repositories/auth_repository';
+import {
+  authRepository,
+  type RegisterInput,
+  type Session,
+} from '@/src/repositories/auth_repository';
 import { AuthStorage } from '@/src/lib/auth/auth_storage';
 import type { User } from '@/src/models/User';
 import { AppError } from '@/src/lib/errors/app_error';
@@ -47,6 +51,21 @@ export const authService = {
 
   async logout(): Promise<void> {
     await authRepository.logout();
+    await AuthStorage.clearToken();
+    await AuthStorage.clearRefreshToken();
+  },
+
+  async listSessions(): Promise<Session[]> {
+    return authRepository.listSessions();
+  },
+
+  async revokeSession(sessionId: number): Promise<void> {
+    if (!Number.isSafeInteger(sessionId) || sessionId <= 0) throw new AppError('无效的会话 ID');
+    await authRepository.revokeSession(sessionId);
+  },
+
+  async logoutAll(): Promise<void> {
+    await authRepository.logoutAll();
     await AuthStorage.clearToken();
     await AuthStorage.clearRefreshToken();
   },

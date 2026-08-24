@@ -1,5 +1,5 @@
 import { postsRepository } from '@/src/repositories/posts_repository';
-import type { PostCreateInput, PostCreateResult, SharePostCreateInput } from '@/src/models/Post';
+import type { PostCreateInput, PostCreateResult } from '@/src/models/Post';
 import type { PostListFilters, PostsListResponse } from '@/src/repositories/posts_repository';
 import { AppError } from '@/src/lib/errors/app_error';
 import { isHttpOrHttpsUrl } from '@/src/lib/security/url';
@@ -14,19 +14,25 @@ function ensureHttpUrls(arr?: string[], label?: string) {
 }
 
 function normalizePostInput(input: PostCreateInput): PostCreateInput {
-  const base = {
+  if (input.post_type === 'share') {
+    return {
+      ...input,
+      title: input.title.trim(),
+      content: input.content.trim(),
+      canteen_code: input.canteen_code?.trim() || input.canteen_code,
+      tags: input.tags?.map((tag) => tag.trim()).filter(Boolean),
+      cuisine: input.cuisine?.trim() || input.cuisine,
+      images: input.images.map((url) => url.trim()).filter(Boolean),
+    };
+  }
+  return {
     ...input,
     title: input.title.trim(),
     content: input.content.trim(),
-    canteen: input.canteen?.trim() || input.canteen,
-    tags: input.tags?.map((t) => t.trim()).filter(Boolean),
-    images: input.images?.map((u) => u.trim()).filter(Boolean),
+    canteen_code: input.canteen_code?.trim() || input.canteen_code,
+    tags: input.tags?.map((tag) => tag.trim()).filter(Boolean),
+    images: input.images?.map((url) => url.trim()).filter(Boolean),
   };
-  if (input.post_type === 'share') {
-    const share = input as SharePostCreateInput;
-    return { ...base, cuisine: share.cuisine?.trim() || share.cuisine } as PostCreateInput;
-  }
-  return base as PostCreateInput;
 }
 
 function validate(input: PostCreateInput) {
@@ -50,7 +56,9 @@ function validate(input: PostCreateInput) {
       if (!input.images || input.images.length < 1) throw new AppError('请至少上传 1 张图片');
       if (input.images.length > 9) throw new AppError('最多上传 9 张图片');
       ensureHttpUrls(input.images, '图片 URL');
-      if (typeof input.price !== 'undefined' && input.price! < 0) throw new AppError('价格不能为负数');
+      if (input.price !== undefined && !/^(?:0|[0-9]+)(?:\.[0-9]{1,2})?$/.test(input.price)) {
+        throw new AppError('价格格式不正确，最多保留两位小数');
+      }
       break;
     }
     case 'seeking': {
@@ -82,9 +90,9 @@ export const postsService = {
     return postsRepository.list(cleaned);
   },
 
-  async get(postId: string) {
-    if (!postId?.trim()) throw new AppError('缺少帖子 ID');
-    return postsRepository.get(postId.trim());
+  async get(postId: number) {
+    if (!Number.isSafeInteger(postId) || postId <= 0) throw new AppError('缺少有效的帖子 ID');
+    return postsRepository.get(postId);
   },
 
   async create(input: PostCreateInput): Promise<PostCreateResult> {
@@ -95,36 +103,36 @@ export const postsService = {
     return postsRepository.create(normalized);
   },
 
-  async update(postId: string, input: PostCreateInput): Promise<{ id: string; status: 'pending' | 'approved' | 'rejected' }> {
-    if (!postId?.trim()) throw new AppError('缺少帖子 ID');
+  async update(postId: number, input: PostCreateInput): Promise<PostCreateResult> {
+    if (!Number.isSafeInteger(postId) || postId <= 0) throw new AppError('缺少有效的帖子 ID');
     const normalized = normalizePostInput(input);
     validate(normalized);
-    return postsRepository.update(postId.trim(), normalized);
+    return postsRepository.update(postId, normalized);
   },
 
-  async remove(postId: string): Promise<void> {
-    if (!postId?.trim()) throw new AppError('缺少帖子 ID');
-    return postsRepository.delete(postId.trim());
+  async remove(postId: number): Promise<void> {
+    if (!Number.isSafeInteger(postId) || postId <= 0) throw new AppError('缺少有效的帖子 ID');
+    return postsRepository.delete(postId);
   },
 
-  async like(postId: string) {
-    if (!postId?.trim()) throw new AppError('缺少帖子 ID');
-    return postsRepository.like(postId.trim());
+  async like(postId: number) {
+    if (!Number.isSafeInteger(postId) || postId <= 0) throw new AppError('缺少有效的帖子 ID');
+    return postsRepository.like(postId);
   },
 
-  async unlike(postId: string) {
-    if (!postId?.trim()) throw new AppError('缺少帖子 ID');
-    return postsRepository.unlike(postId.trim());
+  async unlike(postId: number) {
+    if (!Number.isSafeInteger(postId) || postId <= 0) throw new AppError('缺少有效的帖子 ID');
+    return postsRepository.unlike(postId);
   },
 
-  async favorite(postId: string) {
-    if (!postId?.trim()) throw new AppError('缺少帖子 ID');
-    return postsRepository.favorite(postId.trim());
+  async favorite(postId: number) {
+    if (!Number.isSafeInteger(postId) || postId <= 0) throw new AppError('缺少有效的帖子 ID');
+    return postsRepository.favorite(postId);
   },
 
-  async unfavorite(postId: string) {
-    if (!postId?.trim()) throw new AppError('缺少帖子 ID');
-    return postsRepository.unfavorite(postId.trim());
+  async unfavorite(postId: number) {
+    if (!Number.isSafeInteger(postId) || postId <= 0) throw new AppError('缺少有效的帖子 ID');
+    return postsRepository.unfavorite(postId);
   },
 
 };

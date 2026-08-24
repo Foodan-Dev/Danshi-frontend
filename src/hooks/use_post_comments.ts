@@ -34,8 +34,8 @@ export type CommentActionItem = {
 };
 
 type UsePostCommentsParams = {
-  postId: string;
-  currentUser: { id: string; role?: string } | null;
+  postId: number;
+  currentUser: { id: number; role?: string } | null;
   /** 调用者用此回调更新 post.stats.comment_count */
   onCommentCountChange: (delta: number) => void;
 };
@@ -62,16 +62,17 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
   const [threadRootComment, setThreadRootComment] = useState<Comment | null>(null);
   const [commentInput, setCommentInput] = useState('');
   const [commentReplyTarget, setCommentReplyTarget] = useState<Comment | CommentReply | null>(null);
+  const [commentEditTarget, setCommentEditTarget] = useState<CommentEntity | null>(null);
 
   // ==================== Refs ====================
   const commentSortRef = useRef<'latest' | 'hot'>(commentSort);
-  const commentLikeLoadingRef = useRef<Set<string>>(new Set());
-  const commentDeleteLoadingRef = useRef<Set<string>>(new Set());
+  const commentLikeLoadingRef = useRef<Set<number>>(new Set());
+  const commentDeleteLoadingRef = useRef<Set<number>>(new Set());
   const replyRequestKeysRef = useRef<Set<string>>(new Set());
   const commentsRef = useRef<Comment[]>(comments);
   const commentRepliesRef = useRef<Record<string, CommentReply[]>>(commentReplies);
   const threadRootCommentRef = useRef<Comment | null>(threadRootComment);
-  const fetchRepliesForCommentRef = useRef<(commentId: string, page?: number, append?: boolean) => Promise<void>>(
+  const fetchRepliesForCommentRef = useRef<(commentId: number, page?: number, append?: boolean) => Promise<void>>(
     async () => {}
   );
 
@@ -94,7 +95,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
   }, [comments, threadRootComment]);
 
   // ==================== 数据获取 ====================
-  const fetchComments = useCallback(async (postIdValue: string, sort: 'latest' | 'hot') => {
+  const fetchComments = useCallback(async (postIdValue: number, sort: 'latest' | 'hot') => {
     setCommentLoading(true);
     setCommentError(null);
     try {
@@ -119,7 +120,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
         if (!Object.keys(prev).length) return prev;
         const next: Record<string, CommentReply[]> = {};
         for (const id of Object.keys(prev)) {
-          if (commentIds.has(id)) next[id] = prev[id];
+          if (commentIds.has(Number(id))) next[id] = prev[id];
         }
         return next;
       });
@@ -127,7 +128,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
         if (!Object.keys(prev).length) return prev;
         const next: Record<string, CommentsPagination> = {};
         for (const id of Object.keys(prev)) {
-          if (commentIds.has(id)) next[id] = prev[id];
+          if (commentIds.has(Number(id))) next[id] = prev[id];
         }
         return next;
       });
@@ -135,7 +136,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
         if (!Object.keys(prev).length) return prev;
         const next: Record<string, boolean> = {};
         for (const id of Object.keys(prev)) {
-          if (commentIds.has(id)) next[id] = prev[id];
+          if (commentIds.has(Number(id))) next[id] = prev[id];
         }
         return next;
       });
@@ -147,7 +148,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
     }
   }, []);
 
-  const fetchRepliesForComment = useCallback(async (commentId: string, page = 1, append = false) => {
+  const fetchRepliesForComment = useCallback(async (commentId: number, page = 1, append = false) => {
     const requestKey = `${commentId}:${page}:${append ? 'append' : 'replace'}`;
     if (replyRequestKeysRef.current.has(requestKey)) {
       return;
@@ -179,7 +180,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
   fetchRepliesForCommentRef.current = fetchRepliesForComment;
 
   // ==================== 查找辅助 ====================
-  const findCommentTarget = useCallback((commentId: string) => {
+  const findCommentTarget = useCallback((commentId: number) => {
     const topComment = commentsRef.current.find((c) => c.id === commentId);
     if (topComment) return { entity: topComment, parent: topComment };
 
@@ -191,14 +192,14 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
     for (const [rootId, replies] of Object.entries(commentRepliesRef.current)) {
       const reply = replies.find((r) => r.id === commentId);
       if (reply) {
-        const parent = commentsRef.current.find((c) => c.id === rootId) ?? null;
+        const parent = commentsRef.current.find((c) => c.id === Number(rootId)) ?? null;
         return { entity: reply, parent };
       }
     }
     return null;
   }, []);
 
-  const findLatestCommentById = useCallback((commentId: string): { is_liked?: boolean; like_count?: number } | null => {
+  const findLatestCommentById = useCallback((commentId: number): { is_liked?: boolean; like_count?: number } | null => {
     if (threadRootCommentRef.current?.id === commentId) return threadRootCommentRef.current;
     const topComment = commentsRef.current.find((c) => c.id === commentId);
     if (topComment) return topComment;
@@ -214,7 +215,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
   }, []);
 
   // ==================== 状态补丁 ====================
-  const patchCommentEntity = useCallback((targetId: string, patch: Partial<Comment | CommentReply>) => {
+  const patchCommentEntity = useCallback((targetId: number, patch: Partial<Comment | CommentReply>) => {
     setComments((prev) => {
       const next = prev.map((comment) => {
         if (comment.id === targetId) return { ...comment, ...patch } as Comment;
@@ -251,7 +252,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
   }, []);
 
   // ==================== 点赞 ====================
-  const handleToggleCommentLikeById = useCallback(async (commentId: string) => {
+  const handleToggleCommentLikeById = useCallback(async (commentId: number) => {
     if (commentLikeLoadingRef.current.has(commentId)) return;
     commentLikeLoadingRef.current.add(commentId);
 
@@ -330,6 +331,9 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
       showAlert('请先登录', '登录后才能发表评论');
       return;
     }
+    setCommentEditTarget(null);
+    setCommentReplyTarget(null);
+    setCommentInput('');
     setCommentSheetVisible(true);
   }, [currentUser?.id]);
 
@@ -338,14 +342,27 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
       showAlert('请先登录', '登录后才能回复评论');
       return;
     }
+    if (entity.is_deleted) return;
+    setCommentEditTarget(null);
     setCommentReplyTarget(entity);
     setCommentSheetVisible(true);
   }, [currentUser?.id]);
 
   const getCommentMoreActions = useCallback((entity: CommentEntity): CommentActionItem[] => {
     const isOwner = !!currentUser?.id && !!entity.author?.id && entity.author.id === currentUser.id;
-    if (!isOwner) return [];
+    if (!isOwner || entity.is_deleted) return [];
     return [
+      {
+        key: 'edit',
+        title: '编辑',
+        icon: 'pencil',
+        onPress: () => {
+          setCommentReplyTarget(null);
+          setCommentEditTarget(entity);
+          setCommentInput(entity.content);
+          setCommentSheetVisible(true);
+        },
+      },
       {
         key: 'delete',
         title: '删除',
@@ -356,11 +373,17 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
     ];
   }, [currentUser, handleConfirmDeleteComment]);
 
-  const handleCancelReply = useCallback(() => setCommentReplyTarget(null), []);
+  const handleCancelReply = useCallback(() => {
+    setCommentReplyTarget(null);
+    setCommentEditTarget(null);
+    setCommentInput('');
+  }, []);
 
   const handleCloseCommentSheet = useCallback(() => {
     setCommentSheetVisible(false);
     setCommentReplyTarget(null);
+    setCommentEditTarget(null);
+    setCommentInput('');
   }, []);
 
   // ==================== 提交评论 ====================
@@ -373,9 +396,23 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
     }
     setCommentSubmitting(true);
     try {
-      let parent_id: string | undefined;
-      let reply_to_user_id: string | undefined;
-      let rootCommentId: string | undefined;
+      if (commentEditTarget) {
+        const updated = await commentsService.update(commentEditTarget.id, { content });
+        patchCommentEntity(commentEditTarget.id, {
+          ...updated,
+          parent_id: commentEditTarget.parent_id,
+          is_edited: true,
+        });
+        setCommentInput('');
+        setCommentEditTarget(null);
+        setCommentSheetVisible(false);
+        showAlert('评论已更新', '编辑后的评论已重新进入审核，审核通过后会公开显示。');
+        return;
+      }
+
+      let parent_id: number | undefined;
+      let reply_to_user_id: number | undefined;
+      let rootCommentId: number | undefined;
 
       if (commentReplyTarget) {
         parent_id = commentReplyTarget.id;
@@ -393,13 +430,11 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
         }
       }
 
-      const createdResponse = await commentsService.create(postId, {
+      const createdEntity = await commentsService.create(postId, {
         content,
         parent_id,
         reply_to_user_id,
       });
-
-      const createdEntity = (createdResponse as any)?.comment || createdResponse;
 
       const isReply = !!parent_id;
       if (isReply && createdEntity && rootCommentId) {
@@ -410,13 +445,13 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
 
         let updatedReplyLength = 0;
         setCommentReplies((prev) => {
-          const prevList = prev[rootCommentId!] ?? [];
+          const prevList = prev[rootCommentId] ?? [];
           const merged = [newReply, ...prevList];
           updatedReplyLength = merged.length;
-          return { ...prev, [rootCommentId!]: merged };
+          return { ...prev, [rootCommentId]: merged };
         });
         setCommentRepliesPagination((prev) => {
-          const prevPagination = prev[rootCommentId!];
+          const prevPagination = prev[rootCommentId];
           const limit = prevPagination?.limit ?? 20;
           const total = prevPagination?.total != null
             ? prevPagination.total + 1
@@ -424,7 +459,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
           const total_pages = Math.max(1, Math.ceil(total / limit));
           return {
             ...prev,
-            [rootCommentId!]: {
+            [rootCommentId]: {
               page: prevPagination?.page ?? 1,
               limit,
               total,
@@ -455,6 +490,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
 
       setCommentInput('');
       setCommentReplyTarget(null);
+      setCommentEditTarget(null);
       setCommentSheetVisible(false);
       await fetchComments(postId, commentSort);
 
@@ -472,7 +508,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
     } finally {
       setCommentSubmitting(false);
     }
-  }, [commentInput, commentReplyTarget, postId, currentUser?.id, findCommentTarget, fetchComments, commentSort, fetchRepliesForComment, onCommentCountChange, commentSubmitting]);
+  }, [commentInput, commentReplyTarget, commentEditTarget, postId, currentUser?.id, findCommentTarget, fetchComments, commentSort, fetchRepliesForComment, onCommentCountChange, commentSubmitting, patchCommentEntity]);
 
   // ==================== 排序切换 ====================
   const handleCycleCommentSort = useCallback(() => {
@@ -557,6 +593,7 @@ export function usePostComments({ postId, currentUser, onCommentCountChange }: U
     commentInput,
     setCommentInput,
     commentReplyTarget,
+    commentEditTarget,
     // Derived
     threadRepliesList,
     threadReplyTotal,

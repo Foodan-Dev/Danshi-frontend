@@ -1,4 +1,4 @@
-export type Gender = 'male' | 'female';
+export type Gender = 'male' | 'female' | 'other';
 
 export interface UserStats {
   post_count: number;
@@ -9,14 +9,13 @@ export interface UserStats {
 }
 
 export interface User {
-  id: string;
+  id: number;
   email: string;
   name: string;
-  gender?: Gender;
-  hometown?: string;
+  gender?: Gender | null;
   role: 'user' | 'admin' | 'super_admin';
   avatar_url?: string | null;
-  bio?: string;
+  bio?: string | null;
   stats?: UserStats;
   is_following?: boolean;
   created_at?: string;

@@ -3,6 +3,7 @@ import {
   commentsRepository,
   type CommentListParams,
   type CommentRepliesParams,
+  type UpdateCommentInput,
 } from '@/src/repositories/comments_repository';
 import type { CreateCommentInput, CommentSort } from '@/src/models/Comment';
 
@@ -22,10 +23,10 @@ function sanitizePagination<T extends { page?: number; limit?: number; sortBy?: 
 
 function sanitizeCreateInput(input: CreateCommentInput): CreateCommentInput {
   const content = input.content?.trim() ?? '';
-  const parent_id = input.parent_id?.trim() || undefined;
-  const reply_to_user_id = input.reply_to_user_id?.trim() || undefined;
+  const parent_id = input.parent_id;
+  const reply_to_user_id = input.reply_to_user_id;
   const mentioned_user_ids = Array.from(
-    new Set((input.mentioned_user_ids ?? []).map((id) => id.trim()).filter(Boolean))
+    new Set((input.mentioned_user_ids ?? []).filter((id) => Number.isSafeInteger(id) && id > 0)),
   );
 
   if (!content) throw new AppError('请输入评论内容');
@@ -42,34 +43,45 @@ function sanitizeCreateInput(input: CreateCommentInput): CreateCommentInput {
 }
 
 export const commentsService = {
-  async listByPost(postId: string, params: CommentListParams = {}) {
-    if (!postId?.trim()) throw new AppError('缺少帖子ID');
-    return commentsRepository.listByPost(postId.trim(), sanitizePagination(params));
+  async listByPost(postId: number, params: CommentListParams = {}) {
+    if (!Number.isSafeInteger(postId) || postId <= 0) throw new AppError('缺少有效的帖子ID');
+    return commentsRepository.listByPost(postId, sanitizePagination(params));
   },
 
-  async listReplies(commentId: string, params: CommentRepliesParams = {}) {
-    if (!commentId?.trim()) throw new AppError('缺少评论ID');
-    return commentsRepository.listReplies(commentId.trim(), sanitizePagination(params));
+  async listReplies(commentId: number, params: CommentRepliesParams = {}) {
+    if (!Number.isSafeInteger(commentId) || commentId <= 0) throw new AppError('缺少有效的评论ID');
+    return commentsRepository.listReplies(commentId, sanitizePagination(params));
   },
 
-  async create(postId: string, input: CreateCommentInput) {
-    if (!postId?.trim()) throw new AppError('缺少帖子ID');
+  async create(postId: number, input: CreateCommentInput) {
+    if (!Number.isSafeInteger(postId) || postId <= 0) throw new AppError('缺少有效的帖子ID');
     const payload = sanitizeCreateInput(input);
-    return commentsRepository.create(postId.trim(), payload);
+    return commentsRepository.create(postId, payload);
   },
 
-  async like(commentId: string) {
-    if (!commentId?.trim()) throw new AppError('缺少评论ID');
-    return commentsRepository.like(commentId.trim());
+  async update(commentId: number, input: UpdateCommentInput) {
+    if (!Number.isSafeInteger(commentId) || commentId <= 0) throw new AppError('缺少有效的评论ID');
+    const content = input.content?.trim() ?? '';
+    if (!content) throw new AppError('请输入评论内容');
+    if (content.length > MAX_COMMENT_LENGTH) throw new AppError(`评论内容请勿超过 ${MAX_COMMENT_LENGTH} 字`);
+    const mentioned_user_ids = Array.from(
+      new Set((input.mentioned_user_ids ?? []).filter((id) => Number.isSafeInteger(id) && id > 0)),
+    );
+    return commentsRepository.update(commentId, { content, mentioned_user_ids });
   },
 
-  async unlike(commentId: string) {
-    if (!commentId?.trim()) throw new AppError('缺少评论ID');
-    return commentsRepository.unlike(commentId.trim());
+  async like(commentId: number) {
+    if (!Number.isSafeInteger(commentId) || commentId <= 0) throw new AppError('缺少有效的评论ID');
+    return commentsRepository.like(commentId);
   },
 
-  async remove(commentId: string) {
-    if (!commentId?.trim()) throw new AppError('缺少评论ID');
-    return commentsRepository.delete(commentId.trim());
+  async unlike(commentId: number) {
+    if (!Number.isSafeInteger(commentId) || commentId <= 0) throw new AppError('缺少有效的评论ID');
+    return commentsRepository.unlike(commentId);
+  },
+
+  async remove(commentId: number) {
+    if (!Number.isSafeInteger(commentId) || commentId <= 0) throw new AppError('缺少有效的评论ID');
+    return commentsRepository.delete(commentId);
   },
 };

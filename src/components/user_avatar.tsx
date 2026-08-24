@@ -5,7 +5,7 @@ import { router, type Href } from 'expo-router';
 import { CachedAvatar } from '@/src/components/cached_avatar';
 
 export type UserAvatarProps = {
-  userId: string;
+  userId: number;
   name: string;
   avatar_url?: string | null;
   size?: number;
@@ -29,7 +29,10 @@ export function UserAvatar({
   disabled = false,
 }: UserAvatarProps) {
   const pTheme = usePaperTheme();
-  const normalizedUserId = useMemo(() => userId.trim(), [userId]);
+  const normalizedUserId = useMemo(
+    () => Number.isSafeInteger(userId) && userId > 0 ? userId : null,
+    [userId],
+  );
   const resolvedSize = useMemo(
     () => (Number.isFinite(size) ? Math.max(16, Math.min(96, Math.floor(size))) : 32),
     [size]

@@ -7,21 +7,23 @@ export type CommentAuthor = Pick<User, 'id' | 'name' | 'avatar_url'> & {
 };
 
 export interface MentionedUser {
-  id: string;
+  id: number;
   name: string;
 }
 
 export interface CommentBase {
-  id: string;
+  id: number;
   content: string;
-  author: CommentAuthor;
+  author?: CommentAuthor;
   mentioned_users?: MentionedUser[];
   like_count: number;
   is_liked?: boolean;
   is_author?: boolean;
-  parent_id?: string | null;
+  parent_id?: number | null;
   reply_to?: MentionedUser | null;
   created_at: string; // ISO string
+  is_deleted?: boolean;
+  is_edited?: boolean;
 }
 
 export type CommentReply = CommentBase;
@@ -52,7 +54,7 @@ export interface CommentRepliesResponse {
 
 export type CreateCommentInput = {
   content: string;
-  parent_id?: string | null;
-  reply_to_user_id?: string | null;
-  mentioned_user_ids?: string[];
+  parent_id?: number | null;
+  reply_to_user_id?: number | null;
+  mentioned_user_ids?: number[];
 };

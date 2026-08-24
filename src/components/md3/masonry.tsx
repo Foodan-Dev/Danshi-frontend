@@ -82,7 +82,6 @@ export function Masonry<T>({
     <View
       style={[
         { flexDirection: 'row', alignItems: 'flex-start', flexWrap: 'nowrap', marginLeft: -normalizedGap },
-        // @ts-ignore web supports gap, native will ignore
         { gap: normalizedGap },
         style,
       ]}

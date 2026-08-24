@@ -69,8 +69,8 @@ export const CommentItem: React.FC<CommentItemProps> = ({
   const moreActions = getMoreActions?.(comment) ?? [];
   const totalReplyCount = replyCount ?? ('reply_count' in comment ? comment.reply_count : 0);
   const showReplySummaryButton = showReplySummary && totalReplyCount > 0 && !!onShowReplies;
-  const canReply = !!onReply;
-  const canLike = !!onLike;
+  const canReply = !!onReply && !comment.is_deleted;
+  const canLike = !!onLike && !comment.is_deleted;
 
   const isNested = isReply || depth > 0;
   const avatarSize = isNested ? 28 : 40;
@@ -95,7 +95,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
   return (
     <View style={containerStyles}>
       <View style={[styles.avatarColumn, isNested && styles.replyAvatarColumn]}>
-        {comment.author ? (
+        {!comment.is_deleted && comment.author ? (
           <UserAvatar
             userId={comment.author.id}
             name={comment.author.name}
@@ -110,7 +110,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
         <View style={styles.headerRow}>
           <View style={styles.authorBlock}>
             <Text style={[styles.authorName, isNested && styles.replyAuthorName, { color: theme.colors.onSurface }]} numberOfLines={1}>
-              {comment.author?.name || '匿名用户'}
+            {comment.is_deleted ? '已删除评论' : comment.author?.name || '匿名用户'}
             </Text>
             {isAuthor ? (
               <Text style={[styles.authorBadge, { color: theme.colors.primary }]}>
@@ -121,13 +121,13 @@ export const CommentItem: React.FC<CommentItemProps> = ({
         </View>
 
         <Pressable style={styles.bodyPressable} onPress={handleReply} disabled={!canReply}>
-          <MentionedText mentions={comment.mentioned_users} />
+          {!comment.is_deleted ? <MentionedText mentions={comment.mentioned_users} /> : null}
           <Text
             variant="bodyMedium"
             style={[styles.content, isNested && styles.replyContent, { color: theme.colors.onSurface }]}
             numberOfLines={maxContentLines}
           >
-            {comment.reply_to ? (
+            {!comment.is_deleted && comment.reply_to ? (
               <Text style={styles.replyingText}>
                 回复{' '}
                 <Text style={{ color: theme.colors.onSurfaceVariant }}>
@@ -136,7 +136,10 @@ export const CommentItem: React.FC<CommentItemProps> = ({
                 ：
               </Text>
             ) : null}
-            {comment.content}
+            {comment.is_deleted ? '该评论已删除' : comment.content}
+            {!comment.is_deleted && comment.is_edited ? (
+              <Text style={{ color: theme.colors.onSurfaceVariant }}>（已编辑）</Text>
+            ) : null}
           </Text>
         </Pressable>
 
@@ -145,7 +148,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
             {relativeTime ? (
               <Text style={[styles.timestamp, { color: theme.colors.onSurfaceVariant }]}>{relativeTime}</Text>
             ) : null}
-            <Pressable
+            {!comment.is_deleted ? <Pressable
               style={({ pressed }) => [
                 styles.replyAction,
                 pressed && canReply && styles.actionPressed,
@@ -157,7 +160,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
               <Text style={[styles.replyActionText, { color: theme.colors.onSurfaceVariant }]}>
                 回复
               </Text>
-            </Pressable>
+            </Pressable> : null}
             {moreActions.map((action) => (
               <Pressable
                 key={action.key}
@@ -179,7 +182,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
               </Pressable>
             ))}
           </View>
-          <Pressable style={styles.likeButton} onPress={handleLike} disabled={!canLike}>
+          {!comment.is_deleted ? <Pressable style={styles.likeButton} onPress={handleLike} disabled={!canLike}>
             <View style={styles.likeIcon}>
               <Icon
                 source={comment.is_liked ? 'heart' : 'heart-outline'}
@@ -194,7 +197,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
                 </Text>
               ) : null}
             </View>
-          </Pressable>
+          </Pressable> : null}
         </View>
 
         {showReplySummaryButton ? (

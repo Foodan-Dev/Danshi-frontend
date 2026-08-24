@@ -140,14 +140,14 @@ export default function NotificationsScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [markAllLoading, setMarkAllLoading] = useState(false);
-  const [followStatusByUserId, setFollowStatusByUserId] = useState<Record<string, boolean>>({});
-  const [followLoadingByUserId, setFollowLoadingByUserId] = useState<Record<string, boolean>>({});
+  const [followStatusByUserId, setFollowStatusByUserId] = useState<Record<number, boolean>>({});
+  const [followLoadingByUserId, setFollowLoadingByUserId] = useState<Record<number, boolean>>({});
   const requestSeqRef = useRef(0);
   const notificationsRef = useRef<Notification[]>([]);
-  const followStatusRef = useRef<Record<string, boolean>>({});
-  const followStatusRequestsRef = useRef(new Map<string, Promise<boolean>>());
-  const followStatusVersionRef = useRef(new Map<string, number>());
-  const followActionsRef = useRef(new Set<string>());
+  const followStatusRef = useRef<Record<number, boolean>>({});
+  const followStatusRequestsRef = useRef(new Map<number, Promise<boolean>>());
+  const followStatusVersionRef = useRef(new Map<number, number>());
+  const followActionsRef = useRef(new Set<number>());
 
   notificationsRef.current = notifications;
 
@@ -172,7 +172,7 @@ export default function NotificationsScreen() {
     return data;
   }, []);
 
-  const updateFollowStatus = useCallback((userId: string, isFollowing: boolean) => {
+  const updateFollowStatus = useCallback((userId: number, isFollowing: boolean) => {
     followStatusRef.current = { ...followStatusRef.current, [userId]: isFollowing };
     setFollowStatusByUserId((prev) => (
       Object.prototype.hasOwnProperty.call(prev, userId) && prev[userId] === isFollowing
@@ -181,7 +181,7 @@ export default function NotificationsScreen() {
     ));
   }, []);
 
-  const loadFollowStatus = useCallback(async (userId: string, force = false): Promise<boolean> => {
+  const loadFollowStatus = useCallback(async (userId: number, force = false): Promise<boolean> => {
     if (!force && Object.prototype.hasOwnProperty.call(followStatusRef.current, userId)) {
       return followStatusRef.current[userId];
     }
@@ -337,13 +337,13 @@ export default function NotificationsScreen() {
   }, [markAllLoading, clearUnreadCount, dotsOpacity]);
 
   // 单条标记已读（乐观更新）
-  const handleReadStateChange = useCallback((notificationId: string, isRead: boolean) => {
+  const handleReadStateChange = useCallback((notificationId: number, isRead: boolean) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, is_read: isRead } : n))
     );
   }, []);
 
-  const handleFollowToggle = useCallback(async (userId: string) => {
+  const handleFollowToggle = useCallback(async (userId: number) => {
     if (followActionsRef.current.has(userId)) return;
     followActionsRef.current.add(userId);
     setFollowLoadingByUserId((prev) => ({ ...prev, [userId]: true }));
@@ -510,7 +510,7 @@ export default function NotificationsScreen() {
           ) : (
             <FlatList
               data={notifications}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => String(item.id)}
               renderItem={renderItem}
               ListFooterComponent={renderFooter}
               onEndReached={handleLoadMore}

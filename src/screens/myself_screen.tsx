@@ -38,7 +38,7 @@ const formatCount = (value?: number | null) => {
 type TabType = 'posts' | 'favorites';
 
 type InFlightRequest = {
-  userId: string;
+  userId: number;
   promise: Promise<void>;
 };
 
@@ -335,8 +335,8 @@ export default function MyselfScreen() {
     setRefreshing(false);
   }, [loadProfile, loadPosts, loadFavorites, activeTab]);
 
-  const handlePostPress = useCallback((postId: string) => {
-    router.push({ pathname: '/post/[postId]', params: { postId } });
+  const handlePostPress = useCallback((postId: number) => {
+    router.push({ pathname: '/post/[postId]', params: { postId: String(postId) } });
   }, []);
 
   const currentPosts = activeTab === 'posts' ? posts : favorites;
@@ -361,7 +361,7 @@ export default function MyselfScreen() {
         masonry
         optimizeItemArrangement={false}
         numColumns={numColumns}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderPost}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -464,6 +464,17 @@ export default function MyselfScreen() {
             <Pressable style={styles.statItem} onPress={() => router.push('/myself/following' as Href)}>
               <Text style={[styles.statNumber, { color: theme.colors.onSurface }]}>{formatCount(stats?.following_count)}</Text>
               <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>关注</Text>
+            </Pressable>
+          </View>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: theme.colors.onSurface }]}>{formatCount(stats?.like_count)}</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>获赞</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: theme.colors.outline }]} />
+            <Pressable style={styles.statItem} onPress={() => setActiveTab('favorites')}>
+              <Text style={[styles.statNumber, { color: theme.colors.onSurface }]}>{formatCount(stats?.favorite_count)}</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>收藏</Text>
             </Pressable>
           </View>
         </View>

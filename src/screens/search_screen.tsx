@@ -20,6 +20,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WEB_NO_OUTLINE } from '@/src/utils';
 import { CachedAvatar } from '@/src/components/cached_avatar';
+import type { Post } from '@/src/models/Post';
 
 // 宽屏断点
 const WIDE_BREAKPOINT = 768;
@@ -123,7 +124,7 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
-  const [followLoadingMap, setFollowLoadingMap] = useState<Record<string, boolean>>({});
+  const [followLoadingMap, setFollowLoadingMap] = useState<Record<number, boolean>>({});
   const requestSeqRef = useRef(0);
 
   // 加载搜索历史
@@ -153,16 +154,16 @@ export default function SearchScreen() {
   }, []);
 
   const handlePostPress = useCallback(
-    (postId: string) => {
-      const href: Href = { pathname: '/post/[postId]', params: { postId } } as const;
+    (postId: number) => {
+      const href: Href = { pathname: '/post/[postId]', params: { postId: String(postId) } };
       router.push(href);
     },
     [router]
   );
 
   const handleUserPress = useCallback(
-    (userId: string) => {
-      router.push({ pathname: '/user/[userId]', params: { userId } });
+    (userId: number) => {
+      router.push({ pathname: '/user/[userId]', params: { userId: String(userId) } });
     },
     [router]
   );
@@ -189,9 +190,9 @@ export default function SearchScreen() {
         setPosts([]);
       }
       setHasSearched(true);
-    } catch (e) {
+    } catch (e: unknown) {
       if (requestSeqRef.current !== requestId) return;
-      const message = (e as Error)?.message ?? '搜索失败，请稍后重试';
+      const message = e instanceof Error ? e.message : '搜索失败，请稍后重试';
       setError(message);
     } finally {
       if (requestSeqRef.current === requestId) {
@@ -226,7 +227,7 @@ export default function SearchScreen() {
     [doSearch, hasSearched, keyword]
   );
 
-  const handleToggleFollow = useCallback(async (userId: string, currentlyFollowing: boolean) => {
+  const handleToggleFollow = useCallback(async (userId: number, currentlyFollowing: boolean) => {
     if (!currentUser) {
       showAlert('请先登录', '登录后才能关注用户');
       return;
@@ -251,8 +252,8 @@ export default function SearchScreen() {
             }
           : u
       ));
-    } catch (err: any) {
-      showAlert('操作失败', err.message || '请稍后重试');
+    } catch (err: unknown) {
+      showAlert('操作失败', err instanceof Error ? err.message : '请稍后重试');
     } finally {
       setFollowLoadingMap(prev => ({ ...prev, [userId]: false }));
     }
@@ -262,10 +263,15 @@ export default function SearchScreen() {
     ({ item }: { item: SearchPost }) => {
       const snippet = extractMatchSnippet(item.highlight?.content);
       const showSnippet = snippet && !item.highlight?.title;
+      const post: Post = {
+        ...item,
+        post_type: 'seeking',
+        images: item.images ?? [],
+      };
 
       return (
         <View style={{ marginHorizontal: gridGap / 2, marginBottom: gridVerticalGap }}>
-          <PostCard post={item} onPress={handlePostPress} appearance="flat" />
+          <PostCard post={post} onPress={handlePostPress} appearance="flat" />
           {showSnippet && (
             <View style={[styles.snippetContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
               <HighlightedText
@@ -446,7 +452,7 @@ export default function SearchScreen() {
             masonry
             optimizeItemArrangement={false}
             numColumns={numColumns}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => String(item.id)}
             renderItem={renderPost}
             showsVerticalScrollIndicator={false}
           />
@@ -797,6 +803,31 @@ const styles = StyleSheet.create({
   },
 
   // ==================== 搜索摘要 ====================
+  searchPostCard: {
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  searchPostImage: {
+    width: '100%',
+    aspectRatio: 1.2,
+  },
+  searchPostBody: {
+    padding: 12,
+    gap: 7,
+  },
+  searchPostTitle: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600',
+  },
+  searchPostMeta: {
+    fontSize: 12,
+  },
+  searchPostStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   snippetContainer: {
     marginTop: 6,
     paddingHorizontal: 10,

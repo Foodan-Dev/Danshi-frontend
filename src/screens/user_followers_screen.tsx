@@ -167,14 +167,16 @@ type UserFollowListScreenProps = {
 };
 
 export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type }) => {
-  const { userId } = useLocalSearchParams<{ userId: string }>();
+  const { userId: userIdParam } = useLocalSearchParams<{ userId: string }>();
+  const parsedUserId = Number(userIdParam);
+  const userId = Number.isSafeInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : null;
   const { user: currentUser, isLoading } = useAuth();
   const [items, setItems] = useState<FollowUserItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [actionLoading, setActionLoading] = useState<Record<number, boolean>>({});
   const requestSeqRef = useRef(0);
   const insets = useSafeAreaInsets();
   const theme = usePaperTheme();
@@ -240,18 +242,18 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
   }, [currentUser?.id, isLoading, load]);
 
   const navigateToProfile = useCallback(
-    (targetId: string) => {
+    (targetId: number) => {
       router.push(`/user/${targetId}`);
     },
     [router],
   );
 
-  const withActionLoading = useCallback((targetUserId: string, value: boolean) => {
+  const withActionLoading = useCallback((targetUserId: number, value: boolean) => {
     setActionLoading((prev) => ({ ...prev, [targetUserId]: value }));
   }, []);
 
   const handleFollowBack = useCallback(
-    async (targetId: string) => {
+    async (targetId: number) => {
       setActionError(null);
       withActionLoading(targetId, true);
       try {
@@ -281,7 +283,7 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
   );
 
   const handleUnfollow = useCallback(
-    async (targetId: string) => {
+    async (targetId: number) => {
       setActionError(null);
       withActionLoading(targetId, true);
       try {
@@ -366,7 +368,7 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
         <FlatList
           style={{ flex: 1 }}
           data={items}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
           refreshControl={
             <RefreshControl

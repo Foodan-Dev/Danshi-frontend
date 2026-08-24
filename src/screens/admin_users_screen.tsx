@@ -63,7 +63,7 @@ export default function AdminUsersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
-  const [menuVisible, setMenuVisible] = useState<string | null>(null);
+  const [menuVisible, setMenuVisible] = useState<number | null>(null);
   const requestSeqRef = useRef(0);
 
   const contentHorizontalPadding = pickByBreakpoint(current, { base: 12, sm: 16, md: 20, lg: 24, xl: 24 });
@@ -117,7 +117,7 @@ export default function AdminUsersScreen() {
 
   const canManageRole = !!user && isSuperAdmin(user.role);
 
-  const handleUpdateRole = async (userId: string, role: Role) => {
+  const handleUpdateRole = async (userId: number, role: Role) => {
     setActionError('');
     try {
       await adminService.updateUserRole(userId, { role });
@@ -127,7 +127,7 @@ export default function AdminUsersScreen() {
     }
   };
 
-  const handleUpdateStatus = async (userId: string, isActive: boolean) => {
+  const handleUpdateStatus = async (userId: number, isActive: boolean) => {
     setActionError('');
     try {
       await adminService.updateUserStatus(userId, { is_active: isActive });
@@ -289,7 +289,7 @@ export default function AdminUsersScreen() {
           paddingHorizontal: contentHorizontalPadding,
         }}
         data={users}
-        keyExtractor={(listedUser) => listedUser.id}
+        keyExtractor={(listedUser) => String(listedUser.id)}
         renderItem={renderUser}
         extraData={{ menuVisible, canManageRole }}
         refreshControl={

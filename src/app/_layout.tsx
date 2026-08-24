@@ -52,6 +52,8 @@ function RootStack() {
         <Stack.Screen name="user" />
         <Stack.Screen name="search" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="sessions" />
+        <Stack.Screen name="dictionary-suggestions" />
       </Stack>
     </View>
   );

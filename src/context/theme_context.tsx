@@ -1,9 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react'
-import { View, StyleSheet } from 'react-native'
+import React, { createContext, useContext, useEffect, useState } from 'react'
+import { StyleSheet, View, useColorScheme as useRNColorScheme } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useColorScheme as useRNColorScheme } from 'react-native'
 import { MD3DarkTheme, MD3LightTheme, useTheme as usePaperTheme } from 'react-native-paper'
-import { generatePalette, PRESET_COLORS, isValidHex } from '@/src/lib/theme/color_generator'
+import { isValidHex } from '@/src/lib/theme/color_generator'
 import type { ExtendedMD3Theme } from '@/src/constants/md3_theme'
 
 // Types
@@ -56,7 +55,7 @@ export const ThemeModeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setAccentColorState(accentRaw)
         }
         // 如果没有保存过自定义颜色，保持默认空字符串
-      } catch (e) {
+      } catch {
         // ignore
       }
       setIsReady(true)
@@ -67,7 +66,7 @@ export const ThemeModeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const setMode = async (m: ThemeMode) => {
     try {
       await AsyncStorage.setItem(MODE_KEY, m)
-    } catch (e) {
+    } catch {
       // ignore
     }
     setModeState(m)
@@ -77,7 +76,7 @@ export const ThemeModeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!isValidHex(color)) return
     try {
       await AsyncStorage.setItem(ACCENT_KEY, color)
-    } catch (e) {
+    } catch {
       // ignore
     }
     setAccentColorState(color)
@@ -86,15 +85,15 @@ export const ThemeModeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const resetAccentColor = async () => {
     try {
       await AsyncStorage.removeItem(ACCENT_KEY)
-    } catch (e) {
+    } catch {
       // ignore
     }
     setAccentColorState('')
   }
 
   const toggle = async () => {
-    const next = mode === 'dark' ? 'light' : 'dark'
-    await setMode(next as ThemeMode)
+    const next: ThemeMode = mode === 'dark' ? 'light' : 'dark'
+    await setMode(next)
   }
 
   const effective = mode === 'system' ? (system === 'dark' ? 'dark' : 'light') : mode
@@ -115,7 +114,6 @@ export function useTheme() {
   const ctx = useContext(ThemeContext)
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider')
 
-  const { effective } = ctx
   const paper = usePaperTheme<ExtendedMD3Theme>()
   const colors: ThemeColors = paper.colors
 

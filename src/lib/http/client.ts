@@ -11,12 +11,12 @@ export type HttpOptions = {
 };
 
 export interface HttpClient {
-  request<T = any>(method: HttpMethod, path: string, body?: any, init?: RequestInit): Promise<T>;
-  get<T = any>(path: string, init?: RequestInit): Promise<T>;
-  post<T = any>(path: string, body?: any, init?: RequestInit): Promise<T>;
-  put<T = any>(path: string, body?: any, init?: RequestInit): Promise<T>;
-  patch<T = any>(path: string, body?: any, init?: RequestInit): Promise<T>;
-  delete<T = any>(path: string, init?: RequestInit): Promise<T>;
+  request<T = unknown>(method: HttpMethod, path: string, body?: unknown, init?: RequestInit): Promise<T>;
+  get<T = unknown>(path: string, init?: RequestInit): Promise<T>;
+  post<T = unknown>(path: string, body?: unknown, init?: RequestInit): Promise<T>;
+  put<T = unknown>(path: string, body?: unknown, init?: RequestInit): Promise<T>;
+  patch<T = unknown>(path: string, body?: unknown, init?: RequestInit): Promise<T>;
+  delete<T = unknown>(path: string, init?: RequestInit): Promise<T>;
 }
 
 export function createHttpClient(opts: HttpOptions = {}): HttpClient {
@@ -36,7 +36,7 @@ export function createHttpClient(opts: HttpOptions = {}): HttpClient {
     return false;
   };
 
-  async function request<T>(method: HttpMethod, path: string, body?: any, init?: RequestInit): Promise<T> {
+  async function request<T>(method: HttpMethod, path: string, body?: unknown, init?: RequestInit): Promise<T> {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -80,7 +80,6 @@ export function createHttpClient(opts: HttpOptions = {}): HttpClient {
       const data = isJson ? await res.json().catch(() => undefined) : await res.text().catch(() => undefined);
 
       if (!res.ok) {
-        const message = (data && typeof data === 'object' && 'message' in data ? (data as { message?: string }).message : undefined) || `请求失败(${res.status})`;
         const retryAfterHeader = res.headers.get('retry-after');
         const parsedRetryAfter = retryAfterHeader === null
           ? Number.NaN
@@ -88,16 +87,17 @@ export function createHttpClient(opts: HttpOptions = {}): HttpClient {
         const retryAfterSeconds = Number.isFinite(parsedRetryAfter) && parsedRetryAfter > 0
           ? parsedRetryAfter
           : undefined;
-        throw new AppError(message, {
-          status: res.status,
-          retryAfterSeconds,
-          cause: data,
-        });
+        throw AppError.fromApiResponse(data, res.status, retryAfterSeconds);
       }
 
       return (data as unknown) as T;
-    } catch (e: any) {
-      if (__DEV__) console.error('[HttpClient] Request failed:', method, path, e?.message);
+    } catch (e: unknown) {
+      if (__DEV__) console.error(
+        '[HttpClient] Request failed:',
+        method,
+        path,
+        e instanceof Error ? e.message : e,
+      );
       const name = (e instanceof Error) ? e.name : undefined;
       if (name === 'AbortError') {
         throw new AppError('请求超时', { code: 'TIMEOUT', cause: e });

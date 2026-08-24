@@ -155,7 +155,7 @@ const createFollowListScreen = (type: ListType) => {
     const [refreshing, setRefreshing] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
-    const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+    const [actionLoading, setActionLoading] = useState<Record<number, boolean>>({});
     const requestSeqRef = useRef(0);
     const insets = useSafeAreaInsets();
     const theme = usePaperTheme();
@@ -218,18 +218,18 @@ const createFollowListScreen = (type: ListType) => {
     }, [isLoading, load, user?.id]);
 
     const navigateToProfile = useCallback(
-      (targetId: string) => {
+      (targetId: number) => {
         router.push(`/user/${targetId}`);
       },
       [router],
     );
 
-    const withActionLoading = useCallback((userId: string, value: boolean) => {
+    const withActionLoading = useCallback((userId: number, value: boolean) => {
       setActionLoading((prev) => ({ ...prev, [userId]: value }));
     }, []);
 
     const handleFollowBack = useCallback(
-      async (targetId: string) => {
+      async (targetId: number) => {
         setActionError(null);
         withActionLoading(targetId, true);
         try {
@@ -259,7 +259,7 @@ const createFollowListScreen = (type: ListType) => {
     );
 
     const handleUnfollow = useCallback(
-      async (targetId: string) => {
+      async (targetId: number) => {
         setActionError(null);
         withActionLoading(targetId, true);
         try {
@@ -320,7 +320,7 @@ const createFollowListScreen = (type: ListType) => {
     ) : (
       <FlatList
         data={items}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
         refreshControl={
           <RefreshControl

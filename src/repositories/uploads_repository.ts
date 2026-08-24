@@ -4,6 +4,8 @@ import { httpAuth } from '@/src/lib/http/http_auth';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import { md5Base64 } from '@/src/lib/security/md5';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import type { components } from '@/src/generated/openapi';
+import { requireNumber, requireString } from '@/src/repositories/api_mappers';
 
 /** 上传用途，对应后端 presign 的 purpose（post / avatar）。 */
 export type UploadPurpose = 'post' | 'avatar';
@@ -23,21 +25,6 @@ export type UploadImageResult = {
 
 /** 单张图片直传 COS 的超时（毫秒）；超时只影响当前这一张。 */
 const COS_PUT_TIMEOUT_MS = 60 * 1000;
-
-// 后端 presign / complete 的响应契约（与 validators/upload.py 对齐）
-type UploadPresignData = {
-  upload_id: string;
-  method: string;
-  upload_url: string;
-  expires_at: string;
-};
-
-type UploadCompleteData = {
-  upload_id: string;
-  object_key: string;
-  public_url: string;
-  status: string;
-};
 
 export interface UploadsRepository {
   uploadImage(
@@ -59,23 +46,26 @@ class ApiUploadsRepository implements UploadsRepository {
     const contentMd5 = md5Base64(file.bytes);
 
     // 1. 申请上传凭证（含 Content-MD5 与大小，签入预签名 URL）
-    const presignRes = await httpAuth.post<ApiResponse<UploadPresignData>>(
+    const presignRequest: components['schemas']['uploadPresignRequest'] = {
+      purpose,
+      content_type: file.type,
+      size,
+      content_md5: contentMd5,
+    };
+    const presignRes = await httpAuth.post<ApiResponse<components['schemas']['UploadPresignResult']>>(
       API_ENDPOINTS.UPLOAD.PRESIGN,
-      {
-        purpose,
-        content_type: file.type,
-        size,
-        content_md5: contentMd5,
-      },
+      presignRequest,
     );
-    const presign = unwrapApiResponse<UploadPresignData>(presignRes);
+    const presign = unwrapApiResponse(presignRes);
+    const uploadId = requireNumber(presign.upload_id, '上传 ID');
+    const uploadUrl = requireString(presign.upload_url, '上传地址');
 
     // 2. 直传 COS（裸 fetch：非 API 域名、不带 Authorization，带独立超时）
     const putRes = await (async () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), COS_PUT_TIMEOUT_MS);
       try {
-        return await fetch(presign.upload_url, {
+        return await fetch(uploadUrl, {
           method: 'PUT',
           headers: {
             'Content-Type': file.type,
@@ -101,22 +91,22 @@ class ApiUploadsRepository implements UploadsRepository {
     }
 
     // 3. 确认上传完成，取得公开 URL
-    const completeRes = await httpAuth.post<ApiResponse<UploadCompleteData>>(
+    const completeRes = await httpAuth.post<ApiResponse<components['schemas']['UploadCompleteResult']>>(
       API_ENDPOINTS.UPLOAD.COMPLETE.replace(
         ':uploadId',
-        encodeURIComponent(presign.upload_id),
+        encodeURIComponent(String(uploadId)),
       ),
       {},
     );
-    const complete = unwrapApiResponse<UploadCompleteData>(completeRes);
+    const complete = unwrapApiResponse(completeRes);
 
-    const safeUrl = getSafeRemoteUrl(complete.public_url);
+    const safeUrl = getSafeRemoteUrl(requireString(complete.public_url, '图片地址'));
     if (!safeUrl) {
       throw new AppError('上传返回的图片地址无效');
     }
     return {
       url: safeUrl,
-      filename: complete.object_key.split('/').pop() || file.name,
+      filename: requireString(complete.object_key, '对象键').split('/').pop() || file.name,
       size,
     };
   }

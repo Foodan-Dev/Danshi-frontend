@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Text, useTheme as usePaperTheme, ActivityIndicator } from 'react-native-paper';
@@ -13,7 +13,6 @@ import type { UserStats } from '@/src/models/User';
 import type { Post } from '@/src/models/Post';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { PostCard } from '@/src/components/post_card';
-import { HOMETOWN_OPTIONS, findOptionLabel } from '@/src/constants/selects';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
 import { CachedAvatar } from '@/src/components/cached_avatar';
 
@@ -26,7 +25,12 @@ const formatCount = (value?: number | null) => {
 };
 
 export default function UserProfileScreen() {
-  const { userId } = useLocalSearchParams<{ userId: string }>();
+  const params = useLocalSearchParams<{ userId?: string | string[] }>();
+  const userId = useMemo(() => {
+    const raw = Array.isArray(params.userId) ? params.userId[0] : params.userId;
+    const parsed = raw ? Number(raw) : Number.NaN;
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  }, [params.userId]);
   const { user: currentUser } = useAuth();
   const insets = useSafeAreaInsets();
   const theme = usePaperTheme();
@@ -86,22 +90,12 @@ export default function UserProfileScreen() {
     setPostsError('');
     try {
       const res = await usersService.getUserPosts(userId, { limit: 20 });
-      // 过滤掉不支持的帖子类型（如 companion）和未审核通过的帖子
-      const supportedPosts = res.posts.filter((item: any) => 
-        (!item.post_type || item.post_type === 'share' || item.post_type === 'seeking') &&
-        (!item.status || item.status === 'approved')
-      );
+      const supportedPosts = res.posts.filter((item) => item.status === 'approved');
       const converted: Post[] = supportedPosts.map((item) => mapUserPostListItemToPost(item));
       setPosts(converted);
-    } catch (error: any) {
-      // 忽略 companion 类型相关的验证错误
-      if (error?.message?.includes('companion') || error?.message?.includes('PostType')) {
-        if (__DEV__) console.warn('后端返回了不支持的帖子类型，已忽略');
-        setPosts([]);
-      } else {
-        setPostsError(error?.message ?? '加载用户帖子失败，请稍后重试');
-        if (__DEV__) console.warn('Load user posts failed:', error);
-      }
+    } catch (error) {
+      setPostsError(error instanceof Error ? error.message : '加载用户帖子失败，请稍后重试');
+      if (__DEV__) console.warn('Load user posts failed:', error);
     } finally {
       setPostsLoading(false);
     }
@@ -151,8 +145,8 @@ export default function UserProfileScreen() {
     }
   }, [currentUser, profile, userId]);
 
-  const handlePostPress = useCallback((postId: string) => {
-    router.push({ pathname: '/post/[postId]', params: { postId } });
+  const handlePostPress = useCallback((postId: number) => {
+    router.push({ pathname: '/post/[postId]', params: { postId: String(postId) } });
   }, []);
 
   const renderPost = useCallback(
@@ -190,7 +184,7 @@ export default function UserProfileScreen() {
         masonry
         optimizeItemArrangement={false}
         numColumns={numColumns}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderPost}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -269,17 +263,6 @@ export default function UserProfileScreen() {
                           {profile.email}
                         </Text>
                       )}
-                      {profile.hometown && profile.hometown !== 'Default' && (
-                        <View style={styles.locationRow}>
-                          <Ionicons name="location-outline" size={14} color={theme.colors.onSurfaceVariant} />
-                          <Text 
-                            style={[styles.locationText, { color: theme.colors.onSurfaceVariant }]}
-                            numberOfLines={isProfileExpanded ? undefined : 1}
-                          >
-                            {findOptionLabel(HOMETOWN_OPTIONS, profile.hometown) || profile.hometown}
-                          </Text>
-                        </View>
-                      )}
                     </Pressable>
                     {currentUser && !isCurrentUser && (
                       <Pressable
@@ -333,6 +316,17 @@ export default function UserProfileScreen() {
                   <Text style={[styles.statNumber, { color: theme.colors.onSurface }]}>{formatCount(profile.stats.following_count)}</Text>
                   <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>关注</Text>
                 </Pressable>
+              </View>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statNumber, { color: theme.colors.onSurface }]}>{formatCount(stats?.like_count)}</Text>
+                  <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>获赞</Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: theme.colors.outline }]} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statNumber, { color: theme.colors.onSurface }]}>{formatCount(stats?.favorite_count)}</Text>
+                  <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>收藏</Text>
+                </View>
               </View>
             </View>
 

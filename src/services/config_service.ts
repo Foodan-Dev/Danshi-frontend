@@ -1,26 +1,36 @@
+import { API_ENDPOINTS } from '@/src/constants/app';
+import type { components } from '@/src/generated/openapi';
+import { http } from '@/src/lib/http/client';
+import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import type { PostType, ShareType } from '@/src/models/Post';
 
 export type PostTypeSubType = {
   value: ShareType;
   label: string;
-  icon?: string;
 };
 
 export type PostTypeConfig = {
   type: PostType;
   name: string;
-  icon?: string;
   description?: string;
-  subTypes?: PostTypeSubType[];
-  requiredFields?: string[];
-  recommendedFields?: string[];
+  subTypes: PostTypeSubType[];
+  requiredFields: string[];
+  recommendedFields: string[];
+};
+
+export type CanteenWindowConfig = {
+  id: number;
+  name: string;
+  floor?: string | null;
+  isActive: boolean;
 };
 
 export type CanteenConfig = {
-  id: string;
+  code: string;
   name: string;
   campus: string;
   isActive: boolean;
+  windows: CanteenWindowConfig[];
 };
 
 export type ExploreConfig = {
@@ -30,144 +40,108 @@ export type ExploreConfig = {
   flavors: string[];
 };
 
-type Fetcher<T> = () => Promise<T>;
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let cachedConfig: ExploreConfig | null = null;
+let cacheExpiresAt = 0;
+let inFlightRequest: Promise<ExploreConfig> | null = null;
 
-type CacheEntry<T> = {
-  value: T | null;
-  fetcher: Fetcher<T>;
-};
-
-const POST_TYPES_FALLBACK: PostTypeConfig[] = [
-  {
-    type: 'share',
-    name: '美食分享/避雷',
-    description: '分享你的美食体验，为他人提供参考',
-    subTypes: [
-      { value: 'recommend', label: '推荐' },
-      { value: 'warning', label: '避雷' },
-    ],
-    requiredFields: ['title', 'content', 'images', 'category'],
-    recommendedFields: ['canteen', 'cuisine', 'flavors', 'price', 'tags'],
-  },
-  {
-    type: 'seeking',
-    name: '求美食推荐',
-    description: '寻求他人的美食推荐和建议',
-    subTypes: [],
-    requiredFields: ['title', 'content', 'category'],
-    recommendedFields: ['canteen', 'cuisine', 'budgetRange', 'preferences', 'tags'],
-  },
-];
-
-const CANTEENS_FALLBACK: CanteenConfig[] = [
-  {
-    id: 'canteen-south',
-    name: '邯郸校区南区食堂',
-    campus: '邯郸校区',
-    isActive: true,
-  },
-  {
-    id: 'canteen-chunhui',
-    name: '邯郸校区春晖食堂',
-    campus: '邯郸校区',
-    isActive: true,
-  },
-  {
-    id: 'canteen-north',
-    name: '邯郸校区北区食堂',
-    campus: '邯郸校区',
-    isActive: true,
-  },
-  {
-    id: 'canteen-jiangwan',
-    name: '江湾校区食堂',
-    campus: '江湾校区',
-    isActive: true,
-  },
-];
-
-const CUISINES_FALLBACK: string[] = ['中式', '西式', '日式', '韩式', '东南亚', '其他'];
-
-const FLAVORS_FALLBACK: string[] = [
-  '清淡',
-  '微辣',
-  '麻辣',
-  '中辣',
-  '特辣',
-  '川菜',
-  '湘菜',
-  '粤菜',
-  '家常',
-  '香辣',
-  '甜味',
-  '咸鲜',
-  '酸辣',
-  '浓郁',
-  '爽口',
-  '其他',
-];
-
-function withCache<T>(entry: CacheEntry<T>, force = false): Fetcher<T> {
-  return async () => {
-    if (!force && entry.value) return entry.value;
-    const value = await entry.fetcher();
-    entry.value = value;
-    return value;
+const mapPostType = (item: components['schemas']['PostTypeConfig']): PostTypeConfig | null => {
+  if ((item.type !== 'share' && item.type !== 'seeking') || !item.name) return null;
+  return {
+    type: item.type,
+    name: item.name,
+    description: item.description,
+    subTypes: (item.sub_types ?? []).flatMap((subType) => (
+      (subType.value === 'recommend' || subType.value === 'warning') && subType.label
+        ? [{ value: subType.value, label: subType.label }]
+        : []
+    )),
+    requiredFields: item.required_fields ?? [],
+    recommendedFields: item.recommended_fields ?? [],
   };
-}
-
-const postTypesEntry: CacheEntry<PostTypeConfig[]> = {
-  value: null,
-  fetcher: async () => POST_TYPES_FALLBACK,
 };
 
-const canteensEntry: CacheEntry<CanteenConfig[]> = {
-  value: null,
-  fetcher: async () => CANTEENS_FALLBACK,
+const mapCanteen = (item: components['schemas']['CanteenConfig']): CanteenConfig | null => {
+  if (!item.id || !item.name || !item.campus) return null;
+  return {
+    code: item.id,
+    name: item.name,
+    campus: item.campus,
+    isActive: item.is_active ?? false,
+    windows: (item.windows ?? []).flatMap((window) => (
+      typeof window.id === 'number' && window.name
+        ? [{
+            id: window.id,
+            name: window.name,
+            floor: window.floor ?? null,
+            isActive: window.is_active ?? false,
+          }]
+        : []
+    )),
+  };
 };
 
-const cuisinesEntry: CacheEntry<string[]> = {
-  value: null,
-  fetcher: async () => CUISINES_FALLBACK,
+const fetchConfig = async (): Promise<ExploreConfig> => {
+  const response = await http.get<ApiResponse<components['schemas']['ExploreConfig']>>(
+    API_ENDPOINTS.CONFIG,
+  );
+  const data = unwrapApiResponse(response);
+  return {
+    postTypes: (data.post_types ?? []).flatMap((item) => {
+      const mapped = mapPostType(item);
+      return mapped ? [mapped] : [];
+    }),
+    canteens: (data.canteens ?? []).flatMap((item) => {
+      const mapped = mapCanteen(item);
+      return mapped?.isActive
+        ? [{ ...mapped, windows: mapped.windows.filter((window) => window.isActive) }]
+        : [];
+    }),
+    cuisines: data.cuisines ?? [],
+    flavors: data.flavors ?? [],
+  };
 };
 
-const flavorsEntry: CacheEntry<string[]> = {
-  value: null,
-  fetcher: async () => FLAVORS_FALLBACK,
+const loadConfig = async (force = false): Promise<ExploreConfig> => {
+  if (!force && cachedConfig && Date.now() < cacheExpiresAt) return cachedConfig;
+  if (!force && inFlightRequest) return inFlightRequest;
+
+  inFlightRequest = fetchConfig()
+    .then((config) => {
+      cachedConfig = config;
+      cacheExpiresAt = Date.now() + CACHE_TTL_MS;
+      return config;
+    })
+    .finally(() => {
+      inFlightRequest = null;
+    });
+  return inFlightRequest;
 };
 
 export const configService = {
   async getPostTypes(force = false): Promise<PostTypeConfig[]> {
-    const fetcher = withCache(postTypesEntry, force);
-    const list = await fetcher();
-    return [...list];
+    return [...(await loadConfig(force)).postTypes];
   },
 
   async getCanteens(force = false): Promise<CanteenConfig[]> {
-    const fetcher = withCache(canteensEntry, force);
-    const list = await fetcher();
-    return [...list].filter((item) => item.isActive !== false);
+    return [...(await loadConfig(force)).canteens];
   },
 
   async getCuisines(force = false): Promise<string[]> {
-    const fetcher = withCache(cuisinesEntry, force);
-    const list = await fetcher();
-    return [...list];
+    return [...(await loadConfig(force)).cuisines];
   },
 
   async getFlavors(force = false): Promise<string[]> {
-    const fetcher = withCache(flavorsEntry, force);
-    const list = await fetcher();
-    return [...list];
+    return [...(await loadConfig(force)).flavors];
   },
 
   async getExploreConfig(force = false): Promise<ExploreConfig> {
-    const [postTypes, canteens, cuisines, flavors] = await Promise.all([
-      this.getPostTypes(force),
-      this.getCanteens(force),
-      this.getCuisines(force),
-      this.getFlavors(force),
-    ]);
-    return { postTypes, canteens, cuisines, flavors };
+    const config = await loadConfig(force);
+    return {
+      postTypes: [...config.postTypes],
+      canteens: [...config.canteens],
+      cuisines: [...config.cuisines],
+      flavors: [...config.flavors],
+    };
   },
 };

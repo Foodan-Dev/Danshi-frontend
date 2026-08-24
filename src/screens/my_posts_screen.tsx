@@ -23,7 +23,7 @@ export const MyPostsScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
-  const [postToDelete, setPostToDelete] = useState<string | null>(null);
+  const [postToDelete, setPostToDelete] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const requestSeqRef = useRef(0);
   const insets = useSafeAreaInsets();
@@ -50,26 +50,16 @@ export const MyPostsScreen: React.FC = () => {
       setError(null);
       try {
         const data = await usersService.getUserPosts(user.id);
-        // 过滤掉不支持的帖子类型（如 companion）
-        const supportedPosts = data.posts.filter((item: any) => 
-          !item.post_type || item.post_type === 'share' || item.post_type === 'seeking'
-        );
         if (requestSeqRef.current !== requestId) {
           return;
         }
-        setPosts(supportedPosts);
-      } catch (err: any) {
+        setPosts(data.posts);
+      } catch (err) {
         if (requestSeqRef.current !== requestId) {
           return;
         }
-        // 忽略 companion 类型相关的验证错误
-        if (err?.message?.includes('companion') || err?.message?.includes('PostType')) {
-          if (__DEV__) console.warn('后端返回了不支持的帖子类型，已忽略');
-          setPosts([]);
-        } else {
-          const message = err instanceof AppError ? err.message : '读取数据失败，请稍后重试';
-          setError(message);
-        }
+        const message = err instanceof AppError ? err.message : '读取数据失败，请稍后重试';
+        setError(message);
       } finally {
         if (requestSeqRef.current === requestId) {
           if (isRefresh) {
@@ -93,9 +83,9 @@ export const MyPostsScreen: React.FC = () => {
   );
 
   const handlePostPress = useCallback(
-    (postId: string) => {
+    (postId: number) => {
       // 跳转到编辑页面（这里暂时跳转到详情页，后续可以改为编辑页）
-      const href: Href = { pathname: '/post/[postId]', params: { postId } } as const;
+      const href: Href = { pathname: '/post/[postId]', params: { postId: String(postId) } } as const;
       router.push(href);
     },
     [router]
@@ -106,15 +96,15 @@ export const MyPostsScreen: React.FC = () => {
   }, [router]);
 
   const handleEditPost = useCallback(
-    (postId: string) => {
+    (postId: number) => {
       // 跳转到编辑页面
-      const href: Href = { pathname: '/post/edit/[postId]', params: { postId } } as const;
+      const href: Href = { pathname: '/post/edit/[postId]', params: { postId: String(postId) } } as const;
       router.push(href);
     },
     [router]
   );
 
-  const handleDeletePost = useCallback((postId: string) => {
+  const handleDeletePost = useCallback((postId: number) => {
     setPostToDelete(postId);
     setDeleteDialogVisible(true);
   }, []);
@@ -272,7 +262,7 @@ export const MyPostsScreen: React.FC = () => {
           masonry
           optimizeItemArrangement={false}
           numColumns={numColumns}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderPostCard}
           refreshControl={
             <RefreshControl

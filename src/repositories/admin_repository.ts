@@ -1,258 +1,256 @@
+import { API_ENDPOINTS } from '@/src/constants/app';
+import type { Role } from '@/src/constants/app';
+import type { components } from '@/src/generated/openapi';
+import { AppError } from '@/src/lib/errors/app_error';
 import { httpAuth } from '@/src/lib/http/http_auth';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
-import { API_ENDPOINTS } from '@/src/constants/app';
-import type { PostType, Category } from '@/src/models/Post';
-import type { Role } from '@/src/constants/app';
+import type { Category, PostType } from '@/src/models/Post';
+import { requireNumber, requireString, toPagination } from '@/src/repositories/api_mappers';
 
-export type Pagination = {
-  page: number;
-  limit: number;
-  total: number;
-  total_pages: number;
-};
+type AdminPostListContract = components['schemas']['AdminPostList'];
+type AdminPostContract = components['schemas']['AdminPostView'];
+type AdminCommentListContract = components['schemas']['AdminCommentList'];
+type AdminCommentContract = components['schemas']['AdminCommentView'];
+type AdminUserListContract = components['schemas']['AdminUserList'];
+type AdminUserContract = components['schemas']['AdminUserView'];
 
+export type Pagination = ReturnType<typeof toPagination>;
 export type AdminPostListParams = {
   page?: number;
   limit?: number;
   status?: 'pending' | 'approved' | 'rejected' | 'draft';
   post_type?: PostType;
 };
-
 export type AdminPendingPostSummary = {
-  id: string;
+  id: number;
   title: string;
   content: string;
   category: Category;
-  post_type?: PostType;
-  images?: string[];
-  author: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  status: 'pending' | 'approved' | 'rejected';
-  like_count?: number;
-  view_count?: number;
-  comment_count?: number;
+  post_type: PostType;
+  images: string[];
+  author?: { id: number; name: string; email?: string };
+  status: 'draft' | 'pending' | 'approved' | 'rejected';
+  like_count: number;
+  view_count: number;
+  comment_count: number;
   created_at: string;
 };
-
-export type AdminPendingPostsResponse = {
-  posts: AdminPendingPostSummary[];
-  pagination: Pagination;
-};
-
+export type AdminPendingPostsResponse = { posts: AdminPendingPostSummary[]; pagination: Pagination };
 export type AdminPostsResponse = AdminPendingPostsResponse;
-
-export type AdminPostReviewInput = {
-  status: 'approved' | 'rejected';
-  feedback?: string;
-};
-
+export type AdminPostReviewInput = { status: 'approved' | 'rejected'; feedback?: string };
 export type AdminPostReviewResult = {
-  post_id: string;
-  status: 'approved' | 'rejected';
+  post_id: number;
+  status: 'draft' | 'pending' | 'approved' | 'rejected';
   reviewed_at: string;
+  moderation_record_id: number;
 };
 
-export type AdminUserListParams = {
-  page?: number;
-  limit?: number;
-  role?: Role;
-  is_active?: boolean;
-};
-
+export type AdminUserListParams = { page?: number; limit?: number; role?: Role; is_active?: boolean };
 export type AdminUserSummary = {
-  id: string;
+  id: number;
   name: string;
   email: string;
-  avatar_url?: string;
+  avatar_url: string | null;
   role: Role;
   is_active: boolean;
-  stats?: {
-    post_count?: number;
-    follower_count?: number;
-  };
+  stats: { post_count: number; follower_count: number };
   created_at: string;
 };
+export type AdminUsersResponse = { users: AdminUserSummary[]; pagination: Pagination };
+export type AdminUserRoleInput = { role: Role };
+export type AdminUserRoleResult = { user_id: number; role: Role };
+export type AdminUserStatusInput = { is_active: boolean; reason?: string };
+export type AdminUserStatusResult = { user_id: number; is_active: boolean };
 
-export type AdminUsersResponse = {
-  users: AdminUserSummary[];
-  pagination: Pagination;
+export type AdminCommentListParams = { page?: number; limit?: number; post_id?: number };
+export type AdminCommentSummary = {
+  id: number;
+  content: string;
+  post_id: number;
+  author: { id: number; name: string; email?: string };
+  parent_id: number | null;
+  like_count: number;
+  reply_count: number;
+  created_at: string;
 };
+export type AdminCommentsResponse = { comments: AdminCommentSummary[]; pagination: Pagination };
 
-export type AdminUserRoleInput = {
-  role: Role;
-};
+const isRole = (value: string | undefined): value is Role =>
+  value === 'user' || value === 'admin' || value === 'super_admin';
 
-export type AdminUserRoleResult = {
-  user_id: string;
-  role: Role;
-};
-
-export type AdminUserStatusInput = {
-  is_active: boolean;
-  reason?: string;
-};
-
-export type AdminUserStatusResult = {
-  user_id: string;
-  is_active: boolean;
-};
-
-const mapQueryKey = (key: string): string => {
-  switch (key) {
-    case 'postType':
-      return 'post_type';
-    case 'postId':
-      return 'post_id';
-    case 'isActive':
-      return 'is_active';
-    default:
-      return key;
+const toAdminPost = (post: AdminPostContract): AdminPendingPostSummary => {
+  if (post.category !== 'food' && post.category !== 'recipe') {
+    throw new AppError('服务端返回了无效的帖子分类');
   }
+  if (post.post_type !== 'share' && post.post_type !== 'seeking') {
+    throw new AppError('服务端返回了无效的帖子类型');
+  }
+  if (!post.status) throw new AppError('服务端响应缺少帖子状态');
+  return {
+    id: requireNumber(post.id, '帖子 ID'),
+    title: requireString(post.title, '帖子标题'),
+    content: requireString(post.content, '帖子正文'),
+    category: post.category,
+    post_type: post.post_type,
+    images: post.images ?? [],
+    author: post.author ? {
+      id: requireNumber(post.author.id, '作者 ID'),
+      name: requireString(post.author.name, '作者名称'),
+      email: post.author.email,
+    } : undefined,
+    status: post.status,
+    like_count: post.like_count ?? 0,
+    view_count: post.view_count ?? 0,
+    comment_count: post.comment_count ?? 0,
+    created_at: requireString(post.created_at, '帖子创建时间'),
+  };
 };
 
-const appendQueryParam = (qs: URLSearchParams, key: string, value: unknown) => {
-  if (value == null) return;
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    qs.set(mapQueryKey(key), trimmed);
-    return;
-  }
-  qs.set(mapQueryKey(key), String(value));
+const toAdminComment = (comment: AdminCommentContract): AdminCommentSummary => ({
+  id: requireNumber(comment.id, '评论 ID'),
+  content: requireString(comment.content, '评论正文'),
+  post_id: requireNumber(comment.post_id, '帖子 ID'),
+  author: {
+    id: requireNumber(comment.author?.id, '评论作者 ID'),
+    name: requireString(comment.author?.name, '评论作者名称'),
+    email: comment.author?.email,
+  },
+  parent_id: comment.parent_id ?? null,
+  like_count: comment.like_count ?? 0,
+  reply_count: comment.reply_count ?? 0,
+  created_at: requireString(comment.created_at, '评论创建时间'),
+});
+
+const toAdminUser = (user: AdminUserContract): AdminUserSummary => {
+  if (!isRole(user.role)) throw new AppError('服务端返回了无效的用户角色');
+  if (typeof user.is_active !== 'boolean') throw new AppError('服务端响应缺少用户状态');
+  return {
+    id: requireNumber(user.id, '用户 ID'),
+    name: requireString(user.name, '用户名称'),
+    email: requireString(user.email, '用户邮箱'),
+    avatar_url: user.avatar_url ?? null,
+    role: user.role,
+    is_active: user.is_active,
+    stats: {
+      post_count: user.stats?.post_count ?? 0,
+      follower_count: user.stats?.follower_count ?? 0,
+    },
+    created_at: requireString(user.created_at, '用户创建时间'),
+  };
 };
+
+const withQuery = (path: string, params: object) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+  });
+  return query.size ? `${path}?${query.toString()}` : path;
+};
+const mapPostList = (payload: AdminPostListContract): AdminPostsResponse => ({
+  posts: (payload.posts ?? []).map(toAdminPost),
+  pagination: toPagination(payload.pagination),
+});
+const mapUserList = (payload: AdminUserListContract): AdminUsersResponse => ({
+  users: (payload.users ?? []).map(toAdminUser),
+  pagination: toPagination(payload.pagination),
+});
+const mapCommentList = (payload: AdminCommentListContract): AdminCommentsResponse => ({
+  comments: (payload.comments ?? []).map(toAdminComment),
+  pagination: toPagination(payload.pagination),
+});
 
 export interface AdminRepository {
   listPendingPosts(params?: AdminPostListParams): Promise<AdminPendingPostsResponse>;
   listPosts(params?: AdminPostListParams): Promise<AdminPostsResponse>;
-  reviewPost(postId: string, input: AdminPostReviewInput): Promise<AdminPostReviewResult>;
+  reviewPost(postId: number, input: AdminPostReviewInput): Promise<AdminPostReviewResult>;
+  deletePost(postId: number): Promise<{ post_id: number }>;
   listUsers(params?: AdminUserListParams): Promise<AdminUsersResponse>;
-  updateUserRole(userId: string, input: AdminUserRoleInput): Promise<AdminUserRoleResult>;
-  updateUserStatus(userId: string, input: AdminUserStatusInput): Promise<AdminUserStatusResult>;
   listAdmins(params?: AdminUserListParams): Promise<AdminUsersResponse>;
   listSuperAdmins(params?: AdminUserListParams): Promise<AdminUsersResponse>;
+  updateUserRole(userId: number, input: AdminUserRoleInput): Promise<AdminUserRoleResult>;
+  updateUserStatus(userId: number, input: AdminUserStatusInput): Promise<AdminUserStatusResult>;
   listComments(params?: AdminCommentListParams): Promise<AdminCommentsResponse>;
-  deleteComment(commentId: string): Promise<{ comment_id: string }>;
-  deletePost(postId: string): Promise<{ post_id: string }>;
+  deleteComment(commentId: number): Promise<{ comment_id: number }>;
 }
 
-export type AdminCommentListParams = {
-  page?: number;
-  limit?: number;
-  post_id?: string;
-};
-
-export type AdminCommentSummary = {
-  id: string;
-  content: string;
-  post_id: string;
-  author: {
-    id: string;
-    name: string;
-    email?: string;
-  };
-  parent_id: string | null;
-  like_count?: number;
-  reply_count?: number;
-  created_at: string;
-};
-
-export type AdminCommentsResponse = {
-  comments: AdminCommentSummary[];
-  pagination: Pagination;
-};
-
 class ApiAdminRepository implements AdminRepository {
-  async listPendingPosts(params: AdminPostListParams = {}): Promise<AdminPendingPostsResponse> {
-    const qs = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-      appendQueryParam(qs, key, value);
-    }
-    const url = qs.size ? `${API_ENDPOINTS.ADMIN.POSTS_PENDING}?${qs.toString()}` : API_ENDPOINTS.ADMIN.POSTS_PENDING;
-    const res = await httpAuth.get<ApiResponse<AdminPendingPostsResponse>>(url);
-    return unwrapApiResponse<AdminPendingPostsResponse>(res);
+  async listPendingPosts(params: AdminPostListParams = {}) {
+    const res = await httpAuth.get<ApiResponse<AdminPostListContract>>(
+      withQuery(API_ENDPOINTS.ADMIN.POSTS_PENDING, params),
+    );
+    return mapPostList(unwrapApiResponse(res));
   }
 
-  async listPosts(params: AdminPostListParams = {}): Promise<AdminPostsResponse> {
-    const qs = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-      appendQueryParam(qs, key, value);
-    }
-    const url = qs.size ? `${API_ENDPOINTS.ADMIN.POSTS}?${qs.toString()}` : API_ENDPOINTS.ADMIN.POSTS;
-    const res = await httpAuth.get<ApiResponse<AdminPostsResponse>>(url);
-    return unwrapApiResponse<AdminPostsResponse>(res);
+  async listPosts(params: AdminPostListParams = {}) {
+    const res = await httpAuth.get<ApiResponse<AdminPostListContract>>(
+      withQuery(API_ENDPOINTS.ADMIN.POSTS, params),
+    );
+    return mapPostList(unwrapApiResponse(res));
   }
 
-  async reviewPost(postId: string, input: AdminPostReviewInput): Promise<AdminPostReviewResult> {
-    const path = API_ENDPOINTS.ADMIN.POST_REVIEW.replace(':postId', encodeURIComponent(postId));
-    const res = await httpAuth.put<ApiResponse<AdminPostReviewResult>>(path, input);
-    return unwrapApiResponse<AdminPostReviewResult>(res);
+  async reviewPost(postId: number, input: AdminPostReviewInput) {
+    const path = API_ENDPOINTS.ADMIN.POST_REVIEW.replace(':postId', String(postId));
+    const res = await httpAuth.put<ApiResponse<components['schemas']['AdminPostReviewResult']>>(path, input);
+    const result = unwrapApiResponse(res);
+    if (!result.status) throw new AppError('服务端响应缺少审核状态');
+    return {
+      post_id: requireNumber(result.post_id, '帖子 ID'),
+      status: result.status,
+      reviewed_at: requireString(result.reviewed_at, '审核时间'),
+      moderation_record_id: requireNumber(result.moderation_record_id, '审核记录 ID'),
+    };
   }
 
-  async deletePost(postId: string): Promise<{ post_id: string }> {
-    const path = API_ENDPOINTS.ADMIN.POST_DELETE.replace(':postId', encodeURIComponent(postId));
-    const res = await httpAuth.delete<ApiResponse<{ post_id: string }>>(path);
-    return unwrapApiResponse<{ post_id: string }>(res);
+  async deletePost(postId: number) {
+    const path = API_ENDPOINTS.ADMIN.POST_DELETE.replace(':postId', String(postId));
+    const res = await httpAuth.delete<ApiResponse<components['schemas']['AdminPostDeleteResult']>>(path);
+    return { post_id: requireNumber(unwrapApiResponse(res).post_id, '帖子 ID') };
   }
 
-  async listUsers(params: AdminUserListParams = {}): Promise<AdminUsersResponse> {
-    const qs = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-      appendQueryParam(qs, key, value);
-    }
-    const url = qs.size ? `${API_ENDPOINTS.ADMIN.USERS}?${qs.toString()}` : API_ENDPOINTS.ADMIN.USERS;
-    const res = await httpAuth.get<ApiResponse<AdminUsersResponse>>(url);
-    return unwrapApiResponse<AdminUsersResponse>(res);
+  async listUsers(params: AdminUserListParams = {}) {
+    const res = await httpAuth.get<ApiResponse<AdminUserListContract>>(withQuery(API_ENDPOINTS.ADMIN.USERS, params));
+    return mapUserList(unwrapApiResponse(res));
   }
 
-  async listAdmins(params: AdminUserListParams = {}): Promise<AdminUsersResponse> {
-    const qs = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-      appendQueryParam(qs, key, value);
-    }
-    const url = qs.size ? `${API_ENDPOINTS.ADMIN.ADMINS}?${qs.toString()}` : API_ENDPOINTS.ADMIN.ADMINS;
-    const res = await httpAuth.get<ApiResponse<AdminUsersResponse>>(url);
-    return unwrapApiResponse<AdminUsersResponse>(res);
+  async listAdmins(params: AdminUserListParams = {}) {
+    const res = await httpAuth.get<ApiResponse<AdminUserListContract>>(withQuery(API_ENDPOINTS.ADMIN.ADMINS, params));
+    return mapUserList(unwrapApiResponse(res));
   }
 
-  async listSuperAdmins(params: AdminUserListParams = {}): Promise<AdminUsersResponse> {
-    const qs = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-      appendQueryParam(qs, key, value);
-    }
-    const url = qs.size ? `${API_ENDPOINTS.ADMIN.SUPER_ADMINS}?${qs.toString()}` : API_ENDPOINTS.ADMIN.SUPER_ADMINS;
-    const res = await httpAuth.get<ApiResponse<AdminUsersResponse>>(url);
-    return unwrapApiResponse<AdminUsersResponse>(res);
+  async listSuperAdmins(params: AdminUserListParams = {}) {
+    const res = await httpAuth.get<ApiResponse<AdminUserListContract>>(
+      withQuery(API_ENDPOINTS.ADMIN.SUPER_ADMINS, params),
+    );
+    return mapUserList(unwrapApiResponse(res));
   }
 
-  async updateUserRole(userId: string, input: AdminUserRoleInput): Promise<AdminUserRoleResult> {
-    const path = API_ENDPOINTS.ADMIN.USER_ROLE.replace(':userId', encodeURIComponent(userId));
-    const res = await httpAuth.put<ApiResponse<AdminUserRoleResult>>(path, input);
-    return unwrapApiResponse<AdminUserRoleResult>(res);
+  async updateUserRole(userId: number, input: AdminUserRoleInput) {
+    const path = API_ENDPOINTS.ADMIN.USER_ROLE.replace(':userId', String(userId));
+    const res = await httpAuth.put<ApiResponse<components['schemas']['AdminUserRoleResult']>>(path, input);
+    const result = unwrapApiResponse(res);
+    if (!isRole(result.role)) throw new AppError('服务端返回了无效的用户角色');
+    return { user_id: requireNumber(result.user_id, '用户 ID'), role: result.role };
   }
 
-  async updateUserStatus(userId: string, input: AdminUserStatusInput): Promise<AdminUserStatusResult> {
-    const path = API_ENDPOINTS.ADMIN.USER_STATUS.replace(':userId', encodeURIComponent(userId));
-    const res = await httpAuth.put<ApiResponse<AdminUserStatusResult>>(path, input);
-    return unwrapApiResponse<AdminUserStatusResult>(res);
+  async updateUserStatus(userId: number, input: AdminUserStatusInput) {
+    const path = API_ENDPOINTS.ADMIN.USER_STATUS.replace(':userId', String(userId));
+    const res = await httpAuth.put<ApiResponse<components['schemas']['AdminUserStatusResult']>>(path, input);
+    const result = unwrapApiResponse(res);
+    if (typeof result.is_active !== 'boolean') throw new AppError('服务端响应缺少用户状态');
+    return { user_id: requireNumber(result.user_id, '用户 ID'), is_active: result.is_active };
   }
 
-  async listComments(params: AdminCommentListParams = {}): Promise<AdminCommentsResponse> {
-    const qs = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-      appendQueryParam(qs, key, value);
-    }
-    const url = qs.size ? `${API_ENDPOINTS.ADMIN.COMMENTS}?${qs.toString()}` : API_ENDPOINTS.ADMIN.COMMENTS;
-    const res = await httpAuth.get<ApiResponse<AdminCommentsResponse>>(url);
-    return unwrapApiResponse<AdminCommentsResponse>(res);
+  async listComments(params: AdminCommentListParams = {}) {
+    const res = await httpAuth.get<ApiResponse<AdminCommentListContract>>(
+      withQuery(API_ENDPOINTS.ADMIN.COMMENTS, params),
+    );
+    return mapCommentList(unwrapApiResponse(res));
   }
 
-  async deleteComment(commentId: string): Promise<{ comment_id: string }> {
-    const path = API_ENDPOINTS.ADMIN.COMMENT_DELETE.replace(':commentId', encodeURIComponent(commentId));
-    const res = await httpAuth.delete<ApiResponse<{ comment_id: string }>>(path);
-    return unwrapApiResponse<{ comment_id: string }>(res);
+  async deleteComment(commentId: number) {
+    const path = API_ENDPOINTS.ADMIN.COMMENT_DELETE.replace(':commentId', String(commentId));
+    const res = await httpAuth.delete<ApiResponse<components['schemas']['AdminCommentDeleteResult']>>(path);
+    return { comment_id: requireNumber(unwrapApiResponse(res).comment_id, '评论 ID') };
   }
 }
 

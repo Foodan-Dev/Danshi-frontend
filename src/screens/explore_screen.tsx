@@ -90,9 +90,9 @@ export default function ExploreScreen() {
         if (!isMounted) return;
         setConfig(data);
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         if (!isMounted) return;
-        const message = (e as Error)?.message ?? '配置加载失败，已使用内置数据';
+        const message = e instanceof Error ? e.message : '配置加载失败';
         setConfigError(message);
       })
       .finally(() => {
@@ -110,8 +110,8 @@ export default function ExploreScreen() {
     };
   }, []);
 
-  const requestFilters = useMemo(() => {
-    const payload: Record<string, unknown> = {
+  const requestFilters = useMemo<PostListFilters>(() => {
+    const payload: PostListFilters = {
       limit: 20,
     };
     if (filters.sortBy !== 'latest') {
@@ -121,26 +121,25 @@ export default function ExploreScreen() {
   }, [filters]);
 
   const fetchPosts = useCallback(
-    async (mode: LoaderState = 'initial', overrides?: Record<string, unknown>) => {
+    async (mode: LoaderState = 'initial', overrides?: PostListFilters) => {
       const requestId = ++postsRequestSeqRef.current;
       setLoaderState(mode);
       setError(null);
       try {
-        const params = { ...requestFilters, ...(overrides ?? {}) };
-        const listFilters = { ...(params as Record<string, unknown>) } as PostListFilters;
-        const { posts: result } = await postsService.list(listFilters);
+        const params: PostListFilters = { ...requestFilters, ...(overrides ?? {}) };
+        const { posts: result } = await postsService.list(params);
         if (postsRequestSeqRef.current !== requestId) {
           return;
         }
         // 前端过滤：只显示已审核通过的帖子（后端应该已经过滤，这里是额外保护）
-        const approvedPosts = result.filter((post: any) => post.status === 'approved');
+        const approvedPosts = result.filter((post) => post.status === 'approved');
         setPosts(approvedPosts);
         setError(null);
-      } catch (e) {
+      } catch (e: unknown) {
         if (postsRequestSeqRef.current !== requestId) {
           return;
         }
-        const message = (e as Error)?.message ?? '加载帖子失败';
+        const message = e instanceof Error ? e.message : '加载帖子失败';
         setError(message);
       } finally {
         if (postsRequestSeqRef.current === requestId) {
@@ -173,8 +172,8 @@ export default function ExploreScreen() {
   }, [fetchPosts]);
 
   const onPress = useCallback(
-    (postId: string) => {
-      const href: Href = { pathname: '/post/[postId]', params: { postId } } as const;
+    (postId: number) => {
+      const href: Href = { pathname: '/post/[postId]', params: { postId: String(postId) } };
       router.push(href);
     },
     [router]
@@ -199,7 +198,7 @@ export default function ExploreScreen() {
       { value: 'all' as const, label: '全部类型', description: '推荐最新趋势' },
       ...config.postTypes.map((item) => ({
         value: item.type,
-        label: `${item.icon ?? ''} ${item.name}`.trim(),
+        label: item.name,
         description: item.description ?? '',
       })),
     ];
@@ -317,7 +316,7 @@ export default function ExploreScreen() {
         masonry
         optimizeItemArrangement={false}
         numColumns={numColumns}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderPost}
         refreshControl={
           <RefreshControl
@@ -421,7 +420,7 @@ export default function ExploreScreen() {
                       mode={filters.shareType === item.value ? 'flat' : 'outlined'}
                       compact
                     >
-                      {`${item.icon ?? ''} ${item.label}`.trim()}
+                      {item.label}
                     </Chip>
                   ))}
                 </View>
@@ -469,7 +468,7 @@ export default function ExploreScreen() {
                   </Chip>
                   {config.canteens.map((item) => (
                     <Chip
-                      key={item.id}
+                      key={item.code}
                       selected={filters.canteenName === item.name}
                       onPress={() => setFilters((prev) => ({ ...prev, canteenName: item.name }))}
                       mode={filters.canteenName === item.name ? 'flat' : 'outlined'}
