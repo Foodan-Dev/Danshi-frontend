@@ -183,9 +183,6 @@ export type ExtendedMD3Theme = MD3Theme & {
   colors: MD3Theme['colors'] & SemanticColors & SurfaceColors;
 };
 
-// 默认主题色
-const DEFAULT_ACCENT_COLOR = '#F97316';
-
 function buildTheme(mode: 'light' | 'dark', accentColor?: string): ExtendedMD3Theme {
   const base = mode === 'dark' ? MD3DarkTheme : MD3LightTheme
   const semantic = mode === 'dark' ? semanticDark : semanticLight
@@ -219,7 +216,7 @@ export function getMD3Theme(mode: 'light' | 'dark', accentColor?: string): Exten
 
 /**
  * 类型安全的主题 Hook，返回包含语义颜色的扩展主题。
- * 用于替代 `usePaperTheme()` + `theme.colors as any` 的模式。
+ * 用于提供带语义色与 surface 层级色的强类型主题。
  */
 export function useExtendedTheme(): ExtendedMD3Theme {
   return usePaperTheme<ExtendedMD3Theme>();

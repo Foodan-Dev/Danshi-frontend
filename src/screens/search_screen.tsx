@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, ScrollView, Pressable, TextInput as RNTextInput, TextStyle, type StyleProp, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
 import {
   ActivityIndicator,
   Text,
@@ -15,11 +16,11 @@ import { useAuth } from '@/src/context/auth_context';
 import { showAlert } from '@/src/utils/alert';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
-import { PostCard } from '@/src/components/post_card';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WEB_NO_OUTLINE } from '@/src/utils';
 import { CachedAvatar } from '@/src/components/cached_avatar';
+import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 // 宽屏断点
 const WIDE_BREAKPOINT = 768;
@@ -123,7 +124,7 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
-  const [followLoadingMap, setFollowLoadingMap] = useState<Record<string, boolean>>({});
+  const [followLoadingMap, setFollowLoadingMap] = useState<Record<number, boolean>>({});
   const requestSeqRef = useRef(0);
 
   // 加载搜索历史
@@ -153,16 +154,16 @@ export default function SearchScreen() {
   }, []);
 
   const handlePostPress = useCallback(
-    (postId: string) => {
-      const href: Href = { pathname: '/post/[postId]', params: { postId } } as const;
+    (postId: number) => {
+      const href: Href = { pathname: '/post/[postId]', params: { postId: String(postId) } };
       router.push(href);
     },
     [router]
   );
 
   const handleUserPress = useCallback(
-    (userId: string) => {
-      router.push({ pathname: '/user/[userId]', params: { userId } });
+    (userId: number) => {
+      router.push({ pathname: '/user/[userId]', params: { userId: String(userId) } });
     },
     [router]
   );
@@ -189,9 +190,9 @@ export default function SearchScreen() {
         setPosts([]);
       }
       setHasSearched(true);
-    } catch (e) {
+    } catch (e: unknown) {
       if (requestSeqRef.current !== requestId) return;
-      const message = (e as Error)?.message ?? '搜索失败，请稍后重试';
+      const message = e instanceof Error ? e.message : '搜索失败，请稍后重试';
       setError(message);
     } finally {
       if (requestSeqRef.current === requestId) {
@@ -226,7 +227,7 @@ export default function SearchScreen() {
     [doSearch, hasSearched, keyword]
   );
 
-  const handleToggleFollow = useCallback(async (userId: string, currentlyFollowing: boolean) => {
+  const handleToggleFollow = useCallback(async (userId: number, currentlyFollowing: boolean) => {
     if (!currentUser) {
       showAlert('请先登录', '登录后才能关注用户');
       return;
@@ -251,8 +252,8 @@ export default function SearchScreen() {
             }
           : u
       ));
-    } catch (err: any) {
-      showAlert('操作失败', err.message || '请稍后重试');
+    } catch (err: unknown) {
+      showAlert('操作失败', err instanceof Error ? err.message : '请稍后重试');
     } finally {
       setFollowLoadingMap(prev => ({ ...prev, [userId]: false }));
     }
@@ -262,19 +263,53 @@ export default function SearchScreen() {
     ({ item }: { item: SearchPost }) => {
       const snippet = extractMatchSnippet(item.highlight?.content);
       const showSnippet = snippet && !item.highlight?.title;
+      const previewImage = getSafeRemoteUrl(item.images[0]);
 
       return (
         <View style={{ marginHorizontal: gridGap / 2, marginBottom: gridVerticalGap }}>
-          <PostCard post={item} onPress={handlePostPress} appearance="flat" />
-          {showSnippet && (
-            <View style={[styles.snippetContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
-              <HighlightedText
-                value={snippet}
-                style={[styles.snippetText, { color: theme.colors.onSurfaceVariant }]}
-                numberOfLines={2}
+          <Pressable
+            style={[styles.searchPostCard, { backgroundColor: theme.colors.surface }]}
+            onPress={() => handlePostPress(item.id)}
+          >
+            {previewImage ? (
+              <Image
+                source={{ uri: previewImage }}
+                style={styles.searchPostImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={`${item.id}:${previewImage}`}
               />
+            ) : null}
+            <View style={styles.searchPostBody}>
+              {item.highlight?.title ? (
+                <HighlightedText
+                  value={item.highlight.title}
+                  style={[styles.searchPostTitle, { color: theme.colors.onSurface }]}
+                  numberOfLines={2}
+                />
+              ) : (
+                <Text style={[styles.searchPostTitle, { color: theme.colors.onSurface }]} numberOfLines={2}>
+                  {item.title}
+                </Text>
+              )}
+              <Text style={[styles.searchPostMeta, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
+                {item.author?.name || '未知作者'} · {item.category === 'food' ? '美食' : '食谱'}
+              </Text>
+              {showSnippet ? (
+                <View style={[styles.snippetContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
+                  <HighlightedText
+                    value={snippet}
+                    style={[styles.snippetText, { color: theme.colors.onSurfaceVariant }]}
+                    numberOfLines={2}
+                  />
+                </View>
+              ) : null}
+              <View style={styles.searchPostStats}>
+                <Text style={{ color: theme.colors.onSurfaceVariant }}>♡ {item.stats.like_count}</Text>
+                <Text style={{ color: theme.colors.onSurfaceVariant }}>评论 {item.stats.comment_count}</Text>
+              </View>
             </View>
-          )}
+          </Pressable>
         </View>
       );
     },
@@ -446,7 +481,7 @@ export default function SearchScreen() {
             masonry
             optimizeItemArrangement={false}
             numColumns={numColumns}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => String(item.id)}
             renderItem={renderPost}
             showsVerticalScrollIndicator={false}
           />
@@ -797,6 +832,31 @@ const styles = StyleSheet.create({
   },
 
   // ==================== 搜索摘要 ====================
+  searchPostCard: {
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  searchPostImage: {
+    width: '100%',
+    aspectRatio: 1.2,
+  },
+  searchPostBody: {
+    padding: 12,
+    gap: 7,
+  },
+  searchPostTitle: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600',
+  },
+  searchPostMeta: {
+    fontSize: 12,
+  },
+  searchPostStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   snippetContainer: {
     marginTop: 6,
     paddingHorizontal: 10,

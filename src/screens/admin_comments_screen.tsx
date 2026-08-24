@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { useAuth } from '@/src/context/auth_context';
-import { isAdmin } from '@/src/lib/auth/roles';
+import { canReviewContent } from '@/src/lib/auth/roles';
 import { adminService } from '@/src/services/admin_service';
 import type { AdminCommentSummary } from '@/src/repositories/admin_repository';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -34,7 +34,7 @@ export default function AdminCommentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
-  const [menuVisible, setMenuVisible] = useState<string | null>(null);
+  const [menuVisible, setMenuVisible] = useState<number | null>(null);
   const requestSeqRef = useRef(0);
 
   const contentHorizontalPadding = pickByBreakpoint(current, { base: 12, sm: 16, md: 20, lg: 24, xl: 24 });
@@ -102,7 +102,7 @@ export default function AdminCommentsScreen() {
   }, []);
 
   const loadComments = useCallback(async (isRefresh = false) => {
-    if (!user || !isAdmin(user.role)) return;
+    if (!user || !canReviewContent(user.roles)) return;
     const requestId = ++requestSeqRef.current;
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -128,13 +128,13 @@ export default function AdminCommentsScreen() {
   }, [user]);
 
   useEffect(() => {
-    if (isLoading || !user || !isAdmin(user.role)) {
+    if (isLoading || !user || !canReviewContent(user.roles)) {
       return;
     }
     void loadComments();
   }, [isLoading, loadComments, user]);
 
-  const handleDelete = async (commentId: string) => {
+  const handleDelete = async (commentId: number) => {
     setActionError('');
     try {
       await adminService.deleteComment(commentId);
@@ -144,7 +144,7 @@ export default function AdminCommentsScreen() {
     }
   };
 
-  const confirmDelete = (commentId: string) => {
+  const confirmDelete = (commentId: number) => {
     Alert.alert(
       '删除评论',
       '确定要删除这条评论吗？此操作不可撤销。',
@@ -173,7 +173,7 @@ export default function AdminCommentsScreen() {
           <View style={styles.userTextContainer}>
             <Text style={dynamicStyles.userName}>{comment.author.name}</Text>
             <Text style={dynamicStyles.userEmail} numberOfLines={1}>
-              {comment.author.email || `ID: ${comment.author.id.slice(0, 8)}...`}
+              {comment.author.email || `ID: ${comment.author.id}`}
             </Text>
           </View>
         </View>
@@ -260,7 +260,7 @@ export default function AdminCommentsScreen() {
     );
   }
 
-  if (!isAdmin(user.role)) {
+  if (!canReviewContent(user.roles)) {
     return (
       <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
         <Text style={{ color: pTheme.colors.onSurface, marginBottom: 8 }}>当前账号没有评论管理权限</Text>
@@ -287,7 +287,7 @@ export default function AdminCommentsScreen() {
           paddingHorizontal: contentHorizontalPadding,
         }}
         data={comments}
-        keyExtractor={(comment) => comment.id}
+        keyExtractor={(comment) => String(comment.id)}
         renderItem={renderComment}
         extraData={menuVisible}
         refreshControl={

@@ -167,14 +167,19 @@ type UserFollowListScreenProps = {
 };
 
 export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type }) => {
-  const { userId } = useLocalSearchParams<{ userId: string }>();
+  const { userId: userIdParam } = useLocalSearchParams<{ userId: string }>();
+  const parsedUserId = Number(userIdParam);
+  const userId = Number.isSafeInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : null;
   const { user: currentUser, isLoading } = useAuth();
   const [items, setItems] = useState<FollowUserItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [actionLoading, setActionLoading] = useState<Record<number, boolean>>({});
   const requestSeqRef = useRef(0);
   const insets = useSafeAreaInsets();
   const theme = usePaperTheme();
@@ -195,10 +200,12 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
   }, [router]);
 
   const load = useCallback(
-    async (isRefresh = false) => {
+    async (isRefresh = false, cursor?: string) => {
       if (!userId) return;
       const requestId = ++requestSeqRef.current;
-      if (isRefresh) {
+      if (cursor) {
+        setLoadingMore(true);
+      } else if (isRefresh) {
         setRefreshing(true);
       } else {
         setLoading(true);
@@ -207,12 +214,16 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
       try {
         const data =
           type === 'followers'
-            ? await usersService.getUserFollowers(userId)
-            : await usersService.getUserFollowing(userId);
+            ? await usersService.getUserFollowers(userId, { cursor, limit: 20 })
+            : await usersService.getUserFollowing(userId, { cursor, limit: 20 });
         if (requestSeqRef.current !== requestId) {
           return;
         }
-        setItems(data.users);
+        setItems((current) => cursor
+          ? [...current, ...data.users.filter((item) => !current.some((existing) => existing.id === item.id))]
+          : data.users);
+        setNextCursor(data.pagination.next_cursor);
+        setHasMore(data.pagination.has_more);
       } catch (err) {
         if (requestSeqRef.current !== requestId) {
           return;
@@ -226,11 +237,18 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
           } else {
             setLoading(false);
           }
+          setLoadingMore(false);
         }
       }
     },
     [type, userId],
   );
+
+  const loadMore = useCallback(() => {
+    if (!loading && !loadingMore && hasMore && nextCursor) {
+      void load(false, nextCursor);
+    }
+  }, [hasMore, load, loading, loadingMore, nextCursor]);
 
   useEffect(() => {
     if (isLoading) {
@@ -240,18 +258,18 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
   }, [currentUser?.id, isLoading, load]);
 
   const navigateToProfile = useCallback(
-    (targetId: string) => {
+    (targetId: number) => {
       router.push(`/user/${targetId}`);
     },
     [router],
   );
 
-  const withActionLoading = useCallback((targetUserId: string, value: boolean) => {
+  const withActionLoading = useCallback((targetUserId: number, value: boolean) => {
     setActionLoading((prev) => ({ ...prev, [targetUserId]: value }));
   }, []);
 
   const handleFollowBack = useCallback(
-    async (targetId: string) => {
+    async (targetId: number) => {
       setActionError(null);
       withActionLoading(targetId, true);
       try {
@@ -281,7 +299,7 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
   );
 
   const handleUnfollow = useCallback(
-    async (targetId: string) => {
+    async (targetId: number) => {
       setActionError(null);
       withActionLoading(targetId, true);
       try {
@@ -366,7 +384,7 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
         <FlatList
           style={{ flex: 1 }}
           data={items}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
           refreshControl={
             <RefreshControl
@@ -400,6 +418,9 @@ export const UserFollowListScreen: React.FC<UserFollowListScreenProps> = ({ type
               </Text>
             </View>
           }
+          ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} /> : null}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
         />
       )}
       {actionError || (loadError && items.length > 0) ? (

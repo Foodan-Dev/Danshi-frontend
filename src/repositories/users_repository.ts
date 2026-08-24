@@ -1,25 +1,38 @@
+import type { components } from '@/src/generated/openapi';
+import { AppError } from '@/src/lib/errors/app_error';
 import { httpAuth } from '@/src/lib/http/http_auth';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import type { User, Gender, UserStats } from '@/src/models/User';
+import type { Post } from '@/src/models/Post';
 import { API_ENDPOINTS } from '@/src/constants/app';
+import {
+  requireNumber,
+  requireString,
+  toCursorPagination,
+  toPagination,
+  toPost,
+  type CursorPagination,
+} from '@/src/repositories/api_mappers';
+import { normalizeRoles, primaryRole } from '@/src/lib/auth/roles';
 
 const appendQueryParam = (qs: URLSearchParams, key: string, value: unknown) => {
   if (value == null) return;
   if (typeof value === 'string') {
     const trimmed = value.trim();
-    if (!trimmed) return;
-    qs.set(key, trimmed);
+    if (trimmed) qs.set(key, trimmed);
     return;
   }
   qs.set(key, String(value));
 };
 
-export interface UserProfile extends User {
-  bio?: string;
+export type UserProfile = Omit<User, 'email' | 'role' | 'roles' | 'stats' | 'created_at'> & {
+  email?: string | null;
+  role?: User['role'] | null;
+  roles: User['roles'];
   stats: UserStats;
   is_following: boolean;
-  created_at: string; // ISO
-}
+  created_at: string;
+};
 
 export type Pagination = {
   page: number;
@@ -34,168 +47,167 @@ export type UserPostListParams = {
   status?: 'pending' | 'approved' | 'rejected' | 'draft';
 };
 
-export type UserPostListItem = {
-  id: string;
-  title: string;
-  category?: string;
-  status?: 'pending' | 'approved' | 'rejected' | 'draft';
-  // 平铺格式的统计数据
-  like_count?: number;
-  view_count?: number;
-  comment_count?: number;
-  favorite_count?: number;
-  // 嵌套格式的统计数据（某些 API 可能返回这种格式）
-  stats?: {
-    like_count?: number;
-    view_count?: number;
-    comment_count?: number;
-    favorite_count?: number;
-  };
-  cover_image?: string;
-  images?: string[];  // 某些 API 可能返回完整的 images 数组
-  created_at?: string;
-  post_type?: 'share' | 'seeking';
-  share_type?: 'recommend' | 'warning';
-  content?: string;
-  updated_at?: string;
-  tags?: string[];
-  canteen?: string;
-  price?: number;
-  is_liked?: boolean;
-  is_favorited?: boolean;
-  author?: {
-    id: string;
-    name: string;
-    avatar_url?: string;
-  };
-};
-
-export type UserPostListResponse = {
-  posts: UserPostListItem[];
-  pagination: Pagination;
-};
-
-export type UserFollowListParams = {
-  page?: number;
-  limit?: number;
-};
-
-export type UserFavoriteListParams = {
-  page?: number;
-  limit?: number;
-};
-
-export type UserFavoriteListResponse = {
-  posts: UserPostListItem[];
-  pagination: Pagination;
-};
+export type UserPostListItem = Post;
+export type UserPostListResponse = { posts: UserPostListItem[]; pagination: Pagination };
+export type UserFavoriteListParams = { page?: number; limit?: number };
+export type UserFavoriteListResponse = UserPostListResponse;
+export type UserFollowListParams = { cursor?: string; limit?: number };
 
 export type FollowUserItem = {
-  id: string;
+  id: number;
   name: string;
   avatar_url?: string | null;
-  bio?: string;
+  bio?: string | null;
   stats?: Partial<UserStats>;
   is_following?: boolean;
 };
 
-export type UserFollowListResponse = {
-  users: FollowUserItem[];
-  pagination: Pagination;
-};
-
-export type FollowActionResponse = {
-  is_following: boolean;
-  follower_count: number;
-};
+export type UserFollowListResponse = { users: FollowUserItem[]; pagination: CursorPagination };
+export type FollowActionResponse = { is_following: boolean; follower_count: number };
 
 export type UpdateUserInput = {
   name?: string;
-  bio?: string;
+  bio?: string | null;
   avatar_url?: string | null;
-  gender?: Gender;
-  hometown?: string;
+  gender?: Gender | null;
 };
 
+const toUserStats = (stats: components['schemas']['UserStats'] | undefined): UserStats => ({
+  post_count: stats?.post_count ?? 0,
+  like_count: stats?.like_count ?? 0,
+  favorite_count: stats?.favorite_count ?? 0,
+  follower_count: stats?.follower_count ?? 0,
+  following_count: stats?.following_count ?? 0,
+});
+
+const toUserProfile = (profile: components['schemas']['UserProfile']): UserProfile => {
+  const roles = normalizeRoles(profile.roles);
+  const gender = profile.gender === 'male' || profile.gender === 'female' || profile.gender === 'other'
+    ? profile.gender
+    : null;
+  return {
+    id: requireNumber(profile.id, '用户 ID'),
+    name: requireString(profile.name, '用户名称'),
+    email: profile.email ?? null,
+    role: primaryRole(roles),
+    roles,
+    gender,
+    avatar_url: profile.avatar_url ?? null,
+    bio: profile.bio ?? null,
+    stats: toUserStats(profile.stats),
+    is_following: profile.is_following ?? false,
+    created_at: requireString(profile.created_at, '用户创建时间'),
+  };
+};
+
+const toFollowUser = (user: components['schemas']['UserListItem']): FollowUserItem => ({
+  id: requireNumber(user.id, '用户 ID'),
+  name: requireString(user.name, '用户名称'),
+  avatar_url: user.avatar_url ?? null,
+  bio: user.bio ?? null,
+  stats: toUserStats(user.stats),
+  is_following: user.is_following ?? false,
+});
+
 export interface UsersRepository {
-  getUser(userId: string): Promise<UserProfile>;
-  updateUser(userId: string, input: UpdateUserInput): Promise<{ user: UserProfile }>;
-  listUserPosts(userId: string, params?: UserPostListParams): Promise<UserPostListResponse>;
-  listUserFavorites(userId: string, params?: UserFavoriteListParams): Promise<UserFavoriteListResponse>;
-  listUserFollowing(userId: string, params?: UserFollowListParams): Promise<UserFollowListResponse>;
-  listUserFollowers(userId: string, params?: UserFollowListParams): Promise<UserFollowListResponse>;
-  followUser(userId: string): Promise<FollowActionResponse>;
-  unfollowUser(userId: string): Promise<FollowActionResponse>;
+  getUser(userId: number): Promise<UserProfile>;
+  updateUser(userId: number, input: UpdateUserInput): Promise<{ user: UserProfile }>;
+  listUserPosts(userId: number, params?: UserPostListParams): Promise<UserPostListResponse>;
+  listUserFavorites(userId: number, params?: UserFavoriteListParams): Promise<UserFavoriteListResponse>;
+  listUserFollowing(userId: number, params?: UserFollowListParams): Promise<UserFollowListResponse>;
+  listUserFollowers(userId: number, params?: UserFollowListParams): Promise<UserFollowListResponse>;
+  followUser(userId: number): Promise<FollowActionResponse>;
+  unfollowUser(userId: number): Promise<FollowActionResponse>;
 }
 
 export class ApiUsersRepository implements UsersRepository {
-  async getUser(userId: string): Promise<UserProfile> {
-    const url = API_ENDPOINTS.USERS.ROOT.replace(':userId', encodeURIComponent(userId));
-    // 使用 httpAuth 以便后端能识别当前用户身份，正确返回 is_following 状态
-    const res = await httpAuth.get<ApiResponse<UserProfile>>(url);
-    return unwrapApiResponse<UserProfile>(res);
-  }
-  async updateUser(userId: string, input: UpdateUserInput): Promise<{ user: UserProfile }> {
-    const url = API_ENDPOINTS.USERS.ROOT.replace(':userId', encodeURIComponent(userId));
-    const res = await httpAuth.put<ApiResponse<{ user: UserProfile }>>(url, input);
-    return unwrapApiResponse<{ user: UserProfile }>(res);
+  async getUser(userId: number): Promise<UserProfile> {
+    const url = API_ENDPOINTS.USERS.ROOT.replace(':userId', encodeURIComponent(String(userId)));
+    const res = await httpAuth.get<ApiResponse<components['schemas']['UserProfile']>>(url);
+    return toUserProfile(unwrapApiResponse(res));
   }
 
-  async listUserPosts(userId: string, params: UserPostListParams = {}): Promise<UserPostListResponse> {
+  async updateUser(userId: number, input: UpdateUserInput): Promise<{ user: UserProfile }> {
+    const url = API_ENDPOINTS.USERS.ROOT.replace(':userId', encodeURIComponent(String(userId)));
+    const res = await httpAuth.put<ApiResponse<components['schemas']['UserUpdateResult']>>(
+      url,
+      input satisfies components['schemas']['updateUserRequest'],
+    );
+    const user = unwrapApiResponse(res).user;
+    if (!user) throw new AppError('服务端响应缺少用户信息');
+    return { user: toUserProfile(user) };
+  }
+
+  async listUserPosts(userId: number, params: UserPostListParams = {}): Promise<UserPostListResponse> {
+    return this.listPosts(API_ENDPOINTS.USERS.POSTS, userId, params);
+  }
+
+  async listUserFavorites(userId: number, params: UserFavoriteListParams = {}): Promise<UserFavoriteListResponse> {
+    return this.listPosts(API_ENDPOINTS.USERS.FAVORITES, userId, params);
+  }
+
+  private async listPosts(
+    endpoint: string,
+    userId: number,
+    params: UserPostListParams | UserFavoriteListParams,
+  ): Promise<UserPostListResponse> {
     const qs = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-      appendQueryParam(qs, key, value);
-    }
-    const path = API_ENDPOINTS.USERS.POSTS.replace(':userId', encodeURIComponent(userId));
-    const url = qs.size ? `${path}?${qs.toString()}` : path;
-    // 使用 httpAuth 以便后端能识别当前用户身份，正确返回 is_liked 等状态
-    const res = await httpAuth.get<ApiResponse<UserPostListResponse>>(url);
-    return unwrapApiResponse<UserPostListResponse>(res);
+    Object.entries(params).forEach(([key, value]) => appendQueryParam(qs, key, value));
+    const path = endpoint.replace(':userId', encodeURIComponent(String(userId)));
+    const res = await httpAuth.get<ApiResponse<components['schemas']['PostList']>>(
+      qs.size ? `${path}?${qs.toString()}` : path,
+    );
+    const data = unwrapApiResponse(res);
+    return {
+      posts: (data.posts ?? []).map(toPost),
+      pagination: toPagination(data.pagination),
+    };
   }
 
-  async listUserFavorites(userId: string, params: UserFavoriteListParams = {}): Promise<UserFavoriteListResponse> {
+  async listUserFollowing(userId: number, params: UserFollowListParams = {}): Promise<UserFollowListResponse> {
+    return this.listFollows(API_ENDPOINTS.USERS.FOLLOWING, userId, params);
+  }
+
+  async listUserFollowers(userId: number, params: UserFollowListParams = {}): Promise<UserFollowListResponse> {
+    return this.listFollows(API_ENDPOINTS.USERS.FOLLOWERS, userId, params);
+  }
+
+  private async listFollows(
+    endpoint: string,
+    userId: number,
+    params: UserFollowListParams,
+  ): Promise<UserFollowListResponse> {
     const qs = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-      appendQueryParam(qs, key, value);
-    }
-    const path = API_ENDPOINTS.USERS.FAVORITES.replace(':userId', encodeURIComponent(userId));
-    const url = qs.size ? `${path}?${qs.toString()}` : path;
-    const res = await httpAuth.get<ApiResponse<UserFavoriteListResponse>>(url);
-    return unwrapApiResponse<UserFavoriteListResponse>(res);
+    Object.entries(params).forEach(([key, value]) => appendQueryParam(qs, key, value));
+    const path = endpoint.replace(':userId', encodeURIComponent(String(userId)));
+    const res = await httpAuth.get<ApiResponse<components['schemas']['UserFollowList']>>(
+      qs.size ? `${path}?${qs.toString()}` : path,
+    );
+    const data = unwrapApiResponse(res);
+    return {
+      users: (data.users ?? []).map(toFollowUser),
+      pagination: toCursorPagination(data.pagination),
+    };
   }
 
-  async listUserFollowing(userId: string, params: UserFollowListParams = {}): Promise<UserFollowListResponse> {
-    const qs = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-      appendQueryParam(qs, key, value);
-    }
-    const path = API_ENDPOINTS.USERS.FOLLOWING.replace(':userId', encodeURIComponent(userId));
-    const url = qs.size ? `${path}?${qs.toString()}` : path;
-    const res = await httpAuth.get<ApiResponse<UserFollowListResponse>>(url);
-    return unwrapApiResponse<UserFollowListResponse>(res);
+  async followUser(userId: number): Promise<FollowActionResponse> {
+    return this.setFollow(userId, true);
   }
 
-  async listUserFollowers(userId: string, params: UserFollowListParams = {}): Promise<UserFollowListResponse> {
-    const qs = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-      appendQueryParam(qs, key, value);
-    }
-    const path = API_ENDPOINTS.USERS.FOLLOWERS.replace(':userId', encodeURIComponent(userId));
-    const url = qs.size ? `${path}?${qs.toString()}` : path;
-    const res = await httpAuth.get<ApiResponse<UserFollowListResponse>>(url);
-    return unwrapApiResponse<UserFollowListResponse>(res);
+  async unfollowUser(userId: number): Promise<FollowActionResponse> {
+    return this.setFollow(userId, false);
   }
 
-  async followUser(userId: string): Promise<FollowActionResponse> {
-    const path = API_ENDPOINTS.USERS.FOLLOW.replace(':userId', encodeURIComponent(userId));
-    const res = await httpAuth.post<ApiResponse<FollowActionResponse>>(path, {});
-    return unwrapApiResponse<FollowActionResponse>(res);
-  }
-
-  async unfollowUser(userId: string): Promise<FollowActionResponse> {
-    const path = API_ENDPOINTS.USERS.FOLLOW.replace(':userId', encodeURIComponent(userId));
-    const res = await httpAuth.delete<ApiResponse<FollowActionResponse>>(path);
-    return unwrapApiResponse<FollowActionResponse>(res);
+  private async setFollow(userId: number, follow: boolean): Promise<FollowActionResponse> {
+    const path = API_ENDPOINTS.USERS.FOLLOW.replace(':userId', encodeURIComponent(String(userId)));
+    const res = follow
+      ? await httpAuth.post<ApiResponse<components['schemas']['FollowActionResult']>>(path, {})
+      : await httpAuth.delete<ApiResponse<components['schemas']['FollowActionResult']>>(path);
+    const data = unwrapApiResponse(res);
+    return {
+      is_following: data.is_following ?? false,
+      follower_count: Math.max(0, data.follower_count ?? 0),
+    };
   }
 }
 

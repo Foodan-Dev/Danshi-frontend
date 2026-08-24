@@ -38,7 +38,7 @@ export function ExternalLink({ href, onPress, ...rest }: Props) {
   return (
     <Pressable
       {...rest}
-      {...(webLinkProps as any)}
+      {...webLinkProps}
       accessibilityRole="link"
       disabled={isDisabled}
       onPress={handlePress}

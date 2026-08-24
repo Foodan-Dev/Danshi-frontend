@@ -26,7 +26,7 @@ import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { useExtendedTheme } from '@/src/constants/md3_theme';
 import { postsService } from '@/src/services/posts_service';
-import { CANTEEN_OPTIONS } from '@/src/constants/selects';
+import { configService, type ExploreConfig } from '@/src/services/config_service';
 import CanteenPicker from '@/src/components/overlays/center_picker';
 import ImageUploadGrid from '@/src/components/image_upload_grid';
 import ImageViewer from '@/src/components/image_viewer';
@@ -50,8 +50,8 @@ const POST_DRAFT_KEY = '@post_draft';
 const DRAFT_SAVE_DELAY = 3000; // 3秒防抖
 
 type PostScreenProps = {
-	editMode?: boolean;
-	editPostId?: string;
+  editMode?: boolean;
+  editPostId?: number;
 	initialData?: Post | null;
 	loading?: boolean;
 	onUpdateSuccess?: () => void;
@@ -89,9 +89,9 @@ export default function PostScreen({
 	const [share_type, setShareType] = useState<ShareType>('recommend');
 	const [category, setCategory] = useState<Category>('food');
 	const [canteen, setCanteen] = useState('');
+	const [canteenWindowId, setCanteenWindowId] = useState<number | null>(null);
 	const [cuisine, setCuisine] = useState('');
 	const [flavors, setFlavors] = useState<string[]>([]); // 口味标签数组
-	const [currentFlavorInput, setCurrentFlavorInput] = useState(''); // 当前正在输入的口味
 	const [tags, setTags] = useState<string[]>([]); // 直接存储标签数组
 	const [currentTagInput, setCurrentTagInput] = useState(''); // 当前正在输入的话题
 	const [price, setPrice] = useState('');
@@ -99,15 +99,17 @@ export default function PostScreen({
 	const [budgetMin, setBudgetMin] = useState('');
 	const [budgetMax, setBudgetMax] = useState('');
 	const [preferFlavors, setPreferFlavors] = useState<string[]>([]); // 喜欢的口味数组
-	const [currentPreferFlavorInput, setCurrentPreferFlavorInput] = useState('');
 	const [avoidFlavors, setAvoidFlavors] = useState<string[]>([]); // 不喜欢的口味数组
-	const [currentAvoidFlavorInput, setCurrentAvoidFlavorInput] = useState('');
+	const [config, setConfig] = useState<ExploreConfig>({ postTypes: [], canteens: [], cuisines: [], flavors: [] });
+	const [configError, setConfigError] = useState('');
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState('');
 	const [success, setSuccess] = useState('');
 	const [isPendingReview, setIsPendingReview] = useState(false); // 是否处于待审核状态
-	const [publishedPostId, setPublishedPostId] = useState<string | null>(null); // 发布成功后的帖子 ID（仅 approved 状态）
+	const [publishedPostId, setPublishedPostId] = useState<number | null>(null); // 发布成功后的帖子 ID（仅 approved 状态）
 	const [canteenPickerOpen, setCanteenPickerOpen] = useState(false);
+	const [windowPickerOpen, setWindowPickerOpen] = useState(false);
+	const [cuisinePickerOpen, setCuisinePickerOpen] = useState(false);
 	const [showTagInput, setShowTagInput] = useState(false);
 	const [imageViewer, setImageViewer] = useState<{ visible: boolean; index: number }>({ visible: false, index: 0 });
 
@@ -118,7 +120,9 @@ export default function PostScreen({
 
 	// 标记草稿是否已恢复，避免恢复过程触发自动保存
 	const draftRestoredRef = useRef(false);
-	const normalizedEditPostId = editPostId?.trim() ?? '';
+	const normalizedEditPostId = Number.isSafeInteger(editPostId) && (editPostId ?? 0) > 0
+		? editPostId
+		: null;
 	const editFallbackMessage = editMode
 		? !normalizedEditPostId
 			? '帖子ID缺失，无法进入编辑状态'
@@ -126,6 +130,39 @@ export default function PostScreen({
 				? '帖子内容加载失败或你无权编辑该帖子'
 				: ''
 		: '';
+
+	const selectedCanteen = useMemo(
+		() => config.canteens.find((item) => item.code === canteen) ?? null,
+		[config.canteens, canteen],
+	);
+	const selectedWindow = useMemo(
+		() => selectedCanteen?.windows.find((item) => item.id === canteenWindowId) ?? null,
+		[selectedCanteen, canteenWindowId],
+	);
+	const canteenLabel = selectedCanteen
+		? selectedWindow
+			? `${selectedCanteen.name} · ${selectedWindow.name}`
+			: selectedCanteen.name
+		: '';
+
+	useEffect(() => {
+		let active = true;
+		configService.getExploreConfig()
+			.then((value) => {
+				if (!active) return;
+				setConfig(value);
+				setConfigError('');
+			})
+			.catch((caught) => {
+				if (!active) return;
+				setConfigError(caught instanceof Error ? caught.message : '加载发布配置失败');
+			});
+		return () => { active = false; };
+	}, []);
+
+	useEffect(() => {
+		if (canteenWindowId !== null && !selectedWindow) setCanteenWindowId(null);
+	}, [canteenWindowId, selectedWindow]);
 
 	// 进入页面时清除上一次的成功提示，并尝试恢复草稿
 	useEffect(() => {
@@ -158,6 +195,7 @@ export default function PostScreen({
 					setShareType(draft.share_type || 'recommend');
 					setCategory(draft.category || 'food');
 					setCanteen(draft.canteen || '');
+					setCanteenWindowId(typeof draft.canteenWindowId === 'number' ? draft.canteenWindowId : null);
 					setCuisine(draft.cuisine || '');
 					setFlavors(draft.flavors || []);
 					setTags(draft.tags || []);
@@ -202,7 +240,7 @@ export default function PostScreen({
 
 		const timer = setTimeout(() => {
 			const draft = {
-				title, content, post_type, share_type, category, canteen,
+				title, content, post_type, share_type, category, canteen, canteenWindowId,
 				cuisine, flavors, tags, price, images,
 				budgetMin, budgetMax, preferFlavors, avoidFlavors,
 			};
@@ -211,7 +249,7 @@ export default function PostScreen({
 
 		return () => clearTimeout(timer);
 	}, [
-		editMode, title, content, post_type, share_type, category, canteen,
+		editMode, title, content, post_type, share_type, category, canteen, canteenWindowId,
 		cuisine, flavors, tags, price, images,
 		budgetMin, budgetMax, preferFlavors, avoidFlavors,
 	]);
@@ -225,19 +263,17 @@ export default function PostScreen({
 			setShareType(initialData.post_type === 'share' ? initialData.share_type || 'recommend' : 'recommend');
 			setCuisine(initialData.post_type === 'share' ? initialData.cuisine || '' : '');
 			setFlavors(initialData.post_type === 'share' ? initialData.flavors || [] : []);
-			setPrice(initialData.post_type === 'share' ? initialData.price?.toString() || '' : '');
+			setPrice(initialData.post_type === 'share' ? initialData.price || '' : '');
 			setCategory(initialData.category || 'food');
-			setCanteen(initialData.canteen || '');
+			setCanteen(initialData.canteen?.code || '');
+			setCanteenWindowId(initialData.canteen_window?.id ?? null);
 			setTags(initialData.tags || []);
 			setImages(initialData.images?.length ? initialData.images : []);
 			setBudgetMin(initialData.post_type === 'seeking' ? initialData.budget_range?.min?.toString() || '' : '');
 			setBudgetMax(initialData.post_type === 'seeking' ? initialData.budget_range?.max?.toString() || '' : '');
 			setPreferFlavors(initialData.post_type === 'seeking' ? initialData.preferences?.prefer_flavors || [] : []);
 			setAvoidFlavors(initialData.post_type === 'seeking' ? initialData.preferences?.avoid_flavors || [] : []);
-			setCurrentFlavorInput('');
 			setCurrentTagInput('');
-			setCurrentPreferFlavorInput('');
-			setCurrentAvoidFlavorInput('');
 		}
 	}, [editMode, initialData, initialLoading]);
 
@@ -280,103 +316,16 @@ export default function PostScreen({
 	const handleRemoveTag = useCallback((index: number) => {
 		setTags((prev) => prev.filter((_, i) => i !== index));
 	}, []);
-
-	// ==================== 口味标签处理函数 ====================
-	// 添加口味标签
-	const handleAddFlavor = useCallback((text: string) => {
-		const trimmed = text.trim();
-		if (!trimmed) return;
-		if (flavors.length >= 10) return;
-		if (flavors.includes(trimmed)) return;
-		setFlavors((prev) => [...prev, trimmed]);
-		setCurrentFlavorInput('');
-	}, [flavors]);
-
-	// 处理口味输入变化（检测空格/回车）
-	const handleFlavorInputChange = useCallback((text: string) => {
-		if (text.endsWith(' ') || text.endsWith('\n') || text.endsWith(',') || text.endsWith('，')) {
-			const flavorText = text.slice(0, -1);
-			if (flavorText.trim()) {
-				handleAddFlavor(flavorText);
-			}
-		} else {
-			setCurrentFlavorInput(text);
-		}
-	}, [handleAddFlavor]);
-
-	// 处理口味输入提交（回车键）
-	const handleFlavorInputSubmit = useCallback(() => {
-		if (currentFlavorInput.trim()) {
-			handleAddFlavor(currentFlavorInput);
-		}
-	}, [currentFlavorInput, handleAddFlavor]);
-
-	// 删除口味标签
 	const handleRemoveFlavor = useCallback((index: number) => {
-		setFlavors((prev) => prev.filter((_, i) => i !== index));
+		setFlavors((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
 	}, []);
-
-	// ==================== 喜欢口味处理函数 ====================
-	const handleAddPreferFlavor = useCallback((text: string) => {
-		const trimmed = text.trim();
-		if (!trimmed) return;
-		if (preferFlavors.length >= 10) return;
-		if (preferFlavors.includes(trimmed)) return;
-		setPreferFlavors((prev) => [...prev, trimmed]);
-		setCurrentPreferFlavorInput('');
-	}, [preferFlavors]);
-
-	const handlePreferFlavorInputChange = useCallback((text: string) => {
-		if (text.endsWith(' ') || text.endsWith('\n') || text.endsWith(',') || text.endsWith('，')) {
-			const flavorText = text.slice(0, -1);
-			if (flavorText.trim()) {
-				handleAddPreferFlavor(flavorText);
-			}
-		} else {
-			setCurrentPreferFlavorInput(text);
-		}
-	}, [handleAddPreferFlavor]);
-
-	const handlePreferFlavorInputSubmit = useCallback(() => {
-		if (currentPreferFlavorInput.trim()) {
-			handleAddPreferFlavor(currentPreferFlavorInput);
-		}
-	}, [currentPreferFlavorInput, handleAddPreferFlavor]);
-
 	const handleRemovePreferFlavor = useCallback((index: number) => {
-		setPreferFlavors((prev) => prev.filter((_, i) => i !== index));
+		setPreferFlavors((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
 	}, []);
-
-	// ==================== 不喜欢口味处理函数 ====================
-	const handleAddAvoidFlavor = useCallback((text: string) => {
-		const trimmed = text.trim();
-		if (!trimmed) return;
-		if (avoidFlavors.length >= 10) return;
-		if (avoidFlavors.includes(trimmed)) return;
-		setAvoidFlavors((prev) => [...prev, trimmed]);
-		setCurrentAvoidFlavorInput('');
-	}, [avoidFlavors]);
-
-	const handleAvoidFlavorInputChange = useCallback((text: string) => {
-		if (text.endsWith(' ') || text.endsWith('\n') || text.endsWith(',') || text.endsWith('，')) {
-			const flavorText = text.slice(0, -1);
-			if (flavorText.trim()) {
-				handleAddAvoidFlavor(flavorText);
-			}
-		} else {
-			setCurrentAvoidFlavorInput(text);
-		}
-	}, [handleAddAvoidFlavor]);
-
-	const handleAvoidFlavorInputSubmit = useCallback(() => {
-		if (currentAvoidFlavorInput.trim()) {
-			handleAddAvoidFlavor(currentAvoidFlavorInput);
-		}
-	}, [currentAvoidFlavorInput, handleAddAvoidFlavor]);
-
 	const handleRemoveAvoidFlavor = useCallback((index: number) => {
-		setAvoidFlavors((prev) => prev.filter((_, i) => i !== index));
+		setAvoidFlavors((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
 	}, []);
+
 	const filtered_images = useMemo(
 		() => images.filter((url) => url && /^https?:\/\//i.test(url.trim())),
 		[images]
@@ -409,9 +358,9 @@ export default function PostScreen({
 		setShareType('recommend');
 		setCategory('food');
 		setCanteen('');
+		setCanteenWindowId(null);
 		setCuisine('');
 		setFlavors([]);
-		setCurrentFlavorInput('');
 		setTags([]);
 		setCurrentTagInput('');
 		setPrice('');
@@ -419,9 +368,7 @@ export default function PostScreen({
 		setBudgetMin('');
 		setBudgetMax('');
 		setPreferFlavors([]);
-		setCurrentPreferFlavorInput('');
 		setAvoidFlavors([]);
-		setCurrentAvoidFlavorInput('');
 		AsyncStorage.removeItem(POST_DRAFT_KEY).catch(() => {});
 	};
 
@@ -432,7 +379,9 @@ export default function PostScreen({
 		if (content.trim().length < 5) return '正文至少 5 个字';
 		if (post_type === 'share') {
 			if (!filtered_images.length) return '请至少上传 1 张图片';
-			if (price && Number(price) < 0) return '价格需是正数';
+			if (price && !/^(?:0|[0-9]+)(?:\.[0-9]{1,2})?$/.test(price)) {
+				return '价格格式不正确，最多保留两位小数';
+			}
 		}
 		if (post_type === 'seeking') {
 			if ((budgetMin && Number(budgetMin) < 0) || (budgetMax && Number(budgetMax) < 0)) {
@@ -474,7 +423,8 @@ export default function PostScreen({
 				title: title.trim(),
 				content: content.trim(),
 				category,
-				canteen: canteen.trim() || undefined,
+				canteen_code: canteen.trim() || null,
+				canteen_window_id: canteenWindowId,
 				tags: parsedTags.length ? parsedTags : undefined,
 				images: filtered_images.length ? filtered_images.slice(0, 9) : undefined,
 			};
@@ -486,7 +436,7 @@ export default function PostScreen({
 					share_type: share_type,
 					cuisine: cuisine.trim() || undefined,
 					flavors: flavors.length ? flavors : undefined,
-					price: price ? Number(price) : undefined,
+					price: price || undefined,
 					images: filtered_images.slice(0, 9),
 				};
 				payload = sharePayload;
@@ -528,15 +478,19 @@ export default function PostScreen({
 				setSuccess('更新成功！帖子已提交管理员审核，审核通过后将公开显示。');
 				onUpdateSuccess?.();
 			} else {
-				await postsService.create(payload);
-				// 发布成功后清除草稿并跳转到探索界面
+				const result = await postsService.create(payload);
 				await AsyncStorage.removeItem(POST_DRAFT_KEY).catch(() => {});
 				resetForm();
-				// 使用 replace 替换当前页面，避免用户返回到发布页面
-				router.replace('/(tabs)/explore');
+				setPublishedPostId(result.status === 'approved' ? result.id : null);
+				setIsPendingReview(result.status === 'pending');
+				setSuccess(
+					result.status === 'pending'
+						? '发布成功，帖子正在审核中；审核通过后会出现在信息流。'
+						: '发布成功！',
+				);
 			}
-		} catch (err) {
-			setError((err as Error)?.message ?? '发布失败，请稍后重试');
+		} catch (err: unknown) {
+			setError(err instanceof Error ? err.message : '发布失败，请稍后重试');
 			// 切换到预览模式显示错误（仅窄屏时）
 			if (!isWideScreen) {
 				setIsPreviewMode(true);
@@ -547,6 +501,46 @@ export default function PostScreen({
 	};
 
 	const content_count = content.trim().length;
+
+	const renderFlavorChoices = (
+		selected: string[],
+		setSelected: React.Dispatch<React.SetStateAction<string[]>>,
+	) => (
+		<View>
+			<View style={styles.flavorOptions}>
+				{config.flavors.map((flavor) => {
+					const isSelected = selected.includes(flavor);
+					return (
+						<Chip
+							key={flavor}
+							compact
+							selected={isSelected}
+							disabled={!isSelected && selected.length >= 10}
+							onPress={() => setSelected((current) => (
+								current.includes(flavor)
+									? current.filter((item) => item !== flavor)
+									: [...current, flavor]
+							))}
+						>
+							{flavor}
+						</Chip>
+					);
+				})}
+			</View>
+			{configError ? (
+				<Text style={{ color: theme.colors.error, fontSize: 12, marginTop: 8 }}>{configError}</Text>
+			) : null}
+			<Button
+				mode="text"
+				compact
+				icon="plus"
+				onPress={() => router.push('/dictionary-suggestions')}
+				style={{ alignSelf: 'flex-start', marginTop: 4 }}
+			>
+				没有合适词条？提交建议
+			</Button>
+		</View>
+	);
 
 	// 编辑模式加载中状态
 	if (editMode && initialLoading) {
@@ -691,7 +685,7 @@ export default function PostScreen({
 									marginLeft: 2,
 								}}
 							>
-								{canteen}
+								{canteenLabel}
 							</Text>
 						</View>
 					)}
@@ -906,13 +900,14 @@ export default function PostScreen({
 							]}
 							numberOfLines={1}
 						>
-							{canteen || '添加地点'}
+							{canteenLabel || '添加地点'}
 						</Text>
 						{canteen && (
 							<Pressable
 								onPress={(e) => {
 									e.stopPropagation();
 									setCanteen('');
+									setCanteenWindowId(null);
 								}}
 								hitSlop={8}
 							>
@@ -924,6 +919,17 @@ export default function PostScreen({
 							</Pressable>
 						)}
 					</Pressable>
+					{selectedCanteen ? (
+						<Pressable
+							style={[styles.toolbarBtn, { borderColor: theme.colors.outlineVariant }]}
+							onPress={() => setWindowPickerOpen(true)}
+						>
+							<Ionicons name="storefront-outline" size={16} color={theme.colors.onSurfaceVariant} />
+							<Text style={[styles.toolbarBtnText, { color: theme.colors.onSurfaceVariant }]}>
+								{selectedWindow?.name || '选择窗口（可空）'}
+							</Text>
+						</Pressable>
+					) : null}
 
 					{/* 话题按钮 - 选中态使用15%透明度主题色 */}
 					<Pressable
@@ -1074,23 +1080,14 @@ export default function PostScreen({
 								<Text style={[styles.extraLabel, { color: theme.colors.outline }]}>
 									菜系
 								</Text>
-								<RNTextInput
-									value={cuisine}
-									onChangeText={setCuisine}
-									placeholder="如：川菜、粤菜"
-									placeholderTextColor={theme.colors.outline}
-									onFocus={() => setFocusedField('cuisine')}
-									onBlur={() => setFocusedField(null)}
-									style={[
-										styles.extraInput,
-										{
-											color: theme.colors.onSurface,
-											borderBottomColor: focusedField === 'cuisine' ? theme.colors.primary : theme.colors.outlineVariant,
-											borderBottomWidth: focusedField === 'cuisine' ? 2 : 1,
-										},
-										WEB_NO_OUTLINE,
-									]}
-								/>
+								<Pressable
+									onPress={() => setCuisinePickerOpen(true)}
+									style={[styles.extraInput, { borderBottomColor: theme.colors.outlineVariant }]}
+								>
+									<Text style={{ color: cuisine ? theme.colors.onSurface : theme.colors.outline }}>
+										{cuisine || '选择菜系'}
+									</Text>
+								</Pressable>
 							</View>
 							<View style={styles.extraItem}>
 								<Text style={[styles.extraLabel, { color: theme.colors.outline }]}>
@@ -1148,27 +1145,7 @@ export default function PostScreen({
 									))}
 								</View>
 							)}
-							<RNTextInput
-								value={currentFlavorInput}
-								onChangeText={handleFlavorInputChange}
-								onSubmitEditing={handleFlavorInputSubmit}
-								placeholder={flavors.length >= 10 ? '已达上限' : '输入口味，按空格添加'}
-								placeholderTextColor={theme.colors.outline}
-								editable={flavors.length < 10}
-								returnKeyType="done"
-								blurOnSubmit={false}
-								onFocus={() => setFocusedField('flavors')}
-								onBlur={() => setFocusedField(null)}
-								style={[
-									styles.extraInput,
-									{
-										color: theme.colors.onSurface,
-										borderBottomColor: focusedField === 'flavors' ? theme.colors.primary : theme.colors.outlineVariant,
-										borderBottomWidth: focusedField === 'flavors' ? 2 : 1,
-									},
-									WEB_NO_OUTLINE,
-								]}
-							/>
+							{renderFlavorChoices(flavors, setFlavors)}
 						</View>
 					</View>
 				)}
@@ -1262,27 +1239,7 @@ export default function PostScreen({
 									))}
 								</View>
 							)}
-							<RNTextInput
-								value={currentPreferFlavorInput}
-								onChangeText={handlePreferFlavorInputChange}
-								onSubmitEditing={handlePreferFlavorInputSubmit}
-								placeholder={preferFlavors.length >= 10 ? '已达上限' : '输入口味，按空格添加'}
-								placeholderTextColor={theme.colors.outline}
-								editable={preferFlavors.length < 10}
-								returnKeyType="done"
-								blurOnSubmit={false}
-								onFocus={() => setFocusedField('preferFlavors')}
-								onBlur={() => setFocusedField(null)}
-								style={[
-									styles.extraInput,
-									{
-										color: theme.colors.onSurface,
-										borderBottomColor: focusedField === 'preferFlavors' ? theme.colors.tertiary : theme.colors.outlineVariant,
-										borderBottomWidth: focusedField === 'preferFlavors' ? 2 : 1,
-									},
-									WEB_NO_OUTLINE,
-								]}
-							/>
+							{renderFlavorChoices(preferFlavors, setPreferFlavors)}
 						</View>
 
 						<View style={[styles.flavorSection, { marginTop: 16 }]}>
@@ -1311,27 +1268,7 @@ export default function PostScreen({
 									))}
 								</View>
 							)}
-							<RNTextInput
-								value={currentAvoidFlavorInput}
-								onChangeText={handleAvoidFlavorInputChange}
-								onSubmitEditing={handleAvoidFlavorInputSubmit}
-								placeholder={avoidFlavors.length >= 10 ? '已达上限' : '输入口味，按空格添加'}
-								placeholderTextColor={theme.colors.outline}
-								editable={avoidFlavors.length < 10}
-								returnKeyType="done"
-								blurOnSubmit={false}
-								onFocus={() => setFocusedField('avoidFlavors')}
-								onBlur={() => setFocusedField(null)}
-								style={[
-									styles.extraInput,
-									{
-										color: theme.colors.onSurface,
-										borderBottomColor: focusedField === 'avoidFlavors' ? theme.colors.error : theme.colors.outlineVariant,
-										borderBottomWidth: focusedField === 'avoidFlavors' ? 2 : 1,
-									},
-									WEB_NO_OUTLINE,
-								]}
-							/>
+							{renderFlavorChoices(avoidFlavors, setAvoidFlavors)}
 						</View>
 					</View>
 				)}
@@ -1512,7 +1449,7 @@ export default function PostScreen({
 							{canteen && (
 								<View style={[styles.previewTagBadge, styles.previewLocationBadge, { backgroundColor: theme.colors.surfaceVariant }]}>
 									<Ionicons name="location" size={12} color={theme.colors.onSurfaceVariant} />
-									<Text style={[styles.previewTagBadgeText, { color: theme.colors.onSurfaceVariant }]}>{canteen}</Text>
+									<Text style={[styles.previewTagBadgeText, { color: theme.colors.onSurfaceVariant }]}>{canteenLabel}</Text>
 								</View>
 							)}
 							{post_type === 'share' && (
@@ -1821,9 +1758,45 @@ export default function PostScreen({
 				visible={canteenPickerOpen}
 				onClose={() => setCanteenPickerOpen(false)}
 				title="选择位置"
-				options={CANTEEN_OPTIONS}
+				options={[
+					{ label: '不选择', value: '' },
+					...config.canteens.map((item) => ({
+						label: `${item.name}（${item.campus}）`,
+						value: item.code,
+					})),
+				]}
 				selectedValue={canteen}
-				onSelect={(value) => setCanteen(value)}
+				onSelect={(value) => {
+					setCanteen(value);
+					setCanteenWindowId(null);
+				}}
+			/>
+
+			<CanteenPicker
+				visible={windowPickerOpen}
+				onClose={() => setWindowPickerOpen(false)}
+				title="选择窗口（可不选）"
+				options={[
+					{ label: '不选择窗口', value: '' },
+					...(selectedCanteen?.windows ?? []).map((item) => ({
+						label: item.floor ? `${item.name}（${item.floor}）` : item.name,
+						value: String(item.id),
+					})),
+				]}
+				selectedValue={canteenWindowId === null ? '' : String(canteenWindowId)}
+				onSelect={(value) => setCanteenWindowId(value ? Number(value) : null)}
+			/>
+
+			<CanteenPicker
+				visible={cuisinePickerOpen}
+				onClose={() => setCuisinePickerOpen(false)}
+				title="选择菜系"
+				options={[
+					{ label: '不选择', value: '' },
+					...config.cuisines.map((item) => ({ label: item, value: item })),
+				]}
+				selectedValue={cuisine}
+				onSelect={setCuisine}
 			/>
 
 			{/* 图片查看器 */}
@@ -2103,6 +2076,12 @@ const styles = StyleSheet.create({
 		marginTop: 16,
 	},
 	flavorsDisplay: {
+		flexDirection: 'row',
+		flexWrap: 'wrap',
+		gap: 8,
+		marginTop: 8,
+	},
+	flavorOptions: {
 		flexDirection: 'row',
 		flexWrap: 'wrap',
 		gap: 8,

@@ -15,10 +15,10 @@ import { CachedAvatar } from '@/src/components/cached_avatar';
 interface NotificationItemProps {
   notification: Notification;
   /** 乐观更新回调：同步通知已读状态 */
-  onReadStateChange?: (notificationId: string, isRead: boolean) => void;
+  onReadStateChange?: (notificationId: number, isRead: boolean) => void;
   isFollowing: boolean;
   followLoading: boolean;
-  onFollowToggle: (userId: string) => void;
+  onFollowToggle: (userId: number) => void;
 }
 
 // ==================== Component ====================
@@ -56,7 +56,11 @@ export function NotificationItem({
     if (notification.related_type === 'comment' && notification.related_id && notification.post_id) {
       router.push({
         pathname: '/post/[postId]',
-        params: { postId: notification.post_id, scrollTo: 'comment', commentId: notification.related_id },
+        params: {
+          postId: String(notification.post_id),
+          scrollTo: 'comment',
+          commentId: String(notification.related_id),
+        },
       } as Href);
       return;
     }
@@ -65,7 +69,7 @@ export function NotificationItem({
     if (notification.type === 'comment' && notification.related_type === 'post' && (notification.related_id || notification.post_id)) {
       router.push({
         pathname: '/post/[postId]',
-        params: { postId: notification.related_id || notification.post_id || '', scrollTo: 'comments' },
+        params: { postId: String(notification.related_id || notification.post_id), scrollTo: 'comments' },
       } as Href);
       return;
     }

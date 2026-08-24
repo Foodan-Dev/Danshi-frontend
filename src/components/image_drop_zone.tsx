@@ -135,7 +135,7 @@ export default function ImageDropZone({
       setUploadingCount(filesToUpload.length);
 
       try {
-        const sources: UploadSource[] = filesToUpload.map((file) => file as Blob);
+        const sources: UploadSource[] = filesToUpload;
         const { results, failures, skipped } = await uploadService.uploadImages(sources, 'post');
         if (results.length > 0) {
           addUploadedImages(results.map((r) => r.url));
@@ -347,11 +347,8 @@ export default function ImageDropZone({
               ]}
               onPress={handleClickUpload}
               {...(enableDragDrop ? {
-                // @ts-ignore - Web only props
                 onDragOver: handleDragOver,
-                // @ts-ignore - Web only props
                 onDragLeave: handleDragLeave,
-                // @ts-ignore - Web only props
                 onDrop: handleDrop,
               } : {})}
             >

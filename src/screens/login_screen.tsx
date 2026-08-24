@@ -60,14 +60,24 @@ export default function LoginScreen() {
       router.replace('/explore');
     } catch (e) {
       const appError = ensureAppError(e, '登录失败，请重试');
-      if (appError.code === 'NETWORK_ERROR' || appError.code === 'TIMEOUT') {
-        setError(appError.message);
-      } else if (!appError.status && !appError.code) {
-        setError(appError.message);
-      } else if (appError.status === 401) {
-        setError('邮箱或密码错误');
-      } else {
-        setError('登录失败，请重试');
+      switch (appError.errorCode) {
+        case 'credentials_invalid':
+          setError('邮箱或密码错误');
+          break;
+        case 'account_banned':
+          setError('账号已被封禁，请联系管理员');
+          break;
+        case 'account_deleted':
+          setError('账号已注销');
+          break;
+        case 'rate_limited':
+          setError('登录尝试过于频繁，请稍后再试');
+          break;
+        case 'validation_failed':
+          setError('登录信息格式有误');
+          break;
+        default:
+          setError(appError.message || '登录失败，请重试');
       }
     } finally {
       setLoading(false);

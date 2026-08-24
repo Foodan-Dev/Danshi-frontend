@@ -8,10 +8,10 @@ import { decodeJwtPayload } from '../lib/auth/jwt';
 export type AuthContextValue = {
   userToken: string | null;
   user: User | null; // full info（from /auth/me）
-  preview: Pick<User, 'name' | 'avatar_url'> | null; // from JWT payload 
+  preview: Pick<User, 'name' | 'avatar_url'> | null; // from JWT payload
   isLoading: boolean;
   sessionExpired: boolean; // 会话过期标记
-  signIn: (token: string) => Promise<void>; 
+  signIn: (token: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: (tokenOverride?: string) => Promise<void>; // refresh /me
   clearSessionExpired: () => void; // 清除过期标记
@@ -21,17 +21,23 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const computePreview = (token: string | null): Pick<User, 'name' | 'avatar_url'> | null => {
   if (!token) return null;
-  const payload = decodeJwtPayload<Record<string, any>>(token);
+  const payload = decodeJwtPayload<Record<string, unknown>>(token);
   if (!payload || typeof payload !== 'object') return null;
-  const name = (payload.nickname ?? payload.name ?? null) as string | null;
-  const avatarUrl = (payload.avatarUrl ?? payload.avatar ?? null) as string | null;
+  const rawName = payload.nickname ?? payload.name;
+  const rawAvatarUrl = payload.avatarUrl ?? payload.avatar;
+  const name = typeof rawName === 'string' ? rawName : null;
+  const avatarUrl = typeof rawAvatarUrl === 'string' ? rawAvatarUrl : null;
   if (!name && !avatarUrl) return null;
   return { name: name ?? '', avatar_url: avatarUrl ?? null };
 };
 
 const isSessionExpiredError = (error: unknown) => {
   const appError = AppError.from(error);
-  return appError.status === 401 || appError.status === 403;
+  return appError.code === 'AUTH_EXPIRED' || (
+    appError.status === 401 && (
+      appError.errorCode === 'unauthorized' || appError.errorCode === 'session_revoked'
+    )
+  );
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

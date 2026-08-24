@@ -145,7 +145,7 @@ function ZoomableImage({ uri, onSingleTap }: ZoomableImageProps) {
   }));
 
   // Web 端滚轮缩放
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLElement>) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const newScale = Math.min(Math.max(scale.value * delta, 0.5), 5);
@@ -164,8 +164,7 @@ function ZoomableImage({ uri, onSingleTap }: ZoomableImageProps) {
     return (
       <View
         style={styles.imageContainer}
-        // @ts-ignore - Web only
-        onWheel={handleWheel}
+        {...{ onWheel: handleWheel }}
       >
         <Animated.Image
           source={{ uri }}
@@ -262,7 +261,7 @@ export default function ImageViewer({
   );
 
   const getItemLayout = useCallback(
-    (_: any, index: number) => ({
+    (_: ArrayLike<string> | null | undefined, index: number) => ({
       length: SCREEN_WIDTH,
       offset: SCREEN_WIDTH * index,
       index,

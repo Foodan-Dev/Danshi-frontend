@@ -9,14 +9,13 @@ import {
   type SearchUser,
 } from '@/src/repositories/search_repository';
 
-function normalizePageable<T extends { page?: number; limit?: number }>(params: T): T {
+function normalizePageable(params: { page?: number; limit?: number }) {
   const page = params.page && params.page > 0 ? Math.floor(params.page) : undefined;
   const limit = params.limit && params.limit > 0 ? Math.floor(params.limit) : undefined;
   return {
-    ...params,
     ...(page ? { page } : {}),
     ...(limit ? { limit } : {}),
-  } as T;
+  };
 }
 
 function sanitizeTags(tags?: string[]): string[] | undefined {

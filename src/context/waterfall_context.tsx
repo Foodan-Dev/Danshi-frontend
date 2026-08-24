@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type WaterfallSettings = {
@@ -39,19 +39,22 @@ export const WaterfallSettingsProvider: React.FC<{ children: React.ReactNode }> 
     })();
   }, []);
 
-  const setMinHeight = (v: number) => {
+  const setMinHeight = useCallback((v: number) => {
     const next = Math.max(40, Math.min(v, maxHeight - 10));
     setMinHeightState(next);
     AsyncStorage.setItem(KEY_MIN, String(next)).catch(() => {});
-  };
+  }, [maxHeight]);
 
-  const setMaxHeight = (v: number) => {
+  const setMaxHeight = useCallback((v: number) => {
     const next = Math.max(minHeight + 10, Math.min(600, v));
     setMaxHeightState(next);
     AsyncStorage.setItem(KEY_MAX, String(next)).catch(() => {});
-  };
+  }, [minHeight]);
 
-  const value = useMemo<WaterfallSettings>(() => ({ minHeight, maxHeight, setMinHeight, setMaxHeight }), [minHeight, maxHeight]);
+  const value = useMemo<WaterfallSettings>(
+    () => ({ minHeight, maxHeight, setMinHeight, setMaxHeight }),
+    [maxHeight, minHeight, setMaxHeight, setMinHeight],
+  );
 
   if (!hydrated) return <></>;
 

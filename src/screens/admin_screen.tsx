@@ -114,7 +114,7 @@ export default function AdminScreen() {
     );
   }
 
-  if (!isAdmin(user.role)) {
+  if (!isAdmin(user.roles)) {
     return (
       <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
         <Text style={{ color: pTheme.colors.onSurface, marginBottom: 8 }}>当前账号没有管理权限</Text>
@@ -126,7 +126,7 @@ export default function AdminScreen() {
     );
   }
 
-  const userIsSuperAdmin = isSuperAdmin(user.role);
+  const userIsSuperAdmin = isSuperAdmin(user.roles);
   const roleText = userIsSuperAdmin ? '超级管理员' : '管理员';
   const roleTextEn = userIsSuperAdmin ? 'Super Admin' : 'Admin';
 

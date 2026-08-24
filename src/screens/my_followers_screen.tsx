@@ -152,10 +152,13 @@ const createFollowListScreen = (type: ListType) => {
     const { user, isLoading } = useAuth();
     const [items, setItems] = useState<FollowUserItem[]>([]);
     const [loading, setLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [nextCursor, setNextCursor] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
-    const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+    const [actionLoading, setActionLoading] = useState<Record<number, boolean>>({});
     const requestSeqRef = useRef(0);
     const insets = useSafeAreaInsets();
     const theme = usePaperTheme();
@@ -173,10 +176,12 @@ const createFollowListScreen = (type: ListType) => {
     }, [router]);
 
     const load = useCallback(
-      async (isRefresh = false) => {
+      async (isRefresh = false, cursor?: string) => {
         if (!user?.id) return;
         const requestId = ++requestSeqRef.current;
-        if (isRefresh) {
+        if (cursor) {
+          setLoadingMore(true);
+        } else if (isRefresh) {
           setRefreshing(true);
         } else {
           setLoading(true);
@@ -185,12 +190,16 @@ const createFollowListScreen = (type: ListType) => {
         try {
           const data =
             type === 'followers'
-              ? await usersService.getUserFollowers(user.id)
-              : await usersService.getUserFollowing(user.id);
+              ? await usersService.getUserFollowers(user.id, { cursor, limit: 20 })
+              : await usersService.getUserFollowing(user.id, { cursor, limit: 20 });
           if (requestSeqRef.current !== requestId) {
             return;
           }
-          setItems(data.users);
+          setItems((current) => cursor
+            ? [...current, ...data.users.filter((item) => !current.some((existing) => existing.id === item.id))]
+            : data.users);
+          setNextCursor(data.pagination.next_cursor);
+          setHasMore(data.pagination.has_more);
         } catch (err) {
           if (requestSeqRef.current !== requestId) {
             return;
@@ -204,11 +213,18 @@ const createFollowListScreen = (type: ListType) => {
             } else {
               setLoading(false);
             }
+            setLoadingMore(false);
           }
         }
       },
       [user?.id],
     );
+
+    const loadMore = useCallback(() => {
+      if (!loading && !loadingMore && hasMore && nextCursor) {
+        void load(false, nextCursor);
+      }
+    }, [hasMore, load, loading, loadingMore, nextCursor]);
 
     useEffect(() => {
       if (isLoading || !user?.id) {
@@ -218,18 +234,18 @@ const createFollowListScreen = (type: ListType) => {
     }, [isLoading, load, user?.id]);
 
     const navigateToProfile = useCallback(
-      (targetId: string) => {
+      (targetId: number) => {
         router.push(`/user/${targetId}`);
       },
       [router],
     );
 
-    const withActionLoading = useCallback((userId: string, value: boolean) => {
+    const withActionLoading = useCallback((userId: number, value: boolean) => {
       setActionLoading((prev) => ({ ...prev, [userId]: value }));
     }, []);
 
     const handleFollowBack = useCallback(
-      async (targetId: string) => {
+      async (targetId: number) => {
         setActionError(null);
         withActionLoading(targetId, true);
         try {
@@ -259,7 +275,7 @@ const createFollowListScreen = (type: ListType) => {
     );
 
     const handleUnfollow = useCallback(
-      async (targetId: string) => {
+      async (targetId: number) => {
         setActionError(null);
         withActionLoading(targetId, true);
         try {
@@ -320,7 +336,7 @@ const createFollowListScreen = (type: ListType) => {
     ) : (
       <FlatList
         data={items}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
         refreshControl={
           <RefreshControl
@@ -355,6 +371,9 @@ const createFollowListScreen = (type: ListType) => {
             </Text>
           </View>
         }
+        ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} /> : null}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
       />
     );
 

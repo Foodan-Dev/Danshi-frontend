@@ -13,7 +13,6 @@ import {
 import { useTheme } from '@/src/context/theme_context';
 import { Text, List, useTheme as usePaperTheme, Button, Snackbar } from 'react-native-paper';
 import BottomSheetOverlay from '@/src/components/overlays/bottom_sheet';
-import { CenterPicker } from '@/src/components/overlays/center_picker';
 import { ThemeColorPicker } from '@/src/components/theme_color_picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
@@ -22,7 +21,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/src/context/auth_context';
 import { usersService } from '@/src/services/users_service';
 import { uploadService } from '@/src/services/upload_service';
-import { HOMETOWN_OPTIONS, findOptionLabel } from '@/src/constants/selects';
 import type { UserProfile } from '@/src/repositories/users_repository';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
 import { CachedAvatar } from '@/src/components/cached_avatar';
@@ -44,13 +42,11 @@ export default function SettingsScreen() {
   // 表单字段
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
-  const [hometown, setHometown] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [localAvatarUri, setLocalAvatarUri] = useState<string | null>(null);
 
   // Sheet 状态
   const [sheet, setSheet] = useState<null | 'theme' | 'edit-name' | 'edit-bio'>(null);
-  const [hometownPickerOpen, setHometownPickerOpen] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [editValue, setEditValue] = useState('');
 
@@ -65,14 +61,9 @@ export default function SettingsScreen() {
     return (
       name !== (profile.name ?? '') ||
       bio !== (profile.bio ?? '') ||
-      hometown !== (profile.hometown ?? '') ||
       avatarUrl !== (profile.avatar_url ?? null)
     );
-  }, [profile, name, bio, hometown, avatarUrl]);
-
-  const hometownLabel = useMemo(() => {
-    return findOptionLabel(HOMETOWN_OPTIONS, hometown) || hometown || '未设置';
-  }, [hometown]);
+  }, [profile, name, bio, avatarUrl]);
 
   // 加载用户资料
   const loadProfile = useCallback(async () => {
@@ -88,7 +79,6 @@ export default function SettingsScreen() {
       setProfile(fetchedProfile);
       setName(fetchedProfile.name ?? '');
       setBio(fetchedProfile.bio ?? '');
-      setHometown(fetchedProfile.hometown ?? '');
       setAvatarUrl(fetchedProfile.avatar_url ?? null);
     } catch (error) {
       const message = error instanceof Error ? error.message : '加载资料失败，请稍后重试';
@@ -111,7 +101,6 @@ export default function SettingsScreen() {
     }
     const trimmedName = name.trim();
     const trimmedBio = bio.trim();
-    const trimmedHometown = hometown.trim();
     if (!trimmedName) {
       Alert.alert('保存失败', '昵称不能为空');
       return false;
@@ -121,14 +110,12 @@ export default function SettingsScreen() {
       const input: Parameters<typeof usersService.updateUser>[1] = {
         name: trimmedName,
         bio: trimmedBio,
-        hometown: trimmedHometown,
         avatar_url: avatarUrl ?? null,
       };
       const updatedProfile = await usersService.updateUser(user.id, input);
       setProfile(updatedProfile);
       setName(updatedProfile.name ?? '');
       setBio(updatedProfile.bio ?? '');
-      setHometown(updatedProfile.hometown ?? '');
       setAvatarUrl(updatedProfile.avatar_url ?? null);
       await refreshUser?.();
       const goBack = () => {
@@ -152,18 +139,19 @@ export default function SettingsScreen() {
         }
       }
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '请稍后重试';
       if (__DEV__) console.error('[Settings] Save failed:', error);
       if (Platform.OS === 'web') {
-        window.alert('保存失败：' + (error?.message ?? '请稍后重试'));
+        window.alert('保存失败：' + message);
       } else {
-        Alert.alert('保存失败', error?.message ?? '请稍后重试');
+        Alert.alert('保存失败', message);
       }
       return false;
     } finally {
       setSaving(false);
     }
-  }, [user?.id, name, bio, hometown, avatarUrl, refreshUser]);
+  }, [user?.id, name, bio, avatarUrl, refreshUser]);
 
   // Web 端文件上传处理
   const handleWebFileUpload = useCallback(async (file: File) => {
@@ -186,8 +174,9 @@ export default function SettingsScreen() {
       setAvatarUrl(uploadResult.url);
       setLocalAvatarUri(null);
       URL.revokeObjectURL(localUrl);
-    } catch (uploadError: any) {
-      window.alert('上传失败: ' + (uploadError?.message ?? '请检查网络连接'));
+    } catch (uploadError: unknown) {
+      const message = uploadError instanceof Error ? uploadError.message : '请检查网络连接';
+      window.alert('上传失败: ' + message);
       setLocalAvatarUri(null);
       URL.revokeObjectURL(localUrl);
     } finally {
@@ -244,14 +233,14 @@ export default function SettingsScreen() {
         );
         setAvatarUrl(uploadResult.url);
         setLocalAvatarUri(null);
-      } catch (uploadError: any) {
-        Alert.alert('上传失败', uploadError?.message ?? '请检查网络连接');
+      } catch (uploadError: unknown) {
+        Alert.alert('上传失败', uploadError instanceof Error ? uploadError.message : '请检查网络连接');
         setLocalAvatarUri(null);
       } finally {
         setUploadingAvatar(false);
       }
-    } catch (error: any) {
-      Alert.alert('选择失败', error?.message ?? '请稍后重试');
+    } catch (error: unknown) {
+      Alert.alert('选择失败', error instanceof Error ? error.message : '请稍后重试');
     }
   }, [handleWebFileUpload]);
 
@@ -259,19 +248,19 @@ export default function SettingsScreen() {
   const [isDragging, setIsDragging] = useState(false);
 
   // Web 端拖拽处理
-  const handleDragOver = useCallback((e: any) => {
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
   }, []);
 
-  const handleDragLeave = useCallback((e: any) => {
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback((e: any) => {
+  const handleDrop = useCallback((e: React.DragEvent<HTMLElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
@@ -482,13 +471,6 @@ export default function SettingsScreen() {
                   right={(props) => <List.Icon {...props} icon="chevron-right" />}
                   onPress={() => handleOpenEdit('bio')}
                 />
-                <List.Item
-                  title="家乡"
-                  description={hometownLabel}
-                  left={(props) => <List.Icon {...props} icon="map-marker" />}
-                  right={(props) => <List.Icon {...props} icon="chevron-right" />}
-                  onPress={() => setHometownPickerOpen(true)}
-                />
               </List.Section>
 
               {/* 主题设置 */}
@@ -518,6 +500,20 @@ export default function SettingsScreen() {
               {/* 账号操作 */}
               <List.Section>
                 <List.Subheader>账号</List.Subheader>
+                <List.Item
+                  title="登录设备"
+                  description="查看和管理当前账号的登录会话"
+                  left={(props) => <List.Icon {...props} icon="devices" />}
+                  right={(props) => <List.Icon {...props} icon="chevron-right" />}
+                  onPress={() => router.push('/sessions')}
+                />
+                <List.Item
+                  title="词条建议"
+                  description="提交建议并查看审核状态"
+                  left={(props) => <List.Icon {...props} icon="lightbulb-outline" />}
+                  right={(props) => <List.Icon {...props} icon="chevron-right" />}
+                  onPress={() => router.push('/dictionary-suggestions')}
+                />
                 <List.Item
                   title="退出登录"
                   titleStyle={{ color: pTheme.colors.error }}
@@ -609,16 +605,6 @@ export default function SettingsScreen() {
           </Button>
         </View>
       </BottomSheetOverlay>
-
-      {/* 家乡选择 */}
-      <CenterPicker
-        visible={hometownPickerOpen}
-        onClose={() => setHometownPickerOpen(false)}
-        title="选择家乡"
-        options={HOMETOWN_OPTIONS}
-        selectedValue={hometown}
-        onSelect={(value) => setHometown(value)}
-      />
 
       {/* 主题色选择 */}
       <ThemeColorPicker

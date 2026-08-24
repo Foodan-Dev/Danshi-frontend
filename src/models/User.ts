@@ -1,4 +1,6 @@
-export type Gender = 'male' | 'female';
+export type Gender = 'male' | 'female' | 'other';
+export type ManagementRole = 'dict_reviewer' | 'moderator' | 'super_admin';
+export type DisplayRole = 'user' | ManagementRole;
 
 export interface UserStats {
   post_count: number;
@@ -9,14 +11,15 @@ export interface UserStats {
 }
 
 export interface User {
-  id: string;
+  id: number;
   email: string;
   name: string;
-  gender?: Gender;
-  hometown?: string;
-  role: 'user' | 'admin' | 'super_admin';
+  gender?: Gender | null;
+  /** 仅用于界面展示的主角色；权限判断必须使用 roles。 */
+  role: DisplayRole;
+  roles: ManagementRole[];
   avatar_url?: string | null;
-  bio?: string;
+  bio?: string | null;
   stats?: UserStats;
   is_following?: boolean;
   created_at?: string;

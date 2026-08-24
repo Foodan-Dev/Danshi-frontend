@@ -2,8 +2,8 @@ import type { User } from '@/src/models/User';
 import { isHttpOrHttpsUrl } from '@/src/lib/security/url';
 import type { paths } from '@/src/generated/openapi';
 
-type BackendPath = Extract<keyof paths, `/api/v1${string}`>;
-type RelativeBackendPath<Path extends BackendPath> = Path extends `/api/v1${infer Relative}`
+type BackendPath = Extract<keyof paths, `/api/v2${string}`>;
+type RelativeBackendPath<Path extends BackendPath> = Path extends `/api/v2${infer Relative}`
   ? Relative
   : never;
 type EndpointTemplate<Path extends string> = Path extends `${infer Prefix}{${string}}${infer Suffix}`
@@ -39,8 +39,8 @@ function resolveApiBaseUrl(value?: string) {
 export const API_BASE_URL = resolveApiBaseUrl(rawApiBaseUrl);
 export const REQUEST_TIMEOUT_MS = Number(process.env.EXPO_PUBLIC_REQUEST_TIMEOUT_MS ?? 10000);
 
-// API endpoints (path only, without /api/v1 prefix). 
-// Base URL with /api/v1 prefix comes from src/config
+// API endpoints (path only, without /api/v2 prefix).
+// EXPO_PUBLIC_API_URL supplies the base URL including /api/v2.
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: '/auth/login',             // POST
@@ -48,7 +48,10 @@ export const API_ENDPOINTS = {
     EMAIL_VERIFICATION_CODES: '/auth/email-verification-codes',
     ME: '/auth/me',                   // GET
     LOGOUT: '/auth/logout',           // POST
+    LOGOUT_ALL: '/auth/logout-all',
     REFRESH: '/auth/refresh',         // POST 
+    SESSIONS: '/auth/sessions',
+    SESSION: '/auth/sessions/:sessionId',
   },
   USERS: {
     ROOT: '/users/:userId',
@@ -89,6 +92,7 @@ export const API_ENDPOINTS = {
     LIKE: '/comments/:commentId/like',
     UNLIKE: '/comments/:commentId/like',
     DELETE: '/comments/:commentId',
+    UPDATE: '/comments/:commentId',
   },
   SEARCH: {
     POSTS: '/search/posts',
@@ -104,17 +108,30 @@ export const API_ENDPOINTS = {
     PRESIGN: '/uploads/presign',
     COMPLETE: '/uploads/:uploadId/complete',
   },
+  CONFIG: '/config',
+  DICTIONARY_SUGGESTIONS: {
+    CREATE: '/dictionary-suggestions',
+    MINE: '/dictionary-suggestions/mine',
+  },
 } as const satisfies ApiEndpointMap;
 
 // Role literals and their order (low -> high privilege)
 export const ROLES = {
   USER: 'user',
-  ADMIN: 'admin',
+  DICT_REVIEWER: 'dict_reviewer',
+  MODERATOR: 'moderator',
+  // 兼容旧界面命名；API v2 的内容管理员角色名为 moderator。
+  ADMIN: 'moderator',
   SUPER_ADMIN: 'super_admin',
 } as const;
 
 export type RoleLiteral = typeof ROLES[keyof typeof ROLES];
-export const ROLE_ORDER: RoleLiteral[] = [ROLES.USER, ROLES.ADMIN, ROLES.SUPER_ADMIN];
+export const ROLE_ORDER: RoleLiteral[] = [
+  ROLES.USER,
+  ROLES.DICT_REVIEWER,
+  ROLES.MODERATOR,
+  ROLES.SUPER_ADMIN,
+];
 
 // Common regex patterns
 export const REGEX = {

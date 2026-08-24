@@ -52,15 +52,15 @@ export const adminService = {
     return adminRepository.listPosts(sanitized);
   },
 
-  async reviewPost(postId: string, input: AdminPostReviewInput): Promise<AdminPostReviewResult> {
-    if (!postId?.trim()) throw new AppError('缺少帖子ID');
+  async reviewPost(postId: number, input: AdminPostReviewInput): Promise<AdminPostReviewResult> {
+    if (!Number.isSafeInteger(postId) || postId <= 0) throw new AppError('缺少帖子ID');
     if (!['approved', 'rejected'].includes(input.status)) throw new AppError('无效的审核状态');
     return adminRepository.reviewPost(postId, input);
   },
 
-  async deletePost(postId: string): Promise<{ post_id: string }> {
-    if (!postId?.trim()) throw new AppError('缺少帖子ID');
-    return adminRepository.deletePost(postId.trim());
+  async deletePost(postId: number): Promise<{ post_id: number }> {
+    if (!Number.isSafeInteger(postId) || postId <= 0) throw new AppError('缺少帖子ID');
+    return adminRepository.deletePost(postId);
   },
 
   async getUsers(params: AdminUserListParams = {}): Promise<AdminUsersResponse> {
@@ -81,14 +81,14 @@ export const adminService = {
     return adminRepository.listSuperAdmins(sanitized);
   },
 
-  async updateUserRole(userId: string, input: AdminUserRoleInput): Promise<AdminUserRoleResult> {
-    if (!userId?.trim()) throw new AppError('缺少用户ID');
+  async updateUserRole(userId: number, input: AdminUserRoleInput): Promise<AdminUserRoleResult> {
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new AppError('缺少用户ID');
     if (!input?.role || !isValidRole(input.role)) throw new AppError('无效的角色设定');
     return adminRepository.updateUserRole(userId, input);
   },
 
-  async updateUserStatus(userId: string, input: AdminUserStatusInput): Promise<AdminUserStatusResult> {
-    if (!userId?.trim()) throw new AppError('缺少用户ID');
+  async updateUserStatus(userId: number, input: AdminUserStatusInput): Promise<AdminUserStatusResult> {
+    if (!Number.isSafeInteger(userId) || userId <= 0) throw new AppError('缺少用户ID');
     if (typeof input?.is_active !== 'boolean') throw new AppError('缺少用户状态');
     return adminRepository.updateUserStatus(userId, input);
   },
@@ -98,9 +98,9 @@ export const adminService = {
     return adminRepository.listComments(sanitized);
   },
 
-  async deleteComment(commentId: string): Promise<{ comment_id: string }> {
-    if (!commentId?.trim()) throw new AppError('缺少评论ID');
-    return adminRepository.deleteComment(commentId.trim());
+  async deleteComment(commentId: number): Promise<{ comment_id: number }> {
+    if (!Number.isSafeInteger(commentId) || commentId <= 0) throw new AppError('缺少评论ID');
+    return adminRepository.deleteComment(commentId);
   },
 
   /**

@@ -16,7 +16,7 @@ type PostSetter = React.Dispatch<React.SetStateAction<Post | null>>;
 type UsePostActionsParams = {
   post: Post | null;
   setPost: PostSetter;
-  currentUserId?: string;
+  currentUserId?: number;
 };
 
 export function usePostActions({ post, setPost, currentUserId }: UsePostActionsParams) {
@@ -180,7 +180,7 @@ export function usePostActions({ post, setPost, currentUserId }: UsePostActionsP
     setShareSheetVisible(false);
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(post.id);
+        await navigator.clipboard.writeText(String(post.id));
         showAlert('已复制', '帖子 ID 已复制到剪贴板');
       } else {
         await Share.share({ message: `帖子 ID：${post.id}` });

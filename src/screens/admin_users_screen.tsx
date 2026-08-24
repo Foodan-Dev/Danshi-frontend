@@ -7,10 +7,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { useAuth } from '@/src/context/auth_context';
-import { isAdmin, isSuperAdmin } from '@/src/lib/auth/roles';
+import { isSuperAdmin } from '@/src/lib/auth/roles';
 import { adminService } from '@/src/services/admin_service';
 import type { AdminUserSummary } from '@/src/repositories/admin_repository';
 import type { Role } from '@/src/constants/app';
+import type { ManagementRole } from '@/src/models/User';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { ROLES } from '@/src/constants/app';
 import { formatDate } from '@/src/utils/time_format';
@@ -63,7 +64,7 @@ export default function AdminUsersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
-  const [menuVisible, setMenuVisible] = useState<string | null>(null);
+  const [menuVisible, setMenuVisible] = useState<number | null>(null);
   const requestSeqRef = useRef(0);
 
   const contentHorizontalPadding = pickByBreakpoint(current, { base: 12, sm: 16, md: 20, lg: 24, xl: 24 });
@@ -83,7 +84,7 @@ export default function AdminUsersScreen() {
   }, []);
 
   const loadUsers = useCallback(async (isRefresh = false) => {
-    if (!user || !isAdmin(user.role)) return;
+    if (!user || !isSuperAdmin(user.roles)) return;
     const requestId = ++requestSeqRef.current;
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -109,25 +110,25 @@ export default function AdminUsersScreen() {
   }, [user]);
 
   useEffect(() => {
-    if (isLoading || !user || !isAdmin(user.role)) {
+    if (isLoading || !user || !isSuperAdmin(user.roles)) {
       return;
     }
     void loadUsers();
   }, [isLoading, loadUsers, user]);
 
-  const canManageRole = !!user && isSuperAdmin(user.role);
+  const canManageRole = !!user && isSuperAdmin(user.roles);
 
-  const handleUpdateRole = async (userId: string, role: Role) => {
+  const handleUpdateRole = async (userId: number, role: ManagementRole, action: 'grant' | 'revoke') => {
     setActionError('');
     try {
-      await adminService.updateUserRole(userId, { role });
+      await adminService.updateUserRole(userId, { role, action });
       await loadUsers();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : '修改用户身份失败，请稍后重试');
     }
   };
 
-  const handleUpdateStatus = async (userId: string, isActive: boolean) => {
+  const handleUpdateStatus = async (userId: number, isActive: boolean) => {
     setActionError('');
     try {
       await adminService.updateUserStatus(userId, { is_active: isActive });
@@ -202,29 +203,38 @@ export default function AdminUsersScreen() {
             <Menu.Item
               onPress={() => {
                 setMenuVisible(null);
-                void handleUpdateRole(listedUser.id, ROLES.USER);
+                void handleUpdateRole(
+                  listedUser.id,
+                  ROLES.DICT_REVIEWER,
+                  listedUser.roles.includes(ROLES.DICT_REVIEWER) ? 'revoke' : 'grant',
+                );
               }}
-              title="设为普通用户"
-              leadingIcon="account"
-              disabled={listedUser.role === ROLES.USER}
+              title={listedUser.roles.includes(ROLES.DICT_REVIEWER) ? '移除词条审核员' : '授予词条审核员'}
+              leadingIcon="book-check"
             />
             <Menu.Item
               onPress={() => {
                 setMenuVisible(null);
-                void handleUpdateRole(listedUser.id, ROLES.ADMIN);
+                void handleUpdateRole(
+                  listedUser.id,
+                  ROLES.MODERATOR,
+                  listedUser.roles.includes(ROLES.MODERATOR) ? 'revoke' : 'grant',
+                );
               }}
-              title="设为管理员"
+              title={listedUser.roles.includes(ROLES.MODERATOR) ? '移除内容管理员' : '授予内容管理员'}
               leadingIcon="shield-account"
-              disabled={listedUser.role === ROLES.ADMIN}
             />
             <Menu.Item
               onPress={() => {
                 setMenuVisible(null);
-                void handleUpdateRole(listedUser.id, ROLES.SUPER_ADMIN);
+                void handleUpdateRole(
+                  listedUser.id,
+                  ROLES.SUPER_ADMIN,
+                  listedUser.roles.includes(ROLES.SUPER_ADMIN) ? 'revoke' : 'grant',
+                );
               }}
-              title="设为超级管理员"
+              title={listedUser.roles.includes(ROLES.SUPER_ADMIN) ? '移除超级管理员' : '授予超级管理员'}
               leadingIcon="shield-crown"
-              disabled={listedUser.role === ROLES.SUPER_ADMIN}
             />
             <Divider />
           </>
@@ -262,7 +272,7 @@ export default function AdminUsersScreen() {
     );
   }
 
-  if (!isAdmin(user.role)) {
+  if (!isSuperAdmin(user.roles)) {
     return (
       <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
         <Text style={{ color: pTheme.colors.onSurface, marginBottom: 8 }}>当前账号没有用户管理权限</Text>
@@ -289,7 +299,7 @@ export default function AdminUsersScreen() {
           paddingHorizontal: contentHorizontalPadding,
         }}
         data={users}
-        keyExtractor={(listedUser) => listedUser.id}
+        keyExtractor={(listedUser) => String(listedUser.id)}
         renderItem={renderUser}
         extraData={{ menuVisible, canManageRole }}
         refreshControl={

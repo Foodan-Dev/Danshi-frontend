@@ -38,7 +38,7 @@ const formatCount = (value?: number | null) => {
 type TabType = 'posts' | 'favorites';
 
 type InFlightRequest = {
-  userId: string;
+  userId: number;
   promise: Promise<void>;
 };
 
@@ -63,11 +63,13 @@ const RoleBadge: React.FC<RoleBadgeProps> = ({ role }) => {
       </LinearGradient>
     );
   }
-  if (normalized === 'admin') {
+  if (normalized === 'moderator' || normalized === 'dict_reviewer') {
     return (
       <View style={[styles.adminBadge, { backgroundColor: theme.colors.primaryContainer, borderColor: theme.colors.primary }]}>
         <Ionicons name="shield" size={12} color={theme.colors.primary} />
-        <Text style={[styles.adminBadgeText, { color: theme.colors.primary }]}>管理员</Text>
+        <Text style={[styles.adminBadgeText, { color: theme.colors.primary }]}>
+          {normalized === 'dict_reviewer' ? '词条审核员' : '内容管理员'}
+        </Text>
       </View>
     );
   }
@@ -82,7 +84,7 @@ type AdminConsoleCardProps = {
 const AdminConsoleCard: React.FC<AdminConsoleCardProps> = ({ role }) => {
   const theme = usePaperTheme();
   const normalized = String(role).toLowerCase();
-  const userIsAdmin = normalized === 'admin' || normalized === 'super_admin';
+  const userIsAdmin = normalized === 'moderator' || normalized === 'dict_reviewer' || normalized === 'super_admin';
   
   if (!userIsAdmin) return null;
   
@@ -335,8 +337,8 @@ export default function MyselfScreen() {
     setRefreshing(false);
   }, [loadProfile, loadPosts, loadFavorites, activeTab]);
 
-  const handlePostPress = useCallback((postId: string) => {
-    router.push({ pathname: '/post/[postId]', params: { postId } });
+  const handlePostPress = useCallback((postId: number) => {
+    router.push({ pathname: '/post/[postId]', params: { postId: String(postId) } });
   }, []);
 
   const currentPosts = activeTab === 'posts' ? posts : favorites;
@@ -361,7 +363,7 @@ export default function MyselfScreen() {
         masonry
         optimizeItemArrangement={false}
         numColumns={numColumns}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderPost}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -464,6 +466,17 @@ export default function MyselfScreen() {
             <Pressable style={styles.statItem} onPress={() => router.push('/myself/following' as Href)}>
               <Text style={[styles.statNumber, { color: theme.colors.onSurface }]}>{formatCount(stats?.following_count)}</Text>
               <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>关注</Text>
+            </Pressable>
+          </View>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: theme.colors.onSurface }]}>{formatCount(stats?.like_count)}</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>获赞</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: theme.colors.outline }]} />
+            <Pressable style={styles.statItem} onPress={() => setActiveTab('favorites')}>
+              <Text style={[styles.statNumber, { color: theme.colors.onSurface }]}>{formatCount(stats?.favorite_count)}</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>收藏</Text>
             </Pressable>
           </View>
         </View>

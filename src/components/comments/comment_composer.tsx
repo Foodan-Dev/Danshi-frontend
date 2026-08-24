@@ -21,6 +21,7 @@ export type CommentComposerProps = {
   maxLength?: number;
   currentUser?: CommentAuthor;
   loading?: boolean;
+  editMode?: boolean;
 };
 
 export const CommentComposer: React.FC<CommentComposerProps> = ({
@@ -33,6 +34,7 @@ export const CommentComposer: React.FC<CommentComposerProps> = ({
   maxLength = 500,
   currentUser,
   loading,
+  editMode = false,
 }) => {
   const theme = usePaperTheme();
   const resolvedMaxLength = Number.isFinite(maxLength) ? Math.max(1, Math.floor(maxLength)) : 500;
@@ -41,7 +43,7 @@ export const CommentComposer: React.FC<CommentComposerProps> = ({
   const inputMinHeight = Math.max(120, resolvedMinRows * 26);
   const hasContent = value.trim().length > 0;
   const disabled = !hasContent || !!loading;
-  const headerText = replyTarget ? `回复 @${replyTarget}` : '发表评论';
+  const headerText = editMode ? '编辑评论' : replyTarget ? `回复 @${replyTarget}` : '发表评论';
 
   return (
     <View
@@ -118,7 +120,7 @@ export const CommentComposer: React.FC<CommentComposerProps> = ({
                 { color: disabled ? theme.colors.onSurfaceVariant : theme.colors.onPrimary },
               ]}
             >
-              发布
+              {editMode ? '保存' : '发布'}
             </Text>
           )}
         </Pressable>

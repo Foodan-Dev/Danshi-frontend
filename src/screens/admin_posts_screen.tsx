@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { useAuth } from '@/src/context/auth_context';
-import { isAdmin } from '@/src/lib/auth/roles';
+import { canReviewContent } from '@/src/lib/auth/roles';
 import { adminService } from '@/src/services/admin_service';
 import type { AdminPendingPostSummary } from '@/src/repositories/admin_repository';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -25,7 +25,7 @@ export default function AdminPostsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
-  const [menuVisible, setMenuVisible] = useState<string | null>(null);
+  const [menuVisible, setMenuVisible] = useState<number | null>(null);
   const requestSeqRef = useRef(0);
 
   const contentHorizontalPadding = pickByBreakpoint(current, { base: 12, sm: 16, md: 20, lg: 24, xl: 24 });
@@ -93,7 +93,7 @@ export default function AdminPostsScreen() {
   }, []);
 
   const loadPosts = useCallback(async (isRefresh = false) => {
-    if (!user || !isAdmin(user.role)) return;
+    if (!user || !canReviewContent(user.roles)) return;
     const requestId = ++requestSeqRef.current;
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -119,13 +119,13 @@ export default function AdminPostsScreen() {
   }, [user]);
 
   useEffect(() => {
-    if (isLoading || !user || !isAdmin(user.role)) {
+    if (isLoading || !user || !canReviewContent(user.roles)) {
       return;
     }
     void loadPosts();
   }, [isLoading, loadPosts, user]);
 
-  const handleReview = async (post_id: string, action: 'approve' | 'reject') => {
+  const handleReview = async (post_id: number, action: 'approve' | 'reject') => {
     setActionError('');
     try {
       await adminService.reviewPost(post_id, { status: action === 'approve' ? 'approved' : 'rejected' });
@@ -135,7 +135,7 @@ export default function AdminPostsScreen() {
     }
   };
 
-  const handleDelete = async (post_id: string) => {
+  const handleDelete = async (post_id: number) => {
     setActionError('');
     try {
       await adminService.deletePost(post_id);
@@ -146,7 +146,7 @@ export default function AdminPostsScreen() {
   };
 
   // 确认删除
-  const confirmDelete = (post_id: string, title: string) => {
+  const confirmDelete = (post_id: number, title: string) => {
     Alert.alert(
       '删除帖子',
       `确定要删除「${title}」吗？此操作不可撤销。`,
@@ -162,7 +162,7 @@ export default function AdminPostsScreen() {
   };
 
   // 确认审核
-  const confirmReview = (post_id: string, action: 'approve' | 'reject', title: string) => {
+  const confirmReview = (post_id: number, action: 'approve' | 'reject', title: string) => {
     const actionText = action === 'approve' ? '通过' : '拒绝';
     Alert.alert(
       `${actionText}帖子`,
@@ -327,7 +327,7 @@ export default function AdminPostsScreen() {
     );
   }
 
-  if (!isAdmin(user.role)) {
+  if (!canReviewContent(user.roles)) {
     return (
       <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
         <Text style={{ color: pTheme.colors.onSurface, marginBottom: 8 }}>当前账号没有帖子管理权限</Text>
@@ -354,7 +354,7 @@ export default function AdminPostsScreen() {
           paddingHorizontal: contentHorizontalPadding,
         }}
         data={posts}
-        keyExtractor={(post) => post.id}
+        keyExtractor={(post) => String(post.id)}
         renderItem={renderPost}
         extraData={menuVisible}
         refreshControl={

@@ -11,7 +11,8 @@ export default function EditPostPage() {
   const router = useRouter();
   const params = useLocalSearchParams<{ postId?: string | string[] }>();
   const postIdParam = params.postId;
-  const postId = Array.isArray(postIdParam) ? postIdParam[0] : postIdParam;
+  const rawPostId = Array.isArray(postIdParam) ? postIdParam[0] : postIdParam;
+  const postId = rawPostId ? Number(rawPostId) : Number.NaN;
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -20,7 +21,7 @@ export default function EditPostPage() {
       router.back();
       return;
     }
-    if (postId) {
+    if (Number.isSafeInteger(postId) && postId > 0) {
       router.replace(`/post/${postId}`);
       return;
     }
@@ -28,7 +29,7 @@ export default function EditPostPage() {
   }, [postId, router]);
 
   const loadPost = useCallback(async () => {
-    if (!postId) return;
+    if (!Number.isSafeInteger(postId) || postId <= 0) return;
     
     setLoading(true);
     try {
@@ -55,7 +56,7 @@ export default function EditPostPage() {
     handleBack();
   }, [handleBack]);
 
-  if (!postId) {
+  if (!Number.isSafeInteger(postId) || postId <= 0) {
     return (
       <>
         <Stack.Screen options={{ title: '编辑帖子' }} />

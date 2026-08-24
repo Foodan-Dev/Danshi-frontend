@@ -8,9 +8,10 @@ export default function PostDetailRoute() {
   const router = useRouter();
   const params = useLocalSearchParams<{ postId?: string | string[] }>();
   const postIdParam = params.postId;
-  const postId = Array.isArray(postIdParam) ? postIdParam[0] : postIdParam;
+  const rawPostId = Array.isArray(postIdParam) ? postIdParam[0] : postIdParam;
+  const postId = rawPostId ? Number(rawPostId) : Number.NaN;
 
-  if (!postId) {
+  if (!Number.isSafeInteger(postId) || postId <= 0) {
     return (
       <>
         <Stack.Screen options={{ title: '帖子详情' }} />

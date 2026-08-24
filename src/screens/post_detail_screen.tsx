@@ -44,7 +44,7 @@ const IMAGE_CONFIG = {
 };
 
 type Props = {
-  postId: string;
+  postId: number;
 };
 
 const PostDetailScreen: React.FC<Props> = ({ postId }) => {
@@ -60,19 +60,23 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   }, []);
   // 检查是否需要自动滚动到评论区（如通知跳转）
   const [autoScrollToComments, setAutoScrollToComments] = useState(false);
-  const [pendingScrollCommentId, setPendingScrollCommentId] = useState<string | null>(null);
+  const [pendingScrollCommentId, setPendingScrollCommentId] = useState<number | null>(null);
   const handledScrollParamsRef = useRef<string | null>(null);
   useEffect(() => {
     // 仅消费一次同一组路由定位参数，避免手动滑动时被重复拉回
     const params = (localParams as Record<string, unknown>) || {};
     const scrollTo = normalizeParam(params.scrollTo);
-    const commentId = normalizeParam(
+    const rawCommentId = normalizeParam(
       params.commentId ??
       params.comment_id ??
       params.targetCommentId ??
       params.relatedId ??
       params.related_id
     );
+    const parsedCommentId = rawCommentId ? Number(rawCommentId) : Number.NaN;
+    const commentId = Number.isSafeInteger(parsedCommentId) && parsedCommentId > 0
+      ? parsedCommentId
+      : null;
     const handledKey = `${postId}:${scrollTo ?? ''}:${commentId ?? ''}`;
     if (handledScrollParamsRef.current === handledKey) return;
     if ((scrollTo === 'comment' || commentId) && commentId) {
@@ -112,15 +116,15 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
 
   const commentsHook = usePostComments({
     postId,
-    currentUser: currentUser ? { id: currentUser.id, role: currentUser.role } : null,
+    currentUser: currentUser ? { id: currentUser.id } : null,
     onCommentCountChange,
   });
 
   const {
-    comments, commentSort, commentPagination, commentLoading, commentError,
-    commentReplies, commentRepliesLoading, commentRepliesPagination, commentRepliesExpanded,
+    comments, commentSort, commentLoading, commentError,
+    commentReplies, commentRepliesLoading, commentRepliesExpanded,
     commentSheetVisible, threadVisible, threadRootComment,
-    commentInput, setCommentInput, commentReplyTarget, commentSubmitting,
+    commentInput, setCommentInput, commentReplyTarget, commentEditTarget, commentSubmitting,
     threadRepliesList, threadReplyTotal, threadLoading, threadHasMore,
     fetchComments,
     handleToggleCommentLike, handleReplyToComment, getCommentMoreActions,
@@ -143,7 +147,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const scrollRef = useRef<ScrollView | null>(null);
   const commentsOffsetRef = useRef(0);
   const commentsListOffsetRef = useRef(0);
-  const commentPositionsRef = useRef<Record<string, number>>({});
+  const commentPositionsRef = useRef<Record<number, number>>({});
 
   const isDesktop = windowWidth >= breakpoints.md;
   const handleBack = useCallback(() => {
@@ -192,7 +196,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
         is_favorited: data.is_favorited ?? false,
         stats: { ...(data.stats ?? {}), comment_count: data.stats?.comment_count ?? 0 },
       });
-      const author = data.author as (typeof data.author & { is_following?: boolean }) | undefined;
+      const author = data.author;
       if (author && typeof author.is_following === 'boolean') {
         syncFollowState(author.is_following);
       }
@@ -224,7 +228,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     }
   }, [autoScrollToComments, comments]);
 
-  const scrollToCommentId = useCallback((commentId: string) => {
+  const scrollToCommentId = useCallback((commentId: number) => {
     const y = commentPositionsRef.current[commentId];
     if (typeof y !== 'number' || !scrollRef.current) return false;
     scrollRef.current.scrollTo({ y: Math.max(0, y - 12), animated: true });
@@ -232,7 +236,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   }, []);
 
   const handleCommentLayout = useCallback(
-    (commentId: string) => (e: LayoutChangeEvent) => {
+    (commentId: number) => (e: LayoutChangeEvent) => {
       const baseOffset = commentsOffsetRef.current + commentsListOffsetRef.current;
       const y = baseOffset + e.nativeEvent.layout.y;
       commentPositionsRef.current[commentId] = y;
@@ -302,7 +306,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const likeCount = post?.stats?.like_count ?? 0;
   const favoriteCount = post?.stats?.favorite_count ?? 0;
   const viewCount = post?.stats?.view_count ?? 0;
-  const commentCount = post?.stats?.comment_count ?? commentPagination.total;
+  const commentCount = post?.stats?.comment_count ?? comments.length;
 
   const threadSheet = (
     <BottomSheet
@@ -542,11 +546,19 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
       {/* 标题 */}
       <Text style={styles.title}>{post?.title}</Text>
 
+      {(post?.is_edited || post?.status === 'pending') ? (
+        <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12 }}>
+          {[post?.is_edited ? '已编辑' : null, post?.status === 'pending' ? '审核中' : null]
+            .filter((label): label is string => !!label)
+            .join(' · ')}
+        </Text>
+      ) : null}
+
       {/* 正文 */}
       <Text style={styles.contentText}>{post?.content}</Text>
 
       {/* 结构化信息卡片 */}
-      {sharePostData && (sharePostData.cuisine || typeof sharePostData.price === 'number' || (sharePostData.flavors && sharePostData.flavors.length > 0)) ? (
+      {sharePostData && (sharePostData.cuisine || sharePostData.price || (sharePostData.flavors && sharePostData.flavors.length > 0)) ? (
         <View style={[styles.infoCard, { backgroundColor: theme.colors.surfaceVariant }]}>
           {sharePostData.cuisine ? (
             <View style={styles.infoCardLine}>
@@ -555,7 +567,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
               <Text style={[styles.infoCardValue, { color: theme.colors.onSurface }]}>{sharePostData.cuisine}</Text>
             </View>
           ) : null}
-          {typeof sharePostData.price === 'number' ? (
+          {sharePostData.price ? (
             <View style={styles.infoCardLine}>
               <Ionicons name="cash-outline" size={16} color={theme.colors.primary} />
               <Text style={[styles.infoCardLabel, { color: theme.colors.onSurfaceVariant }]}>价格</Text>
@@ -625,7 +637,11 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
         {post?.canteen ? (
           <View style={[styles.tagBadge, styles.locationBadge, { backgroundColor: theme.colors.surfaceVariant }]}>
             <Ionicons name="location" size={12} color={theme.colors.onSurfaceVariant} />
-            <Text style={[styles.tagBadgeText, { color: theme.colors.onSurfaceVariant }]}>{post.canteen}</Text>
+            <Text style={[styles.tagBadgeText, { color: theme.colors.onSurfaceVariant }]}>
+              {post.canteen_window
+                ? `${post.canteen.name} · ${post.canteen_window.name}`
+                : post.canteen.name}
+            </Text>
           </View>
         ) : null}
         {/* 类型标签 */}
@@ -723,7 +739,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
             const collapsedReplies = availableReplies.slice(0, REPLY_PREVIEW_COUNT);
             const expanded = !!commentRepliesExpanded[item.id];
             const repliesPreview = expanded ? availableReplies : collapsedReplies;
-            const backendReplyTotal = commentRepliesPagination[item.id]?.total ?? item.reply_count ?? 0;
+            const backendReplyTotal = item.reply_count ?? 0;
             const totalReplyCount = Math.max(backendReplyTotal, availableReplies.length, previewReplies.length);
             const showReplySummary = !isDesktop && totalReplyCount > REPLY_PREVIEW_COUNT;
             const shouldInlineReplies = totalReplyCount > 0 && totalReplyCount <= REPLY_PREVIEW_COUNT;
@@ -1020,6 +1036,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
             onCancelReply={handleCancelReply}
             currentUser={currentUser ? { id: currentUser.id, name: currentUser.name || '', avatar_url: currentUser.avatar_url } : undefined}
             loading={commentSubmitting}
+            editMode={!!commentEditTarget}
           />
         </BottomSheet>
 
@@ -1118,6 +1135,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           onCancelReply={handleCancelReply}
           currentUser={currentUser ? { id: currentUser.id, name: currentUser.name || '', avatar_url: currentUser.avatar_url } : undefined}
           loading={commentSubmitting}
+          editMode={!!commentEditTarget}
         />
       </BottomSheet>
 

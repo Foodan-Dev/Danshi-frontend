@@ -82,22 +82,21 @@ export default function RegisterScreen() {
       setVerificationMessage('验证码已发送，有效期 10 分钟');
     } catch (caught) {
       const appError = ensureAppError(caught, '验证码发送失败，请重试');
-      if (appError.status === 429) {
+      if (
+        appError.errorCode === 'rate_limited'
+        || appError.errorCode === 'verify_code_busy'
+        || appError.errorCode === 'verify_code_too_many'
+      ) {
         const retryAfter = Math.max(
           1,
           appError.retryAfterSeconds ?? VERIFICATION_COOLDOWN_SECONDS,
         );
         setCooldownSeconds(retryAfter);
         setError(`请求过于频繁，请 ${retryAfter} 秒后重试`);
-      } else if (
-        appError.status === 400
-        || appError.status === 503
-        || appError.code === 'NETWORK_ERROR'
-        || appError.code === 'TIMEOUT'
-      ) {
-        setError(appError.message);
+      } else if (appError.errorCode === 'email_domain_not_allow') {
+        setError('该邮箱域名暂不支持注册');
       } else {
-        setError('验证码发送失败，请重试');
+        setError(appError.message || '验证码发送失败，请重试');
       }
     } finally {
       setSendingCode(false);
@@ -139,16 +138,27 @@ export default function RegisterScreen() {
       router.replace('/explore');
     } catch (e) {
       const appError = ensureAppError(e, '注册失败，请重试');
-      if (appError.code === 'NETWORK_ERROR' || appError.code === 'TIMEOUT') {
-        setError(appError.message);
-      } else if (!appError.status && !appError.code) {
-        setError(appError.message);
-      } else if (appError.status === 409) {
-        setError('该邮箱已被占用');
-      } else if (appError.status === 400) {
-        setError('注册信息有误，请检查后重试');
-      } else {
-        setError('注册失败，请重试');
+      switch (appError.errorCode) {
+        case 'email_taken':
+          setError('该邮箱已被占用');
+          break;
+        case 'email_domain_not_allow':
+          setError('该邮箱域名暂不支持注册');
+          break;
+        case 'verify_code_invalid':
+          setError('邮箱验证码无效或已过期');
+          break;
+        case 'verify_code_too_many':
+          setError('验证码尝试次数过多，请重新获取');
+          break;
+        case 'validation_failed':
+          setError('注册信息有误，请检查后重试');
+          break;
+        case 'rate_limited':
+          setError('请求过于频繁，请稍后重试');
+          break;
+        default:
+          setError(appError.message || '注册失败，请重试');
       }
     } finally {
       setLoading(false);

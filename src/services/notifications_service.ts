@@ -11,12 +11,12 @@ import {
 
 // ==================== 工具函数 ====================
 
-const isNonEmpty = (v?: string | null) => !!v && v.trim().length > 0;
+const isValidId = (value: number) => Number.isSafeInteger(value) && value > 0;
 
-const sanitizePagination = <T extends { page?: number; limit?: number }>(params: T): T => {
+const sanitizePagination = <T extends { cursor?: string; limit?: number }>(params: T): T => {
   const result = { ...params };
-  if (result.page !== undefined) {
-    result.page = Math.max(1, Math.floor(result.page));
+  if (result.cursor !== undefined) {
+    result.cursor = result.cursor.trim() || undefined;
   }
   if (result.limit !== undefined) {
     result.limit = Math.min(50, Math.max(1, Math.floor(result.limit)));
@@ -71,17 +71,12 @@ export const notificationsService = {
    * - related_type=post: 使用 related_id
    * - related_type=comment: 尝试从扩展字段获取 post_id
    */
-  getNotificationPostId(notification: Notification): string | null {
+  getNotificationPostId(notification: Notification): number | null {
     if (notification.related_type === 'post' && notification.related_id) {
       return notification.related_id;
     }
     if (notification.related_type === 'comment') {
-      return (
-        notification.post_id ||
-        (notification as Notification & { related_post_id?: string | null }).related_post_id ||
-        (notification as Notification & { post?: { id?: string | null } | null }).post?.id ||
-        null
-      );
+      return notification.post_id ?? null;
     }
     return null;
   },
@@ -103,9 +98,9 @@ export const notificationsService = {
   /**
    * 标记单个通知为已读
    */
-  async markAsRead(notificationId: string): Promise<void> {
-    if (!isNonEmpty(notificationId)) {
-      throw new AppError('缺少通知ID');
+  async markAsRead(notificationId: number): Promise<void> {
+    if (!isValidId(notificationId)) {
+      throw new AppError('缺少有效的通知ID');
     }
     await notificationsRepository.markAsRead(notificationId);
   },
@@ -133,7 +128,7 @@ export const notificationsService = {
 
   /**
    * 根据通知跳转到相关页面（返回路由参数）
-   * 
+   *
    * @returns 返回 { pathname, params } 用于 router.push
    */
   getNotificationRoute(notification: Notification): { pathname: string; params?: Record<string, string> } | null {
@@ -147,22 +142,28 @@ export const notificationsService = {
       case 'like_post':
       case 'mention':
         if (postId && commentId) {
-          return { pathname: '/post/[postId]', params: { postId, scrollTo: 'comment', commentId } };
+          return {
+            pathname: '/post/[postId]',
+            params: { postId: String(postId), scrollTo: 'comment', commentId: String(commentId) },
+          };
         }
-        if (postId) return { pathname: '/post/[postId]', params: { postId } };
+        if (postId) return { pathname: '/post/[postId]', params: { postId: String(postId) } };
         return null;
 
       case 'like_comment':
         if (postId && commentId) {
-          return { pathname: '/post/[postId]', params: { postId, scrollTo: 'comment', commentId } };
+          return {
+            pathname: '/post/[postId]',
+            params: { postId: String(postId), scrollTo: 'comment', commentId: String(commentId) },
+          };
         }
-        if (postId) return { pathname: '/post/[postId]', params: { postId } };
+        if (postId) return { pathname: '/post/[postId]', params: { postId: String(postId) } };
         return null;
 
       case 'follow':
         // 跳转到用户主页
         if (sender?.id) {
-          return { pathname: '/user/[userId]', params: { userId: sender.id } };
+          return { pathname: '/user/[userId]', params: { userId: String(sender.id) } };
         }
         return null;
 
@@ -184,4 +185,3 @@ export type {
   UnreadCountResponse,
   MarkAllReadResponse,
 } from '@/src/repositories/notifications_repository';
-
