@@ -14,7 +14,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://danshi.test.fdueat.com/api/v2"
+        "EXPO_PUBLIC_API_URL": "https://danshi.fdueat.com/api/v2"
       }
     },
     "testflight": {
@@ -24,7 +24,7 @@
         "distribution": "store"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://danshi.test.fdueat.com/api/v2"
+        "EXPO_PUBLIC_API_URL": "https://danshi.fdueat.com/api/v2"
       }
     },
     "production": {
