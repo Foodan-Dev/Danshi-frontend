@@ -6,6 +6,12 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "danshi",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d7bd18a3-1439-434c-8c64-9f8f37e54a74"
+    },
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
