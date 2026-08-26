@@ -5,6 +5,7 @@
   },
   "build": {
     "preview": {
+      "channel": "preview",
       "autoIncrement": true,
       "ios": {
         "distribution": "internal"
@@ -17,6 +18,7 @@
       }
     },
     "testflight": {
+      "channel": "testflight",
       "autoIncrement": true,
       "ios": {
         "distribution": "store"
@@ -26,6 +28,7 @@
       }
     },
     "production": {
+      "channel": "production",
       "autoIncrement": true,
       "ios": {
         "distribution": "store"
