@@ -382,16 +382,22 @@ export default function AccountSettingsScreen({ settingsHref }: AccountSettingsS
         <Appbar.BackAction onPress={goBack} />
         <Appbar.Content title="账号管理" />
         {userToken && profile ? (
-          <Appbar.Action
-            icon={saving
-              ? () => <ActivityIndicator size={20} color={pTheme.colors.primary} />
-              : 'content-save-outline'}
+          // 保存必须是有文字的按钮：上传头像只改本地 state，界面会立刻显示新头像，
+          // 光靠一个图标无法让人意识到改动尚未提交。未保存时才可点，点完即置灰。
+          <Button
+            mode="contained"
+            compact
+            loading={saving}
+            disabled={saving || !hasUnsavedChanges}
             accessibilityLabel="保存个人资料"
-            disabled={saving}
+            style={styles.saveButton}
+            labelStyle={styles.saveButtonLabel}
             onPress={() => {
               void handleSaveProfile();
             }}
-          />
+          >
+            保存
+          </Button>
         ) : (
           <View style={styles.appbarPlaceholder} />
         )}
@@ -630,6 +636,14 @@ export default function AccountSettingsScreen({ settingsHref }: AccountSettingsS
 }
 
 const styles = StyleSheet.create({
+  saveButton: {
+    marginRight: 8,
+    borderRadius: 20,
+  },
+  saveButtonLabel: {
+    fontSize: 14,
+    marginHorizontal: 12,
+  },
   appbarPlaceholder: {
     width: 48,
   },
