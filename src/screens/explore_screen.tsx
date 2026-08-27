@@ -13,7 +13,7 @@ import {
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { postsService } from '@/src/services/posts_service';
-import type { PostListFilters, SortBy } from '@/src/repositories/posts_repository';
+import type { PostListFilters, PostsListResponse, SortBy } from '@/src/repositories/posts_repository';
 import type { Post, ShareType } from '@/src/models/Post';
 import { configService, type ExploreConfig, type PostTypeSubType } from '@/src/services/config_service';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
@@ -38,6 +38,29 @@ type ActiveFilterChip = {
   label: string;
   onClear: () => void;
 };
+
+type NextPagination = {
+  hasMore: boolean;
+  nextCursor: string | null;
+  nextPage: number | null;
+};
+
+function getNextPagination(pagination: PostsListResponse['pagination']): NextPagination {
+  if ('has_more' in pagination) {
+    return {
+      hasMore: pagination.has_more,
+      nextCursor: pagination.next_cursor,
+      nextPage: null,
+    };
+  }
+
+  const hasMore = pagination.page < pagination.total_pages;
+  return {
+    hasMore,
+    nextCursor: null,
+    nextPage: hasMore ? pagination.page + 1 : null,
+  };
+}
 
 const INITIAL_FILTERS: ExploreFilters = {
   postType: 'all',
@@ -74,6 +97,11 @@ export default function ExploreScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loaderState, setLoaderState] = useState<LoaderState>('initial');
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [nextPage, setNextPage] = useState<number | null>(null);
   const [filters, setFilters] = useState<ExploreFilters>({ ...INITIAL_FILTERS });
   const [config, setConfig] = useState<ExploreConfig>({ postTypes: [], canteens: [], cuisines: [], flavors: [] });
   const [configLoading, setConfigLoading] = useState(true);
@@ -81,6 +109,7 @@ export default function ExploreScreen() {
   const [filtersSheetVisible, setFiltersSheetVisible] = useState(false);
   const hasFocusedOnceRef = useRef(false);
   const postsRequestSeqRef = useRef(0);
+  const loadingMoreRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -123,17 +152,27 @@ export default function ExploreScreen() {
   const fetchPosts = useCallback(
     async (mode: LoaderState = 'initial', overrides?: PostListFilters) => {
       const requestId = ++postsRequestSeqRef.current;
+      loadingMoreRef.current = false;
       setLoaderState(mode);
+      setLoadingMore(false);
       setError(null);
+      setLoadMoreError(null);
+      setHasMore(false);
+      setNextCursor(null);
+      setNextPage(null);
       try {
         const params: PostListFilters = { ...requestFilters, ...(overrides ?? {}) };
-        const { posts: result } = await postsService.list(params);
+        const { posts: result, pagination } = await postsService.list(params);
         if (postsRequestSeqRef.current !== requestId) {
           return;
         }
         // 前端过滤：只显示已审核通过的帖子（后端应该已经过滤，这里是额外保护）
         const approvedPosts = result.filter((post) => post.status === 'approved');
         setPosts(approvedPosts);
+        const next = getNextPagination(pagination);
+        setHasMore(next.hasMore);
+        setNextCursor(next.nextCursor);
+        setNextPage(next.nextPage);
         setError(null);
       } catch (e: unknown) {
         if (postsRequestSeqRef.current !== requestId) {
@@ -170,6 +209,60 @@ export default function ExploreScreen() {
   const handleRefresh = useCallback(() => {
     fetchPosts('refresh');
   }, [fetchPosts]);
+
+  const handleLoadMore = useCallback(async (retry = false) => {
+    if (
+      loadingMoreRef.current
+      || loaderState !== 'idle'
+      || !hasMore
+      || (loadMoreError && !retry)
+    ) {
+      return;
+    }
+
+    const pagination = nextCursor
+      ? { cursor: nextCursor }
+      : nextPage
+        ? { page: nextPage }
+        : null;
+    if (!pagination) return;
+
+    const requestId = ++postsRequestSeqRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    setLoadMoreError(null);
+
+    try {
+      const { posts: result, pagination: responsePagination } = await postsService.list({
+        ...requestFilters,
+        ...pagination,
+      });
+      if (postsRequestSeqRef.current !== requestId) return;
+
+      const approvedPosts = result.filter((post) => post.status === 'approved');
+      setPosts((current) => {
+        const existingIds = new Set(current.map((post) => post.id));
+        return [
+          ...current,
+          ...approvedPosts.filter((post) => !existingIds.has(post.id)),
+        ];
+      });
+
+      const next = getNextPagination(responsePagination);
+      setHasMore(next.hasMore);
+      setNextCursor(next.nextCursor);
+      setNextPage(next.nextPage);
+    } catch (e: unknown) {
+      if (postsRequestSeqRef.current !== requestId) return;
+      const message = e instanceof Error ? e.message : '加载更多帖子失败';
+      setLoadMoreError(message);
+    } finally {
+      if (postsRequestSeqRef.current === requestId) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }, [hasMore, loadMoreError, loaderState, nextCursor, nextPage, requestFilters]);
 
   const onPress = useCallback(
     (postId: number) => {
@@ -314,7 +407,8 @@ export default function ExploreScreen() {
         }}
         data={content}
         masonry
-        optimizeItemArrangement={false}
+        optimizeItemArrangement
+        drawDistance={300}
         numColumns={numColumns}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderPost}
@@ -329,6 +423,8 @@ export default function ExploreScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
+        onEndReached={() => handleLoadMore()}
+        onEndReachedThreshold={0.3}
         ListHeaderComponent={
           activeFilterChips.length > 0 || (error && !isInitialLoading) ? (
             <View style={styles.listHeader}>
@@ -367,6 +463,26 @@ export default function ExploreScreen() {
               </View>
               <Text style={[styles.emptyTitle, { color: pTheme.colors.onSurface }]}>暂无内容</Text>
               <Text style={[styles.emptyText, { color: pTheme.colors.onSurfaceVariant }]}>去发布第一条美食分享吧～</Text>
+            </View>
+          ) : null
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.listFooter}>
+              <ActivityIndicator color={pTheme.colors.primary} />
+            </View>
+          ) : loadMoreError ? (
+            <View style={styles.listFooter}>
+              <Text style={[styles.loadMoreErrorText, { color: pTheme.colors.error }]}>
+                {loadMoreError}
+              </Text>
+              <Pressable
+                style={[styles.retryBtn, { backgroundColor: pTheme.colors.primaryContainer }]}
+                onPress={() => handleLoadMore(true)}
+              >
+                <Ionicons name="refresh" size={18} color={pTheme.colors.primary} />
+                <Text style={[styles.retryText, { color: pTheme.colors.primary }]}>重试</Text>
+              </Pressable>
             </View>
           ) : null
         }
@@ -584,6 +700,15 @@ const styles = StyleSheet.create({
   listHeader: {
     gap: 12,
     marginBottom: 12,
+  },
+  listFooter: {
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 16,
+  },
+  loadMoreErrorText: {
+    fontSize: 14,
+    textAlign: 'center',
   },
 
   // ==================== 状态展示 ====================
