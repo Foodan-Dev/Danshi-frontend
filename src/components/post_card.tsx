@@ -396,7 +396,7 @@ export const PostCard: React.FC<PostCardProps> = ({
               accessibilityRole="button"
             >
               <Ionicons
-                name={isFavorited ? 'bookmark' : 'bookmark-outline'}
+                name={isFavorited ? 'star' : 'star-outline'}
                 size={14}
                 color={isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant}
               />
