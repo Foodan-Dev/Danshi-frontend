@@ -21,6 +21,7 @@ export type SearchPost = {
   content: string;
   category: 'food' | 'recipe';
   images: string[];
+  image_thumbs: string[];
   author?: { id: number; name: string; avatar_url: string | null };
   stats: { like_count: number; comment_count: number; view_count: number };
   highlight?: SearchHighlight;
@@ -53,6 +54,7 @@ const toSearchPost = (post: components['schemas']['SearchPostItem']): SearchPost
     content: requireString(post.content, '帖子正文'),
     category: post.category,
     images: post.images ?? [],
+    image_thumbs: post.image_thumbs ?? [],
     author: post.author ? {
       id: requireNumber(post.author.id, '作者 ID'),
       name: requireString(post.author.name, '作者名称'),
