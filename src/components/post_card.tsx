@@ -55,8 +55,11 @@ export const PostCard: React.FC<PostCardProps> = ({
   const likeLoadingRef = useRef(false);
   const favoriteLoadingRef = useRef(false);
   const firstImage = useMemo(
-    () => post.images?.map((item) => getSafeRemoteUrl(item)).find((item): item is string => !!item),
-    [post.images]
+    () => post.image_thumbs
+      ?.map((item) => getSafeRemoteUrl(item))
+      .find((item): item is string => !!item)
+      ?? post.images?.map((item) => getSafeRemoteUrl(item)).find((item): item is string => !!item),
+    [post.image_thumbs, post.images]
   );
   const displayTitle = useMemo(
     () => post.title?.trim() || post.content?.trim().slice(0, 60) || '分享美食',

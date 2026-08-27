@@ -29,6 +29,8 @@ export interface PostBase {
   canteen_window?: PostCanteenWindow | null;
   tags?: string[];
   images?: string[];
+  image_thumbs?: string[];
+  image_displays?: string[];
   author?: PostAuthor;
   stats?: PostStats;
   is_liked?: boolean;
@@ -46,6 +48,8 @@ export interface SharePost extends Omit<PostBase, 'images'> {
   flavors?: string[];
   price?: string;
   images: string[]; // 1-9
+  image_thumbs?: string[];
+  image_displays?: string[];
 }
 
 export interface SeekingPost extends PostBase {

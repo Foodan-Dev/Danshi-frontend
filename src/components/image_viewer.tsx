@@ -23,6 +23,7 @@ import Animated, {
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
+import { Image } from 'expo-image';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -38,6 +39,8 @@ interface ZoomableImageProps {
   uri: string;
   onSingleTap: () => void;
 }
+
+const AnimatedExpoImage = Animated.createAnimatedComponent(Image);
 
 /**
  * 可缩放的单张图片组件
@@ -166,10 +169,11 @@ function ZoomableImage({ uri, onSingleTap }: ZoomableImageProps) {
         style={styles.imageContainer}
         {...{ onWheel: handleWheel }}
       >
-        <Animated.Image
+        <AnimatedExpoImage
           source={{ uri }}
           style={[styles.image, animatedStyle]}
-          resizeMode="contain"
+          contentFit="contain"
+          cachePolicy="memory-disk"
         />
         <Pressable style={StyleSheet.absoluteFill} onPress={onSingleTap} />
       </View>
@@ -179,10 +183,11 @@ function ZoomableImage({ uri, onSingleTap }: ZoomableImageProps) {
   return (
     <GestureDetector gesture={composedGesture}>
       <Animated.View style={styles.imageContainer}>
-        <Animated.Image
+        <AnimatedExpoImage
           source={{ uri }}
           style={[styles.image, animatedStyle]}
-          resizeMode="contain"
+          contentFit="contain"
+          cachePolicy="memory-disk"
         />
       </Animated.View>
     </GestureDetector>

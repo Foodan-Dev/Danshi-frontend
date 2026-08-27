@@ -88,6 +88,8 @@ export function toPost(post: PostContract): Post {
     flavors: post.flavors ?? [],
     tags: post.tags ?? [],
     images: post.images ?? [],
+    image_thumbs: post.image_thumbs ?? [],
+    image_displays: post.image_displays ?? [],
     author: toPostAuthor(post.author),
     stats: {
       like_count: post.stats?.like_count ?? 0,
@@ -127,6 +129,8 @@ export function toPost(post: PostContract): Post {
     share_type: post.share_type === 'warning' ? 'warning' : 'recommend',
     price: post.price ?? undefined,
     images: post.images ?? [],
+    image_thumbs: post.image_thumbs ?? [],
+    image_displays: post.image_displays ?? [],
   };
 }
 
