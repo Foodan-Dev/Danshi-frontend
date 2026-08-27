@@ -50,9 +50,12 @@ export const authService = {
   },
 
   async logout(): Promise<void> {
-    await authRepository.logout();
-    await AuthStorage.clearToken();
-    await AuthStorage.clearRefreshToken();
+    try {
+      await authRepository.logout();
+    } finally {
+      await AuthStorage.clearToken();
+      await AuthStorage.clearRefreshToken();
+    }
   },
 
   async listSessions(): Promise<Session[]> {

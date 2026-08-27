@@ -188,6 +188,16 @@ export default function LoginScreen() {
                   注册
                 </Button>
               </View>
+
+              <Button
+                mode="text"
+                icon="cog-outline"
+                onPress={() => router.push('/settings')}
+                style={styles.settingsLink}
+                textColor={rowPromptColor}
+              >
+                设置与诊断
+              </Button>
             </Card.Content>
           </Card>
         </View>
@@ -238,5 +248,9 @@ const styles = StyleSheet.create({
   },
   rowLinkContent: {
     height: 36,
+  },
+  settingsLink: {
+    marginTop: 4,
+    alignSelf: 'center',
   },
 });

@@ -127,6 +127,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Call API to logout (best-effort), then clear local state
       await authService.logout();
+    } catch (error) {
+      if (__DEV__) console.warn('[auth] remote logout failed:', error);
     } finally {
       setSessionExpired(false);
       setUserToken(null);
