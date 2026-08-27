@@ -21,13 +21,25 @@ export const STORAGE_KEYS = {
 // Runtime config (can be overridden via EXPO_PUBLIC_* envs)
 const rawApiBaseUrl = (process.env.EXPO_PUBLIC_API_URL ?? '').trim();
 
-if (__DEV__ && !rawApiBaseUrl) {
-  console.warn('[config] EXPO_PUBLIC_API_URL is not set. Falling back to https://example.invalid');
-}
-
+// 缺失时必须立刻失败，不能回退到占位域名。
+//
+// EXPO_PUBLIC_* 在打包时内联进 bundle，而两条发布链路的取值来源并不相同：
+//   - `eas build`  读 eas.json 里 build.<profile>.env
+//   - `eas update` 读 EAS 服务端环境变量（eas env:*，按 --environment 分组）
+// 两者互相独立。2026-08-26 的线上事故就源于此：服务端环境为空，OTA bundle 里
+// 该值为 undefined，而这里静默回退到 https://example.invalid（RFC 2606 保留域，
+// 永不解析），于是构建与发布两个环节都不报错，用户侧却是所有请求都
+// 「找不到主机」（iOS NSURLErrorCannotFindHost），看起来像网络故障。
+//
+// 宁可在启动时明确炸掉，也不要发出一个看起来正常、实际全网络不可用的包。
 function resolveApiBaseUrl(value?: string) {
-  const fallback = 'https://example.invalid';
-  if (!value) return fallback;
+  if (!value) {
+    throw new Error(
+      'EXPO_PUBLIC_API_URL is not set. `eas build` reads it from the eas.json build '
+        + 'profile env, while `eas update` reads it from the EAS server-side environment '
+        + '(eas env:*). Both must be configured.'
+    );
+  }
   if (!isHttpOrHttpsUrl(value)) {
     throw new Error(
       'EXPO_PUBLIC_API_URL must use http(s).'
