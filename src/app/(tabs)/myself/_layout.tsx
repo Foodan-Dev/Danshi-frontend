@@ -22,6 +22,7 @@ export default function MyselfTabStackLayout() {
         <Stack.Screen name="posts" />
         <Stack.Screen name="followers" />
         <Stack.Screen name="following" />
+        <Stack.Screen name="settings" />
         <Stack.Screen name="admin" />
       </Stack>
     </View>

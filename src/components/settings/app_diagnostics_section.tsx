@@ -58,8 +58,8 @@ export function AppDiagnosticsSection() {
   };
 
   return (
-    <List.Section>
-      <List.Subheader>关于与诊断</List.Subheader>
+    <List.Section style={styles.section}>
+      <List.Subheader style={styles.subheader}>运行诊断</List.Subheader>
       <View
         style={[
           styles.card,
@@ -106,6 +106,12 @@ export function AppDiagnosticsSection() {
 }
 
 const styles = StyleSheet.create({
+  section: {
+    marginHorizontal: -16,
+  },
+  subheader: {
+    paddingHorizontal: 16,
+  },
   card: {
     marginHorizontal: 16,
     borderRadius: 16,

@@ -385,7 +385,7 @@ export default function MyselfScreen() {
               )}
             </Pressable>
             {/* 设置入口 */}
-            <Pressable style={styles.headerBtn} onPress={() => router.push('/settings')}>
+            <Pressable style={styles.headerBtn} onPress={() => router.push('/myself/settings')}>
               <Ionicons name="settings-outline" size={24} color={theme.colors.onSurfaceVariant} />
             </Pressable>
           </View>
@@ -405,7 +405,7 @@ export default function MyselfScreen() {
           <View style={styles.profileHeaderRow}>
             <Pressable
               style={[styles.avatarContainer, { backgroundColor: theme.colors.primaryContainer }]}
-              onPress={() => router.push('/settings')}
+              onPress={() => router.push('/myself/settings/account')}
             >
               <CachedAvatar
                 uri={avatarUrl}
