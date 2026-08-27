@@ -196,7 +196,7 @@ export default function LoginScreen() {
                 style={styles.settingsLink}
                 textColor={rowPromptColor}
               >
-                设置与诊断
+                设置
               </Button>
             </Card.Content>
           </Card>
