@@ -177,8 +177,12 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   }, [windowWidth, windowHeight, isDesktop, insets.top]);
 
   const safePostImages = useMemo(
-    () => (post?.images ?? []).map((item) => getSafeRemoteUrl(item)).filter((item): item is string => !!item),
-    [post?.images]
+    () => Array.from(
+      { length: Math.max(post?.image_displays?.length ?? 0, post?.images?.length ?? 0) },
+      (_, index) => getSafeRemoteUrl(post?.image_displays?.[index])
+        ?? getSafeRemoteUrl(post?.images?.[index])
+    ).filter((item): item is string => !!item),
+    [post?.image_displays, post?.images]
   );
 
   const shouldShowFollowButton = !!currentUser?.id && !!post?.author?.id && currentUser.id !== post.author.id;

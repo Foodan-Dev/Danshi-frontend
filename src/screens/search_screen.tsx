@@ -263,7 +263,10 @@ export default function SearchScreen() {
     ({ item }: { item: SearchPost }) => {
       const snippet = extractMatchSnippet(item.highlight?.content);
       const showSnippet = snippet && !item.highlight?.title;
-      const previewImage = getSafeRemoteUrl(item.images[0]);
+      const previewImage = item.image_thumbs
+        .map((image) => getSafeRemoteUrl(image))
+        .find((image): image is string => !!image)
+        ?? item.images.map((image) => getSafeRemoteUrl(image)).find((image): image is string => !!image);
 
       return (
         <View style={{ marginHorizontal: gridGap / 2, marginBottom: gridVerticalGap }}>
