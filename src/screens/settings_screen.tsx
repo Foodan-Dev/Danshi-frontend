@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -24,20 +24,21 @@ import { uploadService } from '@/src/services/upload_service';
 import type { UserProfile } from '@/src/repositories/users_repository';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
 import { CachedAvatar } from '@/src/components/cached_avatar';
-
+import { AppDiagnosticsSection } from '@/src/components/settings/app_diagnostics_section';
 
 export default function SettingsScreen() {
   const { mode, setMode, accentColor } = useTheme();
-  const { user, signOut, refreshUser } = useAuth();
+  const { userToken, user, isLoading: authLoading, signOut, refreshUser } = useAuth();
   const insets = useSafeAreaInsets();
   const pTheme = usePaperTheme();
 
   // 编辑状态
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const profileRequestId = useRef(0);
 
   // 表单字段
   const [name, setName] = useState('');
@@ -68,30 +69,63 @@ export default function SettingsScreen() {
   // 加载用户资料
   const loadProfile = useCallback(async () => {
     if (!user?.id) {
-      setLoadError('请先登录后再编辑资料');
-      setLoading(false);
       return;
     }
-    setLoading(true);
+    const requestId = ++profileRequestId.current;
+    setProfileLoading(true);
+    setProfile(null);
     setLoadError('');
     try {
       const fetchedProfile = await usersService.getUser(user.id);
+      if (requestId !== profileRequestId.current) return;
       setProfile(fetchedProfile);
       setName(fetchedProfile.name ?? '');
       setBio(fetchedProfile.bio ?? '');
       setAvatarUrl(fetchedProfile.avatar_url ?? null);
     } catch (error) {
+      if (requestId !== profileRequestId.current) return;
       const message = error instanceof Error ? error.message : '加载资料失败，请稍后重试';
       setLoadError(message);
       if (__DEV__) console.warn('Load profile failed:', error);
     } finally {
-      setLoading(false);
+      if (requestId === profileRequestId.current) {
+        setProfileLoading(false);
+      }
     }
   }, [user?.id]);
 
   useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+    if (!userToken) {
+      profileRequestId.current += 1;
+      setProfile(null);
+      setName('');
+      setBio('');
+      setAvatarUrl(null);
+      setLocalAvatarUri(null);
+      setLoadError('');
+      setProfileLoading(false);
+      return;
+    }
+
+    if (user?.id) {
+      void loadProfile();
+    }
+  }, [loadProfile, user?.id, userToken]);
+
+  const handleRetryProfile = useCallback(async () => {
+    if (user?.id) {
+      await loadProfile();
+      return;
+    }
+
+    setProfileLoading(true);
+    setLoadError('');
+    try {
+      await refreshUser();
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [loadProfile, refreshUser, user?.id]);
 
   // 保存个人资料
   const handleSaveProfile = useCallback(async (shouldNavigate = true): Promise<boolean> => {
@@ -295,7 +329,7 @@ export default function SettingsScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/myself');
+      router.replace(userToken ? '/myself' : '/login');
     }
   };
 
@@ -366,29 +400,29 @@ export default function SettingsScreen() {
             <Ionicons name="arrow-back" size={24} color={pTheme.colors.onSurface} />
           </Pressable>
 
-          {/* 右侧：保存按钮 - 使用内联样式确保显示 */}
-          <Pressable
-            style={{
-              backgroundColor: pTheme.colors.primary,
-              paddingHorizontal: 14,
-              paddingVertical: 7,
-              borderRadius: 16,
-              minWidth: 52,
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: saving ? 0.6 : 1,
-            }}
-            onPress={() => {
-              void handleSaveProfile();
-            }}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator size={14} color={pTheme.colors.onPrimary} />
-            ) : (
-              <Text style={{ color: pTheme.colors.onPrimary, fontSize: 14, fontWeight: '600' }}>保存</Text>
-            )}
-          </Pressable>
+          <Text style={[styles.topBarTitle, { color: pTheme.colors.onSurface }]}>设置</Text>
+
+          {userToken && profile ? (
+            <Pressable
+              style={[
+                styles.saveBtn,
+                { backgroundColor: pTheme.colors.primary },
+                saving && styles.saveBtnDisabled,
+              ]}
+              onPress={() => {
+                void handleSaveProfile();
+              }}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator size={14} color={pTheme.colors.onPrimary} />
+              ) : (
+                <Text style={[styles.saveBtnText, { color: pTheme.colors.onPrimary }]}>保存</Text>
+              )}
+            </Pressable>
+          ) : (
+            <View style={styles.topBarRightPlaceholder} />
+          )}
         </View>
       </View>
 
@@ -400,104 +434,171 @@ export default function SettingsScreen() {
           style={{ backgroundColor: pTheme.colors.background }}
           contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
         >
-          {loading ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator size="large" color={pTheme.colors.primary} />
-            </View>
-          ) : loadError && !profile ? (
-            <View style={styles.errorWrap}>
-              <Ionicons name="alert-circle-outline" size={48} color={pTheme.colors.error} />
-              <Text style={{ color: pTheme.colors.error, textAlign: 'center' }}>{loadError}</Text>
-              <Pressable style={[styles.retryBtn, { backgroundColor: pTheme.colors.primaryContainer }]} onPress={() => { void loadProfile(); }}>
-                <Text style={[styles.retryText, { color: pTheme.colors.primary }]}>重新加载</Text>
-              </Pressable>
-            </View>
+          {/* 纯本地设置：不依赖登录或网络 */}
+          <List.Section>
+            <List.Subheader>外观</List.Subheader>
+            <List.Item
+              title="主题模式"
+              description={themeLabel}
+              left={(props) => <List.Icon {...props} icon="theme-light-dark" />}
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={() => setSheet('theme')}
+            />
+            <List.Item
+              title="主题色"
+              description={accentColor ? accentColor.toUpperCase() : '默认'}
+              left={(props) => <List.Icon {...props} icon="palette" />}
+              right={(props) => (
+                <View style={styles.colorPreviewRow}>
+                  <View
+                    style={[
+                      styles.colorPreview,
+                      { backgroundColor: accentColor || pTheme.colors.primary },
+                    ]}
+                  />
+                  <List.Icon {...props} icon="chevron-right" />
+                </View>
+              )}
+              onPress={() => setColorPickerOpen(true)}
+            />
+          </List.Section>
+
+          <AppDiagnosticsSection />
+
+          {authLoading ? (
+            <List.Section>
+              <List.Subheader>账号与个人资料</List.Subheader>
+              <View style={styles.profileStateWrap}>
+                <ActivityIndicator size="small" color={pTheme.colors.primary} />
+                <Text style={{ color: pTheme.colors.onSurfaceVariant }}>正在读取登录状态…</Text>
+              </View>
+            </List.Section>
+          ) : !userToken ? (
+            <List.Section>
+              <List.Subheader>账号与个人资料</List.Subheader>
+              <View
+                style={[
+                  styles.loginGate,
+                  {
+                    backgroundColor: pTheme.colors.surfaceVariant,
+                    borderColor: pTheme.colors.outlineVariant,
+                  },
+                ]}
+              >
+                <Ionicons name="person-circle-outline" size={44} color={pTheme.colors.primary} />
+                <Text variant="titleMedium" style={{ color: pTheme.colors.onSurface }}>
+                  请先登录
+                </Text>
+                <Text style={[styles.loginGateDescription, { color: pTheme.colors.onSurfaceVariant }]}>
+                  登录后可编辑个人资料、管理登录设备、查看词条建议并退出账号。
+                </Text>
+                <Button mode="contained" onPress={() => router.push('/login')}>
+                  前往登录
+                </Button>
+              </View>
+            </List.Section>
           ) : (
             <>
-              {/* 头像编辑 */}
-              <View 
-                style={[
-                  styles.avatarSection,
-                  Platform.OS === 'web' && isDragging && { 
-                    backgroundColor: pTheme.colors.primaryContainer,
-                    borderRadius: 16,
-                  }
-                ]}
-                {...(Platform.OS === 'web' ? {
-                  onDragOver: handleDragOver,
-                  onDragLeave: handleDragLeave,
-                  onDrop: handleDrop,
-                } : {})}
-              >
-                <Pressable style={styles.avatarContainer} onPress={handlePickAvatar} disabled={uploadingAvatar}>
-                  <CachedAvatar
-                    uri={displayAvatarUri}
-                    size={96}
-                    allowLocalUri={!!localAvatarUri}
-                    backgroundColor={pTheme.colors.primaryContainer}
-                    iconColor={pTheme.colors.primary}
-                    iconSize={48}
-                  />
-                  {uploadingAvatar ? (
-                    <View style={styles.avatarOverlay}>
-                      <ActivityIndicator size="small" color={pTheme.colors.onPrimary} />
-                    </View>
-                  ) : (
-                    <View style={[styles.avatarBadge, { backgroundColor: pTheme.colors.primary, borderColor: pTheme.colors.surface }]}>
-                      <Ionicons name="camera" size={16} color={pTheme.colors.onPrimary} />
-                    </View>
-                  )}
-                </Pressable>
-                <Text style={[styles.avatarHint, { color: pTheme.colors.onSurfaceVariant }]}>
-                  {Platform.OS === 'web' ? '点击或拖拽图片更换头像' : '点击更换头像'}
-                </Text>
-              </View>
-
-              {/* 个人信息 */}
               <List.Section>
-                <List.Subheader>个人信息</List.Subheader>
-                <List.Item
-                  title="昵称"
-                  description={name || '未设置'}
-                  left={(props) => <List.Icon {...props} icon="account" />}
-                  right={(props) => <List.Icon {...props} icon="chevron-right" />}
-                  onPress={() => handleOpenEdit('name')}
-                />
-                <List.Item
-                  title="简介"
-                  description={bio || '未设置'}
-                  descriptionNumberOfLines={2}
-                  left={(props) => <List.Icon {...props} icon="text" />}
-                  right={(props) => <List.Icon {...props} icon="chevron-right" />}
-                  onPress={() => handleOpenEdit('bio')}
-                />
+                <List.Subheader>个人资料</List.Subheader>
+                {profileLoading || (Boolean(user?.id) && !profile && !loadError) ? (
+                  <View style={styles.profileStateWrap}>
+                    <ActivityIndicator size="small" color={pTheme.colors.primary} />
+                    <Text style={{ color: pTheme.colors.onSurfaceVariant }}>正在加载个人资料…</Text>
+                  </View>
+                ) : profile ? (
+                  <>
+                    <View
+                      style={[
+                        styles.avatarSection,
+                        Platform.OS === 'web' && isDragging && {
+                          backgroundColor: pTheme.colors.primaryContainer,
+                          borderRadius: 16,
+                        },
+                      ]}
+                      {...(Platform.OS === 'web'
+                        ? {
+                            onDragOver: handleDragOver,
+                            onDragLeave: handleDragLeave,
+                            onDrop: handleDrop,
+                          }
+                        : {})}
+                    >
+                      <Pressable
+                        style={styles.avatarContainer}
+                        onPress={handlePickAvatar}
+                        disabled={uploadingAvatar}
+                      >
+                        <CachedAvatar
+                          uri={displayAvatarUri}
+                          size={96}
+                          allowLocalUri={!!localAvatarUri}
+                          backgroundColor={pTheme.colors.primaryContainer}
+                          iconColor={pTheme.colors.primary}
+                          iconSize={48}
+                        />
+                        {uploadingAvatar ? (
+                          <View style={styles.avatarOverlay}>
+                            <ActivityIndicator size="small" color={pTheme.colors.onPrimary} />
+                          </View>
+                        ) : (
+                          <View
+                            style={[
+                              styles.avatarBadge,
+                              {
+                                backgroundColor: pTheme.colors.primary,
+                                borderColor: pTheme.colors.surface,
+                              },
+                            ]}
+                          >
+                            <Ionicons name="camera" size={16} color={pTheme.colors.onPrimary} />
+                          </View>
+                        )}
+                      </Pressable>
+                      <Text style={[styles.avatarHint, { color: pTheme.colors.onSurfaceVariant }]}>
+                        {Platform.OS === 'web' ? '点击或拖拽图片更换头像' : '点击更换头像'}
+                      </Text>
+                    </View>
+                    <List.Item
+                      title="昵称"
+                      description={name || '未设置'}
+                      left={(props) => <List.Icon {...props} icon="account" />}
+                      right={(props) => <List.Icon {...props} icon="chevron-right" />}
+                      onPress={() => handleOpenEdit('name')}
+                    />
+                    <List.Item
+                      title="简介"
+                      description={bio || '未设置'}
+                      descriptionNumberOfLines={2}
+                      left={(props) => <List.Icon {...props} icon="text" />}
+                      right={(props) => <List.Icon {...props} icon="chevron-right" />}
+                      onPress={() => handleOpenEdit('bio')}
+                    />
+                  </>
+                ) : (
+                  <View
+                    style={[
+                      styles.profileError,
+                      { backgroundColor: pTheme.colors.errorContainer },
+                    ]}
+                  >
+                    <Ionicons name="cloud-offline-outline" size={32} color={pTheme.colors.error} />
+                    <Text style={[styles.profileErrorText, { color: pTheme.colors.onErrorContainer }]}>
+                      {loadError || '暂时无法获取个人资料，请检查网络后重试。'}
+                    </Text>
+                    <Button
+                      mode="text"
+                      textColor={pTheme.colors.error}
+                      onPress={() => {
+                        void handleRetryProfile();
+                      }}
+                    >
+                      重新加载资料
+                    </Button>
+                  </View>
+                )}
               </List.Section>
 
-              {/* 主题设置 */}
-              <List.Section>
-                <List.Subheader>外观</List.Subheader>
-                <List.Item
-                  title="主题模式"
-                  description={themeLabel}
-                  left={(props) => <List.Icon {...props} icon="theme-light-dark" />}
-                  right={(props) => <List.Icon {...props} icon="chevron-right" />}
-                  onPress={() => setSheet('theme')}
-                />
-                <List.Item
-                  title="主题色"
-                  description={accentColor ? accentColor.toUpperCase() : '默认'}
-                  left={(props) => <List.Icon {...props} icon="palette" />}
-                  right={(props) => (
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: accentColor || pTheme.colors.primary, marginRight: 8 }} />
-                      <List.Icon {...props} icon="chevron-right" />
-                    </View>
-                  )}
-                  onPress={() => setColorPickerOpen(true)}
-                />
-              </List.Section>
-
-              {/* 账号操作 */}
               <List.Section>
                 <List.Subheader>账号</List.Subheader>
                 <List.Item
@@ -517,7 +618,9 @@ export default function SettingsScreen() {
                 <List.Item
                   title="退出登录"
                   titleStyle={{ color: pTheme.colors.error }}
-                  left={(props) => <List.Icon {...props} icon="logout" color={pTheme.colors.error} />}
+                  left={(props) => (
+                    <List.Icon {...props} icon="logout" color={pTheme.colors.error} />
+                  )}
                   onPress={handleLogout}
                 />
               </List.Section>
@@ -646,6 +749,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
   },
+  topBarTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  topBarRightPlaceholder: {
+    width: 52,
+  },
   saveBtn: {
     paddingHorizontal: 14,
     paddingVertical: 7,
@@ -661,24 +773,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  loadingWrap: {
-    paddingVertical: 80,
+  colorPreviewRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  errorWrap: {
-    paddingVertical: 80,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    gap: 12,
+  colorPreview: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 8,
   },
-  retryBtn: {
+  loginGate: {
+    marginHorizontal: 16,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    gap: 10,
+  },
+  loginGateDescription: {
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  profileStateWrap: {
+    paddingVertical: 28,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
   },
-  retryText: {
-    fontSize: 14,
-    fontWeight: '600',
+  profileError: {
+    marginHorizontal: 16,
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileErrorText: {
+    textAlign: 'center',
+    lineHeight: 20,
   },
   avatarSection: {
     alignItems: 'center',
