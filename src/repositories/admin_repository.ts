@@ -46,6 +46,7 @@ export type AdminPostReviewResult = {
   reviewed_at: string;
   moderation_record_ids: number[];
 };
+export type AdminPostRestoreResult = { post_id: number; moderation_record_id: number };
 
 export type AdminUserListParams = { page?: number; limit?: number; role?: ManagementRole; is_active?: boolean };
 export type AdminUserSummary = {
@@ -174,6 +175,7 @@ export interface AdminRepository {
   listPosts(params?: AdminPostListParams): Promise<AdminPostsResponse>;
   reviewPost(postId: number, input: AdminPostReviewInput): Promise<AdminPostReviewResult>;
   deletePost(postId: number): Promise<{ post_id: number }>;
+  restorePost(postId: number): Promise<AdminPostRestoreResult>;
   listUsers(params?: AdminUserListParams): Promise<AdminUsersResponse>;
   listAdmins(params?: AdminUserListParams): Promise<AdminUsersResponse>;
   listSuperAdmins(params?: AdminUserListParams): Promise<AdminUsersResponse>;
@@ -217,6 +219,16 @@ class ApiAdminRepository implements AdminRepository {
     const path = API_ENDPOINTS.ADMIN.POST_DELETE.replace(':postId', String(postId));
     const res = await httpAuth.delete<ApiResponse<components['schemas']['AdminPostDeleteResult']>>(path);
     return { post_id: requireNumber(unwrapApiResponse(res).post_id, '帖子 ID') };
+  }
+
+  async restorePost(postId: number) {
+    const path = API_ENDPOINTS.ADMIN.POST_RESTORE.replace(':postId', String(postId));
+    const res = await httpAuth.put<ApiResponse<components['schemas']['AdminPostRestoreResult']>>(path);
+    const result = unwrapApiResponse(res);
+    return {
+      post_id: requireNumber(result.post_id, '帖子 ID'),
+      moderation_record_id: requireNumber(result.moderation_record_id, '审核记录 ID'),
+    };
   }
 
   async listUsers(params: AdminUserListParams = {}) {

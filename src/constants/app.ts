@@ -78,6 +78,7 @@ export const API_ENDPOINTS = {
     POST_REVIEW: '/admin/posts/:postId/review',
     POSTS: '/admin/posts',
     POST_DELETE: '/admin/posts/:postId',
+    POST_RESTORE: '/admin/posts/:postId/restore',
     USERS: '/admin/users',
     USER_ROLE: '/admin/users/:userId/role',
     USER_STATUS: '/admin/users/:userId/status',
@@ -92,6 +93,7 @@ export const API_ENDPOINTS = {
     CREATEPOST: '/posts',  // POST
     UPDATEPOST: '/posts/:postId',  // PUT
     DELETEPOST: '/posts/:postId',  // DELETE
+    HISTORY: '/posts/:postId/history',
     LIKEPOST: '/posts/:postId/like',  // POST
     UNLIKEPOST: '/posts/:postId/like',  // DELETE
     FAVORITEPOST: '/posts/:postId/favorite',  // POST
