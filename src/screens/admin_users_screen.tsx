@@ -23,9 +23,9 @@ import { formatDate } from '@/src/utils/time_format';
 import { UserAvatar } from '@/src/components/user_avatar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BanUserSheet } from '@/src/components/admin/ban_user_sheet';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 const SCREEN_LOADED_AT = Date.now();
-import { UNSET_NICKNAME } from '@/src/constants/user';
 
 // 身份标签组件
 type RoleBadgeProps = {
