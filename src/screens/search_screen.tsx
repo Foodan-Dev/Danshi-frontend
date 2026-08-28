@@ -21,11 +21,33 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WEB_NO_OUTLINE } from '@/src/utils';
 import { CachedAvatar } from '@/src/components/cached_avatar';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { usePostChangeSync } from '@/src/hooks/use_post_change_sync';
+import type { Post } from '@/src/models/Post';
 
 // 宽屏断点
 const WIDE_BREAKPOINT = 768;
 const SEARCH_HISTORY_KEY = '@search_history';
 const MAX_HISTORY_ITEMS = 10;
+const getSearchPostId = (post: SearchPost) => post.id;
+const mapChangedSearchPost = (post: Post, existing: SearchPost | undefined): SearchPost => ({
+  id: post.id,
+  title: post.title,
+  content: post.content,
+  category: post.category,
+  images: post.images ?? [],
+  image_thumbs: post.image_thumbs ?? [],
+  author: post.author ? {
+    id: post.author.id,
+    name: post.author.name,
+    avatar_url: post.author.avatar_url ?? null,
+  } : undefined,
+  stats: {
+    like_count: post.stats?.like_count ?? 0,
+    comment_count: post.stats?.comment_count ?? 0,
+    view_count: post.stats?.view_count ?? 0,
+  },
+  created_at: post.created_at ?? existing?.created_at ?? new Date().toISOString(),
+});
 
 type TabValue = 'posts' | 'users';
 
@@ -126,6 +148,13 @@ export default function SearchScreen() {
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [followLoadingMap, setFollowLoadingMap] = useState<Record<number, boolean>>({});
   const requestSeqRef = useRef(0);
+
+  usePostChangeSync({
+    setItems: setPosts,
+    getPostId: getSearchPostId,
+    mapPost: mapChangedSearchPost,
+    publicOnly: true,
+  });
 
   // 加载搜索历史
   useEffect(() => {

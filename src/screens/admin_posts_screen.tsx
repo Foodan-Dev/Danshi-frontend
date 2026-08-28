@@ -13,12 +13,14 @@ import type { AdminPendingPostSummary } from '@/src/repositories/admin_repositor
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatDate } from '@/src/utils/time_format';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { usePostChanges } from '@/src/context/post_changes_context';
 
 export default function AdminPostsScreen() {
   const pTheme = usePaperTheme();
   const insets = useSafeAreaInsets();
   const { current } = useResponsive();
   const { user, isLoading } = useAuth();
+  const { reportPostChange } = usePostChanges();
 
   const [posts, setPosts] = useState<AdminPendingPostSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -140,6 +142,7 @@ export default function AdminPostsScreen() {
     try {
       await adminService.deletePost(post_id);
       setPosts((prev) => prev.filter((p) => p.id !== post_id));
+      reportPostChange({ kind: 'delete', postId: post_id });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : '删除帖子失败，请稍后重试');
     }

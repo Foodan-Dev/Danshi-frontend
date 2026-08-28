@@ -46,6 +46,7 @@ import { normalizeRoles } from '@/src/lib/auth/roles';
 import { ROLES } from '@/src/constants/app';
 import { showAlert } from '@/src/utils/alert';
 import { BanUserSheet } from '@/src/components/admin/ban_user_sheet';
+import { usePostChanges } from '@/src/context/post_changes_context';
 
 // 图片展示配置
 const IMAGE_CONFIG = {
@@ -83,6 +84,7 @@ const requestConfirmation = (
 
 const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const router = useRouter();
+  const { changes, reportPostChange } = usePostChanges();
   const localParams = useLocalSearchParams();
   const normalizeParam = useCallback((value: unknown): string | null => {
     if (Array.isArray(value)) return value[0] ?? null;
@@ -137,6 +139,17 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const [postActionsVisible, setPostActionsVisible] = useState(false);
   const [postActionLoading, setPostActionLoading] = useState<PostActionLoading>(null);
   const [banAuthorVisible, setBanAuthorVisible] = useState(false);
+
+  const latestPostChange = useMemo(
+    () => changes.findLast((change) => change.postId === postId),
+    [changes, postId],
+  );
+
+  useEffect(() => {
+    if (latestPostChange?.kind !== 'delete' && latestPostChange?.post) {
+      setPost(latestPostChange.post);
+    }
+  }, [latestPostChange]);
 
   // ==================== 评论 Hook ====================
   const onCommentCountChange = useCallback((delta: number) => {
@@ -371,13 +384,14 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     setPostActionLoading('delete-own');
     try {
       await postsRepository.delete(postId);
+      reportPostChange({ kind: 'delete', postId });
       handleBack();
     } catch (actionError) {
       showAlert('删除失败', actionError instanceof Error ? actionError.message : '请稍后重试');
     } finally {
       setPostActionLoading(null);
     }
-  }, [closeActionsAndConfirm, handleBack, postId]);
+  }, [closeActionsAndConfirm, handleBack, postId, reportPostChange]);
 
   const handleTakeDownPost = useCallback(async () => {
     const confirmed = await closeActionsAndConfirm(
@@ -389,19 +403,21 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     setPostActionLoading('take-down');
     try {
       await adminRepository.deletePost(postId);
+      reportPostChange({ kind: 'delete', postId });
       handleBack();
     } catch (actionError) {
       showAlert('下架失败', actionError instanceof Error ? actionError.message : '请稍后重试');
     } finally {
       setPostActionLoading(null);
     }
-  }, [closeActionsAndConfirm, handleBack, postId]);
+  }, [closeActionsAndConfirm, handleBack, postId, reportPostChange]);
 
   const handleRestorePost = useCallback(async () => {
     setPostActionsVisible(false);
     setPostActionLoading('restore');
     try {
       await adminRepository.restorePost(postId);
+      reportPostChange({ kind: 'update', postId, status: 'approved' });
       await fetchPost('refresh');
       showAlert('恢复成功', '帖子已恢复');
     } catch (actionError) {
@@ -409,7 +425,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     } finally {
       setPostActionLoading(null);
     }
-  }, [fetchPost, postId]);
+  }, [fetchPost, postId, reportPostChange]);
 
   const handleOpenBanAuthor = useCallback(async () => {
     if (!post?.author?.id) return;
