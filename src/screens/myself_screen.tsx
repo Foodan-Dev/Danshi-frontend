@@ -9,7 +9,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
-import { router, type Href, useFocusEffect } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { ActivityIndicator, Button, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/src/context/auth_context';
@@ -25,6 +25,8 @@ import { breakpoints, pickByBreakpoint } from '@/src/constants/breakpoints';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CachedAvatar } from '@/src/components/cached_avatar';
+import { getPostComposerHref } from '@/src/lib/navigation/post_composer';
+import { usePostChangeSync } from '@/src/hooks/use_post_change_sync';
 
 
 
@@ -36,6 +38,8 @@ const formatCount = (value?: number | null) => {
 };
 
 type TabType = 'posts' | 'favorites';
+const getPostId = (post: Post) => post.id;
+const mapChangedPost = (post: Post) => post;
 
 type InFlightRequest = {
   userId: number;
@@ -162,13 +166,26 @@ export default function MyselfScreen() {
   const [isProfileExpanded, setIsProfileExpanded] = useState(false);
   const currentUserRef = useRef(user);
   const currentProfileRef = useRef<UserProfile | null>(null);
-  const activeTabRef = useRef<TabType>(activeTab);
   const profileInFlightRef = useRef<InFlightRequest | null>(null);
   const postsInFlightRef = useRef<InFlightRequest | null>(null);
   const favoritesInFlightRef = useRef<InFlightRequest | null>(null);
 
   currentUserRef.current = user;
-  activeTabRef.current = activeTab;
+
+  useEffect(() => {
+    if (!user) return;
+    setProfile((current) => current?.id === user.id ? {
+      ...current,
+      name: user.name,
+      email: user.email,
+      avatar_url: user.avatar_url ?? null,
+      bio: user.bio ?? null,
+      role: user.role,
+      roles: user.roles,
+      stats: user.stats ?? current.stats,
+    } : current);
+    if (user.stats) setStats(user.stats);
+  }, [user]);
 
   const displayName = useMemo(
     () => profile?.name ?? user?.name ?? '未登录',
@@ -313,16 +330,24 @@ export default function MyselfScreen() {
     return promise;
   }, [user?.id]);
 
-  // 页面获得焦点时刷新数据
-  useFocusEffect(
-    useCallback(() => {
-      loadProfile();
-      loadPosts();
-      if (activeTabRef.current === 'favorites') {
-        loadFavorites();
-      }
-    }, [loadProfile, loadPosts, loadFavorites])
-  );
+  // 只在页面首次挂载或登录用户变化时加载，切换 tab 时保留列表与滚动位置。
+  useEffect(() => {
+    void loadProfile();
+    void loadPosts();
+  }, [loadProfile, loadPosts]);
+
+  usePostChangeSync({
+    setItems: setPosts,
+    getPostId,
+    mapPost: mapChangedPost,
+    insertNew: true,
+  });
+  usePostChangeSync({
+    setItems: setFavorites,
+    getPostId,
+    mapPost: mapChangedPost,
+    publicOnly: true,
+  });
 
   // 切换到收藏 tab 时加载收藏
   useEffect(() => {
@@ -566,7 +591,7 @@ export default function MyselfScreen() {
               {activeTab === 'posts' && (
                 <Pressable
                   style={[styles.emptyBtn, { backgroundColor: theme.colors.primary }]}
-                  onPress={() => router.push('/(tabs)/post')}
+                  onPress={() => router.navigate(getPostComposerHref('/myself'))}
                 >
                   <Text style={[styles.emptyBtnText, { color: theme.colors.onPrimary }]}>去发布</Text>
                 </Pressable>

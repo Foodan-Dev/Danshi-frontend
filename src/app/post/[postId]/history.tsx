@@ -22,6 +22,7 @@ import {
   type PostHistoryView,
 } from '@/src/repositories/posts_repository';
 import { showAlert } from '@/src/utils/alert';
+import { usePostChanges } from '@/src/context/post_changes_context';
 
 const confirmRestore = (revision: number): Promise<boolean> => {
   const title = `恢复版本 ${revision}`;
@@ -57,6 +58,7 @@ const formatHistoryTime = (value: string) => {
 
 export default function PostHistoryRoute() {
   const router = useRouter();
+  const { reportPostChange } = usePostChanges();
   const insets = useSafeAreaInsets();
   const theme = usePaperTheme();
   const params = useLocalSearchParams<{ postId?: string | string[] }>();
@@ -113,7 +115,8 @@ export default function PostHistoryRoute() {
     if (!confirmed || !validPostId) return;
     setRestoringRevision(revision);
     try {
-      await postsRepository.restoreHistory(postId, revision, {});
+      const result = await postsRepository.restoreHistory(postId, revision, {});
+      reportPostChange({ kind: 'update', postId, status: result.status });
       await loadHistories(true);
       showAlert('恢复成功', `帖子已恢复到版本 ${revision}`);
     } catch (restoreError) {
@@ -121,7 +124,7 @@ export default function PostHistoryRoute() {
     } finally {
       setRestoringRevision(null);
     }
-  }, [loadHistories, postId, validPostId]);
+  }, [loadHistories, postId, reportPostChange, validPostId]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

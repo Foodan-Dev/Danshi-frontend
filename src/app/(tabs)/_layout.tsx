@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { breakpoints } from '@/src/constants/breakpoints';
 import { CachedAvatar } from '@/src/components/cached_avatar';
 import { ExploreTabRefreshRequestProvider } from '@/src/context/explore_tab_refresh_context';
+import { getPostComposerHref } from '@/src/lib/navigation/post_composer';
 
 // 300ms 足以覆盖常见双击节奏，同时可降低两次独立点击被合并的概率。
 const EXPLORE_TAB_DOUBLE_PRESS_INTERVAL_MS = 300;
@@ -76,7 +77,13 @@ function Sidebar() {
                   backgroundColor: theme.effective === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
                 },
               ]}
-              onPress={() => router.push(item.href as Href)}
+              onPress={() => {
+                if (item.name === 'post') {
+                  router.navigate(getPostComposerHref(pathname));
+                  return;
+                }
+                router.navigate(item.href as Href);
+              }}
             >
               <Ionicons
                 name={iconName as React.ComponentProps<typeof Ionicons>['name']}
@@ -104,6 +111,7 @@ function Sidebar() {
 
 export default function TabsLayout() {
   const theme = useTheme();
+  const router = useRouter();
   const { userToken, isLoading } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -217,6 +225,13 @@ export default function TabsLayout() {
               />
               <Tabs.Screen
                 name="post"
+                listeners={{
+                  tabPress: (event) => {
+                    if (pathname === '/post') return;
+                    event.preventDefault();
+                    router.navigate(getPostComposerHref(pathname));
+                  },
+                }}
                 options={{
                   title: '',
                   tabBarIcon: () => (
@@ -267,6 +282,13 @@ export default function TabsLayout() {
         />
         <Tabs.Screen
           name="post"
+          listeners={{
+            tabPress: (event) => {
+              if (pathname === '/post') return;
+              event.preventDefault();
+              router.navigate(getPostComposerHref(pathname));
+            },
+          }}
           options={{
             title: '发布',
             tabBarIcon: ({ color, focused }) => (

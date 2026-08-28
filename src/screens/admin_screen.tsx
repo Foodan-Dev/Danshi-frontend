@@ -36,10 +36,10 @@ export default function AdminScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (user) {
+      if (user?.id) {
         void refreshUser();
       }
-    }, [refreshUser, user])
+    }, [refreshUser, user?.id])
   );
 
   // 动态样式 - 基于主题

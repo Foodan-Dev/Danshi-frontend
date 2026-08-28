@@ -7,6 +7,7 @@ import { ThemeModeProvider, useTheme } from '@/src/context/theme_context';
 import { AuthProvider } from '@/src/context/auth_context';
 import { WaterfallSettingsProvider } from '@/src/context/waterfall_context';
 import { NotificationsProvider } from '@/src/context/notifications_context';
+import { PostChangesProvider } from '@/src/context/post_changes_context';
 import { PaperProvider } from 'react-native-paper';
 import { getMD3Theme } from '@/src/constants/md3_theme';
 
@@ -16,11 +17,13 @@ export default function RootLayout() {
       <ThemeModeProvider>
         <ThemedPaperRoot>
           <AuthProvider>
-            <NotificationsProvider>
-              <WaterfallSettingsProvider>
-                <RootStack />
-              </WaterfallSettingsProvider>
-            </NotificationsProvider>
+            <PostChangesProvider>
+              <NotificationsProvider>
+                <WaterfallSettingsProvider>
+                  <RootStack />
+                </WaterfallSettingsProvider>
+              </NotificationsProvider>
+            </PostChangesProvider>
           </AuthProvider>
         </ThemedPaperRoot>
       </ThemeModeProvider>

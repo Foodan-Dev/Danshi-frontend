@@ -15,6 +15,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { PostCard } from '@/src/components/post_card';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
 import { CachedAvatar } from '@/src/components/cached_avatar';
+import { usePostChangeSync } from '@/src/hooks/use_post_change_sync';
 
 
 const formatCount = (value?: number | null) => {
@@ -23,6 +24,9 @@ const formatCount = (value?: number | null) => {
   if (value < 10000) return `${(value / 1000).toFixed(1).replace(/\.0$/, '')}k`;
   return `${(value / 10000).toFixed(1).replace(/\.0$/, '')}w`;
 };
+
+const getPostId = (post: Post) => post.id;
+const mapChangedPost = (post: Post) => post;
 
 export default function UserProfileScreen() {
   const params = useLocalSearchParams<{ userId?: string | string[] }>();
@@ -53,6 +57,13 @@ export default function UserProfileScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [isProfileExpanded, setIsProfileExpanded] = useState(false);
+
+  usePostChangeSync({
+    setItems: setPosts,
+    getPostId,
+    mapPost: mapChangedPost,
+    publicOnly: true,
+  });
 
   const isCurrentUser = currentUser?.id === userId;
   const handleBack = useCallback(() => {

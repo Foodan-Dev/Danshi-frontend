@@ -23,6 +23,7 @@ import type {
 import { notificationsService } from '@/src/services/notifications_service';
 import { usersService } from '@/src/services/users_service';
 import { NotificationItem } from '@/src/components/notifications/notification_item';
+import { getPostComposerHref } from '@/src/lib/navigation/post_composer';
 import { useNotifications } from '@/src/context/notifications_context';
 
 // ==================== 类型定义 ====================
@@ -113,7 +114,7 @@ function EmptyState({ theme }: { theme: MD3Theme }) {
       </Text>
       <Pressable
         style={[styles.emptyButton, { borderColor: theme.colors.primary }]}
-        onPress={() => router.push('/post')}
+        onPress={() => router.navigate(getPostComposerHref('/notifications'))}
       >
         <Text style={[styles.emptyButtonText, { color: theme.colors.primary }]}>
           发布帖子

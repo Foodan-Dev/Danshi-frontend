@@ -22,6 +22,7 @@ import { PostCard } from '@/src/components/post_card';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { LoaderState } from '@/src/constants/post_labels';
 import { useExploreTabRefreshRequest } from '@/src/context/explore_tab_refresh_context';
+import { usePostChangeSync } from '@/src/hooks/use_post_change_sync';
 
 
 type SortValue = SortBy;
@@ -77,6 +78,8 @@ const SORT_OPTIONS: { value: SortValue; label: string; description: string }[] =
 ];
 
 const FILTERS_SUPPORTED = false;
+const getPostId = (post: Post) => post.id;
+const mapChangedPost = (post: Post) => post;
 
 export default function ExploreScreen() {
   const bp = useBreakpoint();
@@ -151,6 +154,14 @@ export default function ExploreScreen() {
     }
     return payload;
   }, [filters]);
+
+  usePostChangeSync({
+    setItems: setPosts,
+    getPostId,
+    mapPost: mapChangedPost,
+    publicOnly: true,
+    insertNew: filters.sortBy === 'latest',
+  });
 
   const fetchPosts = useCallback(
     async (mode: LoaderState = 'initial', overrides?: PostListFilters) => {

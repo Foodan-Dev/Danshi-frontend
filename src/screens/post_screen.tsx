@@ -21,7 +21,7 @@ import {
 	ActivityIndicator,
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { useExtendedTheme } from '@/src/constants/md3_theme';
@@ -41,13 +41,72 @@ import type {
 	CommonCreateBase,
 	Post,
 	PostCreateInput,
+	PostCreateResult,
 	PostType,
 	SharePostCreateInput,
 	ShareType,
 } from '@/src/models/Post';
+import { normalizePostComposerReturnTo } from '@/src/lib/navigation/post_composer';
+import { usePostChanges } from '@/src/context/post_changes_context';
 
 const POST_DRAFT_KEY = '@post_draft';
 const DRAFT_SAVE_DELAY = 3000; // 3秒防抖
+
+type OptimisticPostLocation = Pick<Post, 'canteen' | 'canteen_window'>;
+
+function toOptimisticPost(
+	result: PostCreateResult,
+	input: PostCreateInput,
+	existing: Post | null | undefined,
+	author: Post['author'],
+	location: OptimisticPostLocation,
+): Post {
+	const now = new Date().toISOString();
+	const base = {
+		id: result.id,
+		title: input.title,
+		content: input.content,
+		category: input.category,
+		canteen: location.canteen,
+		canteen_window: location.canteen_window,
+		tags: input.tags ?? [],
+		images: input.images ?? [],
+		image_thumbs: undefined,
+		image_displays: undefined,
+		author: existing?.author ?? author,
+		stats: existing?.stats ?? {
+			like_count: 0,
+			favorite_count: 0,
+			comment_count: 0,
+			view_count: 0,
+		},
+		is_liked: existing?.is_liked ?? false,
+		is_favorited: existing?.is_favorited ?? false,
+		created_at: existing?.created_at ?? now,
+		updated_at: now,
+		status: result.status,
+		is_edited: !!existing,
+	};
+
+	if (input.post_type === 'share') {
+		return {
+			...base,
+			post_type: 'share',
+			share_type: input.share_type,
+			cuisine: input.cuisine,
+			flavors: input.flavors,
+			price: input.price,
+			images: input.images,
+		};
+	}
+
+	return {
+		...base,
+		post_type: 'seeking',
+		budget_range: input.budget_range,
+		preferences: input.preferences,
+	};
+}
 
 type PostScreenProps = {
   editMode?: boolean;
@@ -77,6 +136,9 @@ export default function PostScreen({
 }: PostScreenProps = {}) {
 	const bp = useBreakpoint();
 	const router = useRouter();
+	const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
+	const returnTo = normalizePostComposerReturnTo(params.returnTo);
+	const { reportPostChange } = usePostChanges();
 	const { width: windowWidth } = useWindowDimensions();
 	const maxWidth = pickByBreakpoint<DimensionValue>(bp, { base: '100%', sm: 540, md: 580, lg: 620, xl: 660 });
 	const horizontalPadding = pickByBreakpoint(bp, { base: 24, sm: 28, md: 32, lg: 36, xl: 40 });
@@ -372,12 +434,16 @@ export default function PostScreen({
 	}, []);
 
 	const handleBack = useCallback(() => {
+		if (!editMode && returnTo) {
+			router.navigate(returnTo as Href);
+			return;
+		}
 		if (router.canGoBack()) {
 			router.back();
 		} else {
-			router.replace('/');
+			router.replace('/(tabs)/explore');
 		}
-	}, [router]);
+	}, [editMode, returnTo, router]);
 
 	const togglePreviewMode = useCallback(() => {
 		setIsPreviewMode((prev) => !prev);
@@ -513,12 +579,58 @@ export default function PostScreen({
 			}
 
 			if (editMode && normalizedEditPostId) {
-				await postsService.update(normalizedEditPostId, payload);
+				const result = await postsService.update(normalizedEditPostId, payload);
+				reportPostChange({
+					kind: 'update',
+					postId: normalizedEditPostId,
+					status: result.status,
+					post: toOptimisticPost(
+						result,
+						payload,
+						initialData,
+						currentUser
+							? { id: currentUser.id, name: currentUser.name, avatar_url: currentUser.avatar_url }
+							: undefined,
+						{
+							canteen: selectedCanteen
+								? { code: selectedCanteen.code, name: selectedCanteen.name, campus: selectedCanteen.campus }
+								: payload.canteen_code && initialData?.canteen?.code === payload.canteen_code
+									? initialData.canteen
+									: null,
+							canteen_window: selectedWindow
+								? { id: selectedWindow.id, name: selectedWindow.name, floor: selectedWindow.floor }
+								: payload.canteen_window_id && initialData?.canteen_window?.id === payload.canteen_window_id
+									? initialData.canteen_window
+									: null,
+						},
+					),
+				});
 				setIsPendingReview(true);
 				setSuccess('更新成功！帖子已提交管理员审核，审核通过后将公开显示。');
 				onUpdateSuccess?.();
 			} else {
 				const result = await postsService.create(payload);
+				reportPostChange({
+					kind: 'create',
+					postId: result.id,
+					status: result.status,
+					post: toOptimisticPost(
+						result,
+						payload,
+						null,
+						currentUser
+							? { id: currentUser.id, name: currentUser.name, avatar_url: currentUser.avatar_url }
+							: undefined,
+						{
+							canteen: selectedCanteen
+								? { code: selectedCanteen.code, name: selectedCanteen.name, campus: selectedCanteen.campus }
+								: null,
+							canteen_window: selectedWindow
+								? { id: selectedWindow.id, name: selectedWindow.name, floor: selectedWindow.floor }
+								: null,
+						},
+					),
+				});
 				await AsyncStorage.removeItem(POST_DRAFT_KEY).catch(() => {});
 				resetForm();
 				setPublishedPostId(result.status === 'approved' ? result.id : null);

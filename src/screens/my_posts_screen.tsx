@@ -1,9 +1,9 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, RefreshControl, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { ActivityIndicator, Appbar, Text, useTheme as usePaperTheme, Chip, FAB, Dialog, Portal, Button } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter, type Href } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 
 import { useAuth } from '@/src/context/auth_context';
 import { usersService } from '@/src/services/users_service';
@@ -14,9 +14,16 @@ import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { PostCard } from '@/src/components/post_card';
 import type { UserPostListItem } from '@/src/repositories/users_repository';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
+import { getPostComposerHref } from '@/src/lib/navigation/post_composer';
+import { usePostChangeSync } from '@/src/hooks/use_post_change_sync';
+import { usePostChanges } from '@/src/context/post_changes_context';
+
+const getPostId = (post: UserPostListItem) => post.id;
+const mapChangedPost = (post: UserPostListItem) => post;
 
 export const MyPostsScreen: React.FC = () => {
   const { user } = useAuth();
+  const { reportPostChange } = usePostChanges();
   const router = useRouter();
   const [posts, setPosts] = useState<UserPostListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -73,14 +80,16 @@ export const MyPostsScreen: React.FC = () => {
     [user?.id],
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!user?.id) {
-        return;
-      }
-      void loadPosts();
-    }, [loadPosts, user?.id])
-  );
+  useEffect(() => {
+    if (user?.id) void loadPosts();
+  }, [loadPosts, user?.id]);
+
+  usePostChangeSync({
+    setItems: setPosts,
+    getPostId,
+    mapPost: mapChangedPost,
+    insertNew: true,
+  });
 
   const handlePostPress = useCallback(
     (postId: number) => {
@@ -92,7 +101,7 @@ export const MyPostsScreen: React.FC = () => {
   );
 
   const handleCreatePost = useCallback(() => {
-    router.push('/post');
+    router.navigate(getPostComposerHref('/myself/posts'));
   }, [router]);
 
   const handleEditPost = useCallback(
@@ -117,6 +126,7 @@ export const MyPostsScreen: React.FC = () => {
       await postsService.remove(postToDelete);
       // 从列表中移除该帖子
       setPosts(prev => prev.filter(p => p.id !== postToDelete));
+      reportPostChange({ kind: 'delete', postId: postToDelete });
       setDeleteDialogVisible(false);
       setPostToDelete(null);
       setError(null);
@@ -126,7 +136,7 @@ export const MyPostsScreen: React.FC = () => {
     } finally {
       setDeleting(false);
     }
-  }, [postToDelete]);
+  }, [postToDelete, reportPostChange]);
 
   const cancelDelete = useCallback(() => {
     setDeleteDialogVisible(false);
