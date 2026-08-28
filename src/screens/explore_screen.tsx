@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, ScrollView, RefreshControl, Pressable, useWindowDimensions } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { useBreakpoint } from '@/src/hooks/use_responsive';
 import { breakpoints, pickByBreakpoint } from '@/src/constants/breakpoints';
 import {
@@ -16,11 +16,12 @@ import { postsService } from '@/src/services/posts_service';
 import type { PostListFilters, PostsListResponse, SortBy } from '@/src/repositories/posts_repository';
 import type { Post, ShareType } from '@/src/models/Post';
 import { configService, type ExploreConfig, type PostTypeSubType } from '@/src/services/config_service';
-import { useFocusEffect, useRouter, type Href } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { BottomSheet } from '@/src/components/overlays/bottom_sheet';
 import { PostCard } from '@/src/components/post_card';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { LoaderState } from '@/src/constants/post_labels';
+import { useExploreTabRefreshRequest } from '@/src/context/explore_tab_refresh_context';
 
 
 type SortValue = SortBy;
@@ -94,6 +95,7 @@ export default function ExploreScreen() {
   const bottomContentPadding = useMemo(() => tabBarHeight + 24, [tabBarHeight]);
 
   const router = useRouter();
+  const tabRefreshRequestId = useExploreTabRefreshRequest();
   const [posts, setPosts] = useState<Post[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loaderState, setLoaderState] = useState<LoaderState>('initial');
@@ -107,7 +109,8 @@ export default function ExploreScreen() {
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
   const [filtersSheetVisible, setFiltersSheetVisible] = useState(false);
-  const hasFocusedOnceRef = useRef(false);
+  const listRef = useRef<FlashListRef<Post>>(null);
+  const handledTabRefreshRequestRef = useRef(tabRefreshRequestId);
   const postsRequestSeqRef = useRef(0);
   const loadingMoreRef = useRef(false);
 
@@ -193,22 +196,22 @@ export default function ExploreScreen() {
     fetchPosts('initial');
   }, [fetchPosts]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!hasFocusedOnceRef.current) {
-        hasFocusedOnceRef.current = true;
-        return;
-      }
-      fetchPosts('refresh');
-    }, [fetchPosts])
-  );
-
   const refreshing = loaderState === 'refresh';
   const isInitialLoading = loaderState === 'initial';
 
   const handleRefresh = useCallback(() => {
     fetchPosts('refresh');
   }, [fetchPosts]);
+
+  useEffect(() => {
+    if (handledTabRefreshRequestRef.current === tabRefreshRequestId) {
+      return;
+    }
+
+    handledTabRefreshRequestRef.current = tabRefreshRequestId;
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    handleRefresh();
+  }, [handleRefresh, tabRefreshRequestId]);
 
   const handleLoadMore = useCallback(async (retry = false) => {
     if (
@@ -399,6 +402,7 @@ export default function ExploreScreen() {
 
       {/* 主内容区 */}
       <FlashList
+        ref={listRef}
         style={styles.scrollView}
         contentContainerStyle={{
           paddingTop: 4,
