@@ -3,7 +3,13 @@ import { AppError } from '@/src/lib/errors/app_error';
 import { httpAuth } from '@/src/lib/http/http_auth';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import { API_ENDPOINTS } from '@/src/constants/app';
-import { requireNumber, requireString, toCursorPagination, type CursorPagination } from '@/src/repositories/api_mappers';
+import {
+  requireNumber,
+  requireString,
+  toCursorPagination,
+  toNullableNickname,
+  type CursorPagination,
+} from '@/src/repositories/api_mappers';
 
 export type NotificationType =
   | 'comment'
@@ -17,7 +23,7 @@ export type NotificationRelatedType = 'post' | 'comment';
 
 export type NotificationSender = {
   id: number;
-  name: string;
+  name: string | null;
   avatar_url?: string | null;
 };
 
@@ -61,7 +67,7 @@ const toNotification = (item: components['schemas']['NotificationItem']): Notifi
     type: item.type,
     sender: {
       id: requireNumber(item.sender.id, '通知发送者 ID'),
-      name: requireString(item.sender.name, '通知发送者名称'),
+      name: toNullableNickname(item.sender.name),
       avatar_url: item.sender.avatar_url ?? null,
     },
     related_id: item.related_id ?? null,

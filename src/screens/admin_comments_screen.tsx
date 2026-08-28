@@ -12,6 +12,7 @@ import { adminService } from '@/src/services/admin_service';
 import type { AdminCommentSummary } from '@/src/repositories/admin_repository';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { CachedAvatar } from '@/src/components/cached_avatar';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 // 格式化时间：显示为 MM-DD HH:mm
 const formatTime = (dateStr: string) => {
@@ -171,7 +172,9 @@ export default function AdminCommentsScreen() {
             iconSize={16}
           />
           <View style={styles.userTextContainer}>
-            <Text style={dynamicStyles.userName}>{comment.author.name}</Text>
+            <Text style={dynamicStyles.userName}>
+              {comment.author.name || UNSET_NICKNAME}
+            </Text>
             <Text style={dynamicStyles.userEmail} numberOfLines={1}>
               {comment.author.email || `ID: ${comment.author.id}`}
             </Text>

@@ -3,7 +3,7 @@ import type { UserPostListItem } from '@/src/repositories/users_repository';
 
 export type PostAuthorInfo = {
   id: number;
-  name: string;
+  name: string | null;
   avatar_url?: string | null;
 };
 

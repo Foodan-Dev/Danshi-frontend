@@ -13,6 +13,9 @@ export const requireString = (value: string | null | undefined, field: string): 
   return value;
 };
 
+export const toNullableNickname = (value: string | null | undefined): string | null =>
+  typeof value === 'string' && value.trim() ? value : null;
+
 export const requireNumber = (value: number | null | undefined, field: string): number => {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
     throw new AppError(`服务端响应缺少有效的 ${field}`);
@@ -42,10 +45,10 @@ export const toCursorPagination = (meta: CursorMetaContract | undefined): Cursor
 const toPostAuthor = (
   author: components['schemas']['PostAuthorView'] | undefined,
 ): PostAuthor | undefined => {
-  if (!author?.id || !author.name) return undefined;
+  if (!author?.id) return undefined;
   return {
     id: author.id,
-    name: author.name,
+    name: toNullableNickname(author.name),
     avatar_url: author.avatar_url ?? null,
     is_following: author.is_following ?? null,
   };
@@ -140,7 +143,7 @@ const toCommentAuthor = (
   if (!author) return undefined;
   return {
     id: requireNumber(author.id, '评论作者 ID'),
-    name: requireString(author.name, '评论作者名称'),
+    name: toNullableNickname(author.name),
     avatar_url: author.avatar_url ?? null,
   };
 };
@@ -152,13 +155,13 @@ export function toComment(comment: CommentContract): Comment {
     author: toCommentAuthor(comment.author),
     mentioned_users: (comment.mentioned_users ?? []).map((user) => ({
       id: requireNumber(user.id, '被提及用户 ID'),
-      name: requireString(user.name, '被提及用户名称'),
+      name: toNullableNickname(user.name),
     })),
     like_count: comment.like_count ?? 0,
     is_liked: comment.is_liked ?? false,
     is_author: comment.is_author ?? false,
-    reply_to: comment.reply_to?.id && comment.reply_to.name
-      ? { id: comment.reply_to.id, name: comment.reply_to.name }
+    reply_to: comment.reply_to?.id
+      ? { id: comment.reply_to.id, name: toNullableNickname(comment.reply_to.name) }
       : null,
     created_at: requireString(comment.created_at, '评论创建时间'),
     is_edited: comment.is_edited ?? false,

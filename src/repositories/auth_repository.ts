@@ -6,6 +6,7 @@ import { API_ENDPOINTS } from '@/src/constants/app';
 import { AppError } from '@/src/lib/errors/app_error';
 import type { components } from '@/src/generated/openapi';
 import { normalizeRoles, primaryRole } from '@/src/lib/auth/roles';
+import { toNullableNickname } from '@/src/repositories/api_mappers';
 
 type LoginContract = components['schemas']['loginRequest'];
 type RegisterContract = components['schemas']['registerRequest'];
@@ -73,7 +74,7 @@ function toUser(user: UserContract): User {
   return {
     id: requireNumber(user.id, '用户 ID'),
     email,
-    name: user.name?.trim() || email.split('@')[0],
+    name: toNullableNickname(user.name),
     role: primaryRole(roles),
     roles,
     avatar_url: user.avatar_url ?? null,

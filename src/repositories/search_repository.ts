@@ -3,7 +3,12 @@ import type { components } from '@/src/generated/openapi';
 import { AppError } from '@/src/lib/errors/app_error';
 import { httpAuth } from '@/src/lib/http/http_auth';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
-import { requireNumber, requireString, toPagination } from '@/src/repositories/api_mappers';
+import {
+  requireNumber,
+  requireString,
+  toNullableNickname,
+  toPagination,
+} from '@/src/repositories/api_mappers';
 
 export type SearchPostsParams = {
   q: string;
@@ -22,7 +27,7 @@ export type SearchPost = {
   category: 'food' | 'recipe';
   images: string[];
   image_thumbs: string[];
-  author?: { id: number; name: string; avatar_url: string | null };
+  author?: { id: number; name: string | null; avatar_url: string | null };
   stats: { like_count: number; comment_count: number; view_count: number };
   highlight?: SearchHighlight;
   created_at: string;
@@ -33,7 +38,7 @@ export type SearchPostsResponse = {
 };
 export type SearchUser = {
   id: number;
-  name: string;
+  name: string | null;
   avatar_url: string | null;
   bio: string | null;
   stats: { post_count: number; follower_count: number };
@@ -57,7 +62,7 @@ const toSearchPost = (post: components['schemas']['SearchPostItem']): SearchPost
     image_thumbs: post.image_thumbs ?? [],
     author: post.author ? {
       id: requireNumber(post.author.id, '作者 ID'),
-      name: requireString(post.author.name, '作者名称'),
+      name: toNullableNickname(post.author.name),
       avatar_url: post.author.avatar_url ?? null,
     } : undefined,
     stats: {
@@ -72,7 +77,7 @@ const toSearchPost = (post: components['schemas']['SearchPostItem']): SearchPost
 
 const toSearchUser = (user: components['schemas']['SearchUserItem']): SearchUser => ({
   id: requireNumber(user.id, '用户 ID'),
-  name: requireString(user.name, '用户名称'),
+  name: toNullableNickname(user.name),
   avatar_url: user.avatar_url ?? null,
   bio: user.bio ?? null,
   stats: {

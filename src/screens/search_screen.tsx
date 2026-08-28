@@ -23,6 +23,7 @@ import { CachedAvatar } from '@/src/components/cached_avatar';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
 import { usePostChangeSync } from '@/src/hooks/use_post_change_sync';
 import type { Post } from '@/src/models/Post';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 // 宽屏断点
 const WIDE_BREAKPOINT = 768;
@@ -325,7 +326,9 @@ export default function SearchScreen() {
                 </Text>
               )}
               <Text style={[styles.searchPostMeta, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
-                {item.author?.name || '未知作者'} · {item.category === 'food' ? '美食' : '食谱'}
+                {item.author
+                  ? item.author.name || UNSET_NICKNAME
+                  : '未知作者'} · {item.category === 'food' ? '美食' : '食谱'}
               </Text>
               {showSnippet ? (
                 <View style={[styles.snippetContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
@@ -557,7 +560,7 @@ export default function SearchScreen() {
                     {/* 中间：用户信息 */}
                     <View style={styles.userInfo}>
                       <Text style={[styles.userName, { color: theme.colors.onSurface }]} numberOfLines={1}>
-                        {user.name}
+                        {user.name || UNSET_NICKNAME}
                       </Text>
                       <Text style={[styles.userMeta, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
                         帖子 {user.stats?.post_count ?? 0} · 粉丝 {user.stats?.follower_count ?? 0}

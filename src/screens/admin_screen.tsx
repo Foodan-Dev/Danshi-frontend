@@ -9,6 +9,7 @@ import { useAuth } from '@/src/context/auth_context';
 import { isAdmin, isSuperAdmin } from '@/src/lib/auth/roles';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 
 export default function AdminScreen() {
@@ -192,7 +193,9 @@ export default function AdminScreen() {
               </View>
               <View style={styles.headerRight}>
                 <Text style={[styles.greetingText, dynamicStyles.gradientTextTertiary]}>{greeting}</Text>
-                <Text style={[styles.nameText, dynamicStyles.gradientTextPrimary]}>{user.name || '管理员'}</Text>
+                <Text style={[styles.nameText, dynamicStyles.gradientTextPrimary]}>
+                  {user.name || UNSET_NICKNAME}
+                </Text>
               </View>
             </View>
           </LinearGradient>

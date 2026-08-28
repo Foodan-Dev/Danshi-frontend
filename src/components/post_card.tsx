@@ -10,6 +10,7 @@ import { useAuth } from '@/src/context/auth_context';
 import { postsService } from '@/src/services/posts_service';
 import { showAlert } from '@/src/utils/alert';
 import type { PostLikePatch } from '@/src/utils/post_like';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 // 莫兰迪色系背景色组（低饱和、高明度）
 const POSTER_COLORS = [
@@ -376,7 +377,7 @@ export const PostCard: React.FC<PostCardProps> = ({
                   disabled
                 />
                 <Text numberOfLines={1} style={[styles.authorName, { color: theme.colors.onSurfaceVariant }]}>
-                  {post.author.name}
+                  {post.author.name || UNSET_NICKNAME}
                 </Text>
               </>
             ) : (

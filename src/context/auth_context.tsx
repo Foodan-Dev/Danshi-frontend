@@ -25,10 +25,10 @@ const computePreview = (token: string | null): Pick<User, 'name' | 'avatar_url'>
   if (!payload || typeof payload !== 'object') return null;
   const rawName = payload.nickname ?? payload.name;
   const rawAvatarUrl = payload.avatarUrl ?? payload.avatar;
-  const name = typeof rawName === 'string' ? rawName : null;
+  const name = typeof rawName === 'string' && rawName.trim() ? rawName : null;
   const avatarUrl = typeof rawAvatarUrl === 'string' ? rawAvatarUrl : null;
   if (!name && !avatarUrl) return null;
-  return { name: name ?? '', avatar_url: avatarUrl ?? null };
+  return { name, avatar_url: avatarUrl ?? null };
 };
 
 const isSessionExpiredError = (error: unknown) => {

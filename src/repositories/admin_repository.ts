@@ -7,7 +7,12 @@ import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import type { Category, PostType } from '@/src/models/Post';
 import type { ManagementRole } from '@/src/models/User';
 import { normalizeRoles, primaryRole } from '@/src/lib/auth/roles';
-import { requireNumber, requireString, toPagination } from '@/src/repositories/api_mappers';
+import {
+  requireNumber,
+  requireString,
+  toNullableNickname,
+  toPagination,
+} from '@/src/repositories/api_mappers';
 
 type AdminPostListContract = components['schemas']['AdminPostList'];
 type AdminPostContract = components['schemas']['AdminPostView'];
@@ -32,7 +37,7 @@ export type AdminPendingPostSummary = {
   images: string[];
   image_thumbs?: string[];
   image_displays?: string[];
-  author?: { id: number; name: string; email?: string };
+  author?: { id: number; name: string | null; email?: string };
   status: 'draft' | 'pending' | 'approved' | 'rejected';
   like_count: number;
   view_count: number;
@@ -98,7 +103,7 @@ export type AdminCommentSummary = {
   id: number;
   content: string;
   post_id: number;
-  author: { id: number; name: string; email?: string };
+  author: { id: number; name: string | null; email?: string };
   parent_id: number | null;
   like_count: number;
   reply_count: number;
@@ -161,7 +166,7 @@ const toAdminPost = (post: AdminPostContract): AdminPendingPostSummary => {
     image_displays: imageVariants.image_displays ?? [],
     author: post.author ? {
       id: requireNumber(post.author.id, '作者 ID'),
-      name: requireString(post.author.name, '作者名称'),
+      name: toNullableNickname(post.author.name),
       email: post.author.email,
     } : undefined,
     status: post.status,
@@ -178,7 +183,7 @@ const toAdminComment = (comment: AdminCommentContract): AdminCommentSummary => (
   post_id: requireNumber(comment.post_id, '帖子 ID'),
   author: {
     id: requireNumber(comment.author?.id, '评论作者 ID'),
-    name: requireString(comment.author?.name, '评论作者名称'),
+    name: toNullableNickname(comment.author?.name),
     email: comment.author?.email,
   },
   parent_id: comment.parent_id ?? null,

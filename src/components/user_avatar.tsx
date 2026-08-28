@@ -3,10 +3,11 @@ import { Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { router, type Href } from 'expo-router';
 import { CachedAvatar } from '@/src/components/cached_avatar';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 export type UserAvatarProps = {
   userId: number;
-  name: string;
+  name: string | null;
   avatar_url?: string | null;
   size?: number;
   show_name?: boolean;
@@ -57,7 +58,7 @@ export function UserAvatar({
           style={[styles.name, { color: pTheme.colors.onSurface }]}
           numberOfLines={1}
         >
-          {name}
+          {name || UNSET_NICKNAME}
         </Text>
       )}
     </Pressable>

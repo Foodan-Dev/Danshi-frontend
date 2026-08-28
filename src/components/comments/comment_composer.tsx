@@ -9,6 +9,7 @@ import {
 import { Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { WEB_NO_OUTLINE } from '@/src/utils';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 import type { CommentAuthor } from '@/src/models/Comment';
 
 export type CommentComposerProps = {
@@ -39,7 +40,9 @@ export const CommentComposer: React.FC<CommentComposerProps> = ({
   const theme = usePaperTheme();
   const resolvedMaxLength = Number.isFinite(maxLength) ? Math.max(1, Math.floor(maxLength)) : 500;
   const resolvedMinRows = Number.isFinite(minRows) ? Math.max(3, Math.floor(minRows)) : 5;
-  const currentUserName = currentUser?.name?.trim();
+  const currentUserName = currentUser
+    ? currentUser.name?.trim() || UNSET_NICKNAME
+    : null;
   const inputMinHeight = Math.max(120, resolvedMinRows * 26);
   const hasContent = value.trim().length > 0;
   const disabled = !hasContent || !!loading;

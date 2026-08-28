@@ -16,6 +16,7 @@ import { PostCard } from '@/src/components/post_card';
 import { mapUserPostListItemToPost } from '@/src/utils/post_converters';
 import { CachedAvatar } from '@/src/components/cached_avatar';
 import { usePostChangeSync } from '@/src/hooks/use_post_change_sync';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 
 const formatCount = (value?: number | null) => {
@@ -256,7 +257,7 @@ export default function UserProfileScreen() {
                         style={[styles.userName, { color: theme.colors.onSurface }]}
                         numberOfLines={isProfileExpanded ? undefined : 1}
                       >
-                        {profile.name}
+                        {profile.name || UNSET_NICKNAME}
                       </Text>
                       {profile.bio ? (
                         <Text 

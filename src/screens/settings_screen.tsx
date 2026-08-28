@@ -9,6 +9,7 @@ import BottomSheetOverlay from '@/src/components/overlays/bottom_sheet';
 import { ThemeColorPicker } from '@/src/components/theme_color_picker';
 import { useAuth } from '@/src/context/auth_context';
 import { useTheme } from '@/src/context/theme_context';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 type SettingsScreenProps = {
   accountHref: Href;
@@ -32,10 +33,8 @@ export default function SettingsScreen({ accountHref, aboutHref }: SettingsScree
     if (authLoading) return '正在读取登录状态…';
     if (!userToken) return '未登录 · 登录后管理个人资料和账号';
 
-    const displayName = user?.name || preview?.name;
-    return displayName
-      ? `${displayName} · 个人资料、登录设备与账号操作`
-      : '个人资料、登录设备与账号操作';
+    const displayName = user?.name || preview?.name || UNSET_NICKNAME;
+    return `${displayName} · 个人资料、登录设备与账号操作`;
   }, [authLoading, preview?.name, user?.name, userToken]);
 
   const handleBack = () => {
