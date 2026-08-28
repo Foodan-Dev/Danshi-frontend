@@ -34,6 +34,9 @@ const isValidRole = (role: string): role is typeof ROLES[keyof typeof ROLES] => 
 
 const VALID_POST_STATUS = new Set(['pending', 'approved', 'rejected', 'draft']);
 const VALID_POST_TYPES = new Set(['share', 'seeking']);
+const BAN_REASON_MAX_LENGTH = 200;
+
+const countCharacters = (value: string) => Array.from(value).length;
 
 export const adminService = {
   async getPendingPosts(params: AdminPostListParams = {}): Promise<AdminPendingPostsResponse> {
@@ -89,7 +92,43 @@ export const adminService = {
 
   async updateUserStatus(userId: number, input: AdminUserStatusInput): Promise<AdminUserStatusResult> {
     if (!Number.isSafeInteger(userId) || userId <= 0) throw new AppError('缺少用户ID');
-    if (typeof input?.is_active !== 'boolean') throw new AppError('缺少用户状态');
+    if (!input) throw new AppError('缺少用户状态');
+
+    const usesLegacyStatus = typeof input.is_active === 'boolean';
+    const usesBanFields = input.ban_is_permanent !== undefined
+      || input.banned_until !== undefined
+      || input.ban_reason !== undefined;
+    if (usesLegacyStatus && usesBanFields) {
+      throw new AppError('is_active 不能与封禁时长或封禁理由同时提交');
+    }
+
+    if (usesLegacyStatus) {
+      if (!input.is_active && !input.reason?.trim()) throw new AppError('请输入封禁理由');
+      return adminRepository.updateUserStatus(userId, input);
+    }
+
+    if (typeof input.ban_is_permanent !== 'boolean') throw new AppError('请选择封禁时长或永久封禁');
+    if (input.ban_is_permanent && input.banned_until) {
+      throw new AppError('永久封禁不能同时设置到期时间');
+    }
+
+    const isUnban = !input.ban_is_permanent && !input.banned_until;
+    if (isUnban) {
+      if (input.ban_reason != null) throw new AppError('解封时不能保留封禁理由');
+      return adminRepository.updateUserStatus(userId, input);
+    }
+
+    const reason = input.ban_reason?.trim() ?? '';
+    if (!reason) throw new AppError('请输入封禁理由');
+    if (countCharacters(reason) > BAN_REASON_MAX_LENGTH) {
+      throw new AppError(`封禁理由不能超过 ${BAN_REASON_MAX_LENGTH} 个字`);
+    }
+    if (!input.ban_is_permanent) {
+      const bannedUntil = input.banned_until ? Date.parse(input.banned_until) : Number.NaN;
+      if (!Number.isFinite(bannedUntil) || bannedUntil <= Date.now()) {
+        throw new AppError('封禁到期时间必须晚于当前时间');
+      }
+    }
     return adminRepository.updateUserStatus(userId, input);
   },
 
