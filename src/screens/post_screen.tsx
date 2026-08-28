@@ -57,6 +57,17 @@ type PostScreenProps = {
 	onUpdateSuccess?: () => void;
 };
 
+type FormImage = {
+	publicUrl: string;
+	displayUrl: string;
+};
+
+const toFormImages = (publicUrls: string[], displayUrls: string[] = []): FormImage[] =>
+	publicUrls.map((publicUrl, index) => ({
+		publicUrl,
+		displayUrl: displayUrls[index] || publicUrl,
+	}));
+
 export default function PostScreen({
 	editMode = false,
 	editPostId,
@@ -95,7 +106,7 @@ export default function PostScreen({
 	const [tags, setTags] = useState<string[]>([]); // 直接存储标签数组
 	const [currentTagInput, setCurrentTagInput] = useState(''); // 当前正在输入的话题
 	const [price, setPrice] = useState('');
-	const [images, setImages] = useState<string[]>([]);
+	const [formImages, setFormImages] = useState<FormImage[]>([]);
 	const [budgetMin, setBudgetMin] = useState('');
 	const [budgetMax, setBudgetMax] = useState('');
 	const [preferFlavors, setPreferFlavors] = useState<string[]>([]); // 喜欢的口味数组
@@ -112,6 +123,7 @@ export default function PostScreen({
 	const [cuisinePickerOpen, setCuisinePickerOpen] = useState(false);
 	const [showTagInput, setShowTagInput] = useState(false);
 	const [imageViewer, setImageViewer] = useState<{ visible: boolean; index: number }>({ visible: false, index: 0 });
+	const images = useMemo(() => formImages.map((image) => image.publicUrl), [formImages]);
 
 	// 输入框聚焦状态
 	const [titleFocused, setTitleFocused] = useState(false);
@@ -200,7 +212,7 @@ export default function PostScreen({
 					setFlavors(draft.flavors || []);
 					setTags(draft.tags || []);
 					setPrice(draft.price || '');
-					setImages(draft.images || []);
+					setFormImages(toFormImages(draft.images || []));
 					setBudgetMin(draft.budgetMin || '');
 					setBudgetMax(draft.budgetMax || '');
 					setPreferFlavors(draft.preferFlavors || []);
@@ -268,7 +280,7 @@ export default function PostScreen({
 			setCanteen(initialData.canteen?.code || '');
 			setCanteenWindowId(initialData.canteen_window?.id ?? null);
 			setTags(initialData.tags || []);
-			setImages(initialData.images?.length ? initialData.images : []);
+			setFormImages(toFormImages(initialData.images || [], initialData.image_displays || []));
 			setBudgetMin(initialData.post_type === 'seeking' ? initialData.budget_range?.min?.toString() || '' : '');
 			setBudgetMax(initialData.post_type === 'seeking' ? initialData.budget_range?.max?.toString() || '' : '');
 			setPreferFlavors(initialData.post_type === 'seeking' ? initialData.preferences?.prefer_flavors || [] : []);
@@ -326,10 +338,38 @@ export default function PostScreen({
 		setAvoidFlavors((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
 	}, []);
 
-	const filtered_images = useMemo(
-		() => images.filter((url) => url && /^https?:\/\//i.test(url.trim())),
-		[images]
+	const filteredFormImages = useMemo(
+		() => formImages
+			.filter(({ publicUrl }) => publicUrl && /^https?:\/\//i.test(publicUrl.trim()))
+			.map((image) => ({
+				...image,
+				displayUrl: /^https?:\/\//i.test(image.displayUrl.trim())
+					? image.displayUrl
+					: image.publicUrl,
+			})),
+		[formImages]
 	);
+	const filtered_images = useMemo(
+		() => filteredFormImages.map((image) => image.publicUrl),
+		[filteredFormImages]
+	);
+	const filtered_display_images = useMemo(
+		() => filteredFormImages.map((image) => image.displayUrl),
+		[filteredFormImages]
+	);
+
+	const handleImagesChange = useCallback((nextDisplayUrls: string[]) => {
+		setFormImages((current) => {
+			const unmatched = [...current];
+			return nextDisplayUrls.map((displayUrl) => {
+				const existingIndex = unmatched.findIndex((image) => image.displayUrl === displayUrl);
+				if (existingIndex >= 0) {
+					return unmatched.splice(existingIndex, 1)[0];
+				}
+				return { publicUrl: displayUrl, displayUrl };
+			});
+		});
+	}, []);
 
 	const handleBack = useCallback(() => {
 		if (router.canGoBack()) {
@@ -364,7 +404,7 @@ export default function PostScreen({
 		setTags([]);
 		setCurrentTagInput('');
 		setPrice('');
-		setImages([]);
+		setFormImages([]);
 		setBudgetMin('');
 		setBudgetMax('');
 		setPreferFlavors([]);
@@ -618,9 +658,9 @@ export default function PostScreen({
 					</View>
 				)}
 				{/* 预览：图片画廊 */}
-				{filtered_images.length > 0 && (
+				{filtered_display_images.length > 0 && (
 					<View style={styles.narrowPreviewImageGrid}>
-						{filtered_images.slice(0, 9).map((url, idx) => (
+						{filtered_display_images.slice(0, 9).map((url, idx) => (
 							<Pressable key={idx} style={styles.narrowPreviewImageItem} onPress={() => handleOpenImageViewer(idx)}>
 								<Image
 									source={{ uri: url }}
@@ -1063,8 +1103,8 @@ export default function PostScreen({
 
 				{/* ==================== 图片上传区 ==================== */}
 				<ImageUploadGrid
-					images={images}
-					onImagesChange={setImages}
+					images={filtered_display_images}
+					onImagesChange={handleImagesChange}
 					maxImages={9}
 					onImagePress={handleOpenImageViewer}
 				/>
@@ -1287,7 +1327,7 @@ export default function PostScreen({
 				? { primary: colors.warning, secondary: colors.warningContainer, accent: colors.onWarningContainer }
 				: { primary: theme.colors.primary, secondary: theme.colors.primaryContainer, accent: theme.colors.onPrimaryContainer };
 
-		const hasImages = filtered_images.length > 0;
+		const hasImages = filtered_display_images.length > 0;
 
 		return (
 			<View style={styles.previewPanelContainer}>
@@ -1300,14 +1340,14 @@ export default function PostScreen({
 					{hasImages ? (
 						<Pressable style={styles.previewImageSection} onPress={() => handleOpenImageViewer(0)}>
 							<Image
-								source={{ uri: filtered_images[0] }}
+								source={{ uri: filtered_display_images[0] }}
 								style={styles.previewHeroImage}
 								resizeMode="cover"
 							/>
-							{filtered_images.length > 1 && (
+							{filtered_display_images.length > 1 && (
 								<View style={styles.previewImageIndicator}>
 									<Text style={styles.previewImageIndicatorText}>
-										1/{filtered_images.length}
+										1/{filtered_display_images.length}
 									</Text>
 								</View>
 							)}
@@ -1485,13 +1525,13 @@ export default function PostScreen({
 					</View>
 
 					{/* 更多图片 */}
-					{filtered_images.length > 1 && (
+					{filtered_display_images.length > 1 && (
 						<View style={[styles.previewMoreImagesSection, { backgroundColor: theme.colors.surface }]}>
 							<Text style={[styles.previewMoreImagesTitle, { color: theme.colors.onSurfaceVariant }]}>
-								全部图片 ({filtered_images.length})
+								全部图片 ({filtered_display_images.length})
 							</Text>
 							<View style={styles.previewImagesGrid}>
-								{filtered_images.map((url, idx) => (
+								{filtered_display_images.map((url, idx) => (
 									<Pressable key={idx} onPress={() => handleOpenImageViewer(idx)}>
 										<Image
 											source={{ uri: url }}
@@ -1802,7 +1842,7 @@ export default function PostScreen({
 			{/* 图片查看器 */}
 			<ImageViewer
 				visible={imageViewer.visible}
-				images={filtered_images}
+				images={filtered_display_images}
 				initialIndex={imageViewer.index}
 				onClose={handleCloseImageViewer}
 			/>
