@@ -14,6 +14,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatDate } from '@/src/utils/time_format';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
 import { usePostChanges } from '@/src/context/post_changes_context';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 export default function AdminPostsScreen() {
   const pTheme = usePaperTheme();
@@ -298,7 +299,9 @@ export default function AdminPostsScreen() {
         <View style={styles.metaRow}>
           <View style={styles.metaLeft}>
             <Ionicons name="person-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
-            <Text style={dynamicStyles.metaText}>{post.author?.name || '未知'}</Text>
+            <Text style={dynamicStyles.metaText}>
+              {post.author ? post.author.name || UNSET_NICKNAME : '未知'}
+            </Text>
             <Text style={dynamicStyles.metaSeparator}>·</Text>
             <Ionicons name="time-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
             <Text style={dynamicStyles.metaText}>{formatShortDate(post.created_at)}</Text>

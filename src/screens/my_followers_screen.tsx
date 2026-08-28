@@ -10,6 +10,7 @@ import { usersService } from '@/src/services/users_service';
 import type { FollowUserItem } from '@/src/repositories/users_repository';
 import { AppError } from '@/src/lib/errors/app_error';
 import { CachedAvatar } from '@/src/components/cached_avatar';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 const formatCount = (value?: number) => {
   if (value == null) return '0';
@@ -122,7 +123,7 @@ const UserListItem: React.FC<UserListItemProps> = ({
       {/* 中间：用户信息 */}
       <View style={styles.infoContainer}>
         <Text style={[styles.userName, { color: theme.colors.onSurface }]} numberOfLines={1}>
-          {user.name}
+          {user.name || UNSET_NICKNAME}
         </Text>
         <Text style={[styles.userBio, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
           {user.bio || '这个用户还没有填写简介'}

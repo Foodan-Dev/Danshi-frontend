@@ -9,6 +9,7 @@ import {
   requireNumber,
   requireString,
   toCursorPagination,
+  toNullableNickname,
   toPagination,
   toPost,
   type CursorPagination,
@@ -55,7 +56,7 @@ export type UserFollowListParams = { cursor?: string; limit?: number };
 
 export type FollowUserItem = {
   id: number;
-  name: string;
+  name: string | null;
   avatar_url?: string | null;
   bio?: string | null;
   stats?: Partial<UserStats>;
@@ -87,7 +88,7 @@ const toUserProfile = (profile: components['schemas']['UserProfile']): UserProfi
     : null;
   return {
     id: requireNumber(profile.id, '用户 ID'),
-    name: requireString(profile.name, '用户名称'),
+    name: toNullableNickname(profile.name),
     email: profile.email ?? null,
     role: primaryRole(roles),
     roles,
@@ -102,7 +103,7 @@ const toUserProfile = (profile: components['schemas']['UserProfile']): UserProfi
 
 const toFollowUser = (user: components['schemas']['UserListItem']): FollowUserItem => ({
   id: requireNumber(user.id, '用户 ID'),
-  name: requireString(user.name, '用户名称'),
+  name: toNullableNickname(user.name),
   avatar_url: user.avatar_url ?? null,
   bio: user.bio ?? null,
   stats: toUserStats(user.stats),

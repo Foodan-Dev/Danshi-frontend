@@ -3,6 +3,7 @@ import { View, StyleSheet, Pressable, type ViewStyle } from 'react-native';
 import { Avatar, Icon, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import type { CommentEntity, MentionedUser } from '@/src/models/Comment';
 import { UserAvatar } from '@/src/components/user_avatar';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 import { formatRelativeTime } from '@/src/utils/time_format';
 
 type BaseProps = {
@@ -36,7 +37,7 @@ function MentionedText({ mentions }: { mentions?: MentionedUser[] }) {
         <React.Fragment key={mention.id}>
           <UserAvatar
             userId={mention.id}
-            name={`@${mention.name}`}
+            name={`@${mention.name || UNSET_NICKNAME}`}
             size={16}
             show_name
             disabled
@@ -110,7 +111,11 @@ export const CommentItem: React.FC<CommentItemProps> = ({
         <View style={styles.headerRow}>
           <View style={styles.authorBlock}>
             <Text style={[styles.authorName, isNested && styles.replyAuthorName, { color: theme.colors.onSurface }]} numberOfLines={1}>
-            {comment.is_deleted ? '已删除评论' : comment.author?.name || '匿名用户'}
+            {comment.is_deleted
+              ? '已删除评论'
+              : comment.author
+                ? comment.author.name || UNSET_NICKNAME
+                : '匿名用户'}
             </Text>
             {isAuthor ? (
               <Text style={[styles.authorBadge, { color: theme.colors.primary }]}>
@@ -131,7 +136,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
               <Text style={styles.replyingText}>
                 回复{' '}
                 <Text style={{ color: theme.colors.onSurfaceVariant }}>
-                  {comment.reply_to.name}
+                  {comment.reply_to.name || UNSET_NICKNAME}
                 </Text>
                 ：
               </Text>

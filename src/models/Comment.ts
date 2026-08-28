@@ -8,7 +8,7 @@ export type CommentAuthor = Pick<User, 'id' | 'name' | 'avatar_url'> & {
 
 export interface MentionedUser {
   id: number;
-  name: string;
+  name: string | null;
 }
 
 export interface CommentBase {

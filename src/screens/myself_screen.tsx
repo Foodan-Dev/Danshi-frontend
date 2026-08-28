@@ -27,6 +27,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CachedAvatar } from '@/src/components/cached_avatar';
 import { getPostComposerHref } from '@/src/lib/navigation/post_composer';
 import { usePostChangeSync } from '@/src/hooks/use_post_change_sync';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 
 
@@ -188,8 +189,8 @@ export default function MyselfScreen() {
   }, [user]);
 
   const displayName = useMemo(
-    () => profile?.name ?? user?.name ?? '未登录',
-    [profile?.name, user?.name]
+    () => user ? profile?.name || user.name || UNSET_NICKNAME : '未登录',
+    [profile?.name, user]
   );
   const displayEmail = useMemo(
     () => profile?.email ?? user?.email ?? undefined,

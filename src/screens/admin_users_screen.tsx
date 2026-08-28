@@ -25,6 +25,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BanUserSheet } from '@/src/components/admin/ban_user_sheet';
 
 const SCREEN_LOADED_AT = Date.now();
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 // 身份标签组件
 type RoleBadgeProps = {
@@ -196,7 +197,7 @@ export default function AdminUsersScreen() {
   const renderUser = ({ item: listedUser }: { item: AdminUserSummary }) => {
     const banState = getAdminUserBanState(listedUser, now);
     const isCurrentlyBanned = banState.kind !== 'none';
-    const displayName = listedUser.name || '未设置昵称';
+    const displayName = listedUser.name || UNSET_NICKNAME;
     const banStatusText = banState.kind === 'permanent'
       ? '永久封禁'
       : banState.kind === 'timed'

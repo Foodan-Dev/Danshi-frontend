@@ -47,6 +47,7 @@ import { ROLES } from '@/src/constants/app';
 import { showAlert } from '@/src/utils/alert';
 import { BanUserSheet } from '@/src/components/admin/ban_user_sheet';
 import { usePostChanges } from '@/src/context/post_changes_context';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 // 图片展示配置
 const IMAGE_CONFIG = {
@@ -749,12 +750,14 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           backgroundColor={theme.colors.primaryContainer}
           fallback={
             <Text style={{ color: theme.colors.onPrimaryContainer, fontSize: 18 }}>
-              {(post?.author?.name ?? '访').slice(0, 1)}
+              {(post?.author ? post.author.name || UNSET_NICKNAME : '访').slice(0, 1)}
             </Text>
           }
         />
         <View style={styles.authorTextWrap}>
-          <Text style={styles.authorName} numberOfLines={1}>{post?.author?.name ?? '匿名用户'}</Text>
+          <Text style={styles.authorName} numberOfLines={1}>
+            {post?.author ? post.author.name || UNSET_NICKNAME : '匿名用户'}
+          </Text>
           <Text style={[styles.authorMeta, { color: theme.colors.onSurfaceVariant }]}>
             {formatRelativeOrDate(post?.created_at)}
           </Text>
@@ -1290,9 +1293,13 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
             value={commentInput}
             onChange={setCommentInput}
             onSubmit={handleSubmitComment}
-            replyTarget={commentReplyTarget?.author?.name}
+            replyTarget={commentReplyTarget
+              ? commentReplyTarget.author?.name || UNSET_NICKNAME
+              : undefined}
             onCancelReply={handleCancelReply}
-            currentUser={currentUser ? { id: currentUser.id, name: currentUser.name || '', avatar_url: currentUser.avatar_url } : undefined}
+            currentUser={currentUser
+              ? { id: currentUser.id, name: currentUser.name, avatar_url: currentUser.avatar_url }
+              : undefined}
             loading={commentSubmitting}
             editMode={!!commentEditTarget}
           />
@@ -1400,9 +1407,13 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           value={commentInput}
           onChange={setCommentInput}
           onSubmit={handleSubmitComment}
-          replyTarget={commentReplyTarget?.author?.name}
+          replyTarget={commentReplyTarget
+            ? commentReplyTarget.author?.name || UNSET_NICKNAME
+            : undefined}
           onCancelReply={handleCancelReply}
-          currentUser={currentUser ? { id: currentUser.id, name: currentUser.name || '', avatar_url: currentUser.avatar_url } : undefined}
+          currentUser={currentUser
+            ? { id: currentUser.id, name: currentUser.name, avatar_url: currentUser.avatar_url }
+            : undefined}
           loading={commentSubmitting}
           editMode={!!commentEditTarget}
         />

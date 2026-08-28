@@ -9,6 +9,7 @@ import { notificationsService } from '@/src/services/notifications_service';
 import { formatRelativeTime } from '@/src/utils/time_format';
 import { useNotifications } from '@/src/context/notifications_context';
 import { CachedAvatar } from '@/src/components/cached_avatar';
+import { UNSET_NICKNAME } from '@/src/constants/user';
 
 // ==================== Props ====================
 
@@ -132,7 +133,9 @@ export function NotificationItem({
       <View style={[styles.content, { opacity: readOpacity }]}>
         {/* 第一行：用户名 + 动作 */}
         <Text style={styles.actionLine} numberOfLines={2}>
-          <Text style={[styles.username, { color: theme.colors.onSurface }]}>{sender.name}</Text>
+          <Text style={[styles.username, { color: theme.colors.onSurface }]}>
+            {sender.name || UNSET_NICKNAME}
+          </Text>
           <Text style={[styles.action, { color: theme.colors.onSurfaceVariant }]}> {actionText}</Text>
         </Text>
 

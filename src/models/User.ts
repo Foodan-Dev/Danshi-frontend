@@ -13,7 +13,7 @@ export interface UserStats {
 export interface User {
   id: number;
   email: string;
-  name: string;
+  name: string | null;
   gender?: Gender | null;
   /** 仅用于界面展示的主角色；权限判断必须使用 roles。 */
   role: DisplayRole;
