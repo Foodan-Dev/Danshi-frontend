@@ -3,8 +3,10 @@ import type { components } from '@/src/generated/openapi';
 import { unwrapApiResponse, type ApiResponse } from '@/src/lib/http/response';
 import { httpAuth } from '@/src/lib/http/http_auth';
 import { AppError } from '@/src/lib/errors/app_error';
-import type { Post, PostCreateInput, PostCreateResult } from '@/src/models/Post';
+import type { Category, Post, PostCreateInput, PostCreateResult } from '@/src/models/Post';
 import {
+  requireNumber,
+  requireString,
   toCursorPagination,
   toPagination,
   toPost,
@@ -13,6 +15,66 @@ import {
 
 type PostLikeResult = { is_liked: boolean; like_count: number };
 type PostFavoriteResult = { is_favorited: boolean; favorite_count: number };
+type PostHistoryContract = components['schemas']['PostHistoryView'];
+
+export type PostHistorySnapshot = Record<string, unknown> & {
+  title: string;
+  content: string;
+  category: Category;
+  tags?: string[];
+  flavors?: string[];
+  images?: string[];
+};
+
+export type PostHistoryView = {
+  id: number;
+  revision: number;
+  edited_by: number;
+  edited_at: string;
+  edit_reason: string | null;
+  snapshot: PostHistorySnapshot;
+};
+
+export type PostHistoryRestoreInput = { edit_reason?: string };
+
+const toStringArray = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((item): item is string => typeof item === 'string');
+};
+
+const toPostHistorySnapshot = (value: unknown): PostHistorySnapshot => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AppError('服务端返回了无效的帖子历史快照');
+  }
+  const snapshot = value as Record<string, unknown>;
+  if (snapshot.category !== 'food' && snapshot.category !== 'recipe') {
+    throw new AppError('服务端返回了无效的历史帖子分类');
+  }
+  return {
+    ...snapshot,
+    title: requireString(
+      typeof snapshot.title === 'string' ? snapshot.title : undefined,
+      '历史帖子标题',
+    ),
+    content: requireString(
+      typeof snapshot.content === 'string' ? snapshot.content : undefined,
+      '历史帖子正文',
+    ),
+    category: snapshot.category,
+    tags: toStringArray(snapshot.tags),
+    flavors: toStringArray(snapshot.flavors),
+    images: toStringArray(snapshot.images),
+  };
+};
+
+const toPostHistory = (history: PostHistoryContract): PostHistoryView => ({
+  id: requireNumber(history.id, '历史记录 ID'),
+  revision: requireNumber(history.revision, '历史版本号'),
+  edited_by: requireNumber(history.edited_by, '历史编辑者 ID'),
+  edited_at: requireString(history.edited_at, '历史修改时间'),
+  edit_reason: history.edit_reason?.trim() || null,
+  snapshot: toPostHistorySnapshot(history.snapshot),
+});
 
 const toPostCreateResult = (
   result: components['schemas']['PostCreateResult'],
@@ -47,6 +109,12 @@ export interface PostsRepository {
   get(postId: number): Promise<Post>;
   update(postId: number, input: PostCreateInput): Promise<PostCreateResult>;
   delete(postId: number): Promise<void>;
+  history(postId: number): Promise<PostHistoryView[]>;
+  restoreHistory(
+    postId: number,
+    revision: number,
+    input?: PostHistoryRestoreInput,
+  ): Promise<PostCreateResult>;
   like(postId: number): Promise<PostLikeResult>;
   unlike(postId: number): Promise<PostLikeResult>;
   favorite(postId: number): Promise<PostFavoriteResult>;
@@ -110,6 +178,29 @@ class ApiPostsRepository implements PostsRepository {
   async delete(postId: number): Promise<void> {
     const path = API_ENDPOINTS.POSTS.DELETEPOST.replace(':postId', encodeURIComponent(String(postId)));
     unwrapApiResponse(await httpAuth.delete<ApiResponse<null>>(path));
+  }
+
+  async history(postId: number): Promise<PostHistoryView[]> {
+    const path = API_ENDPOINTS.POSTS.HISTORY.replace(':postId', encodeURIComponent(String(postId)));
+    const resp = await httpAuth.get<ApiResponse<components['schemas']['PostHistoryList']>>(path);
+    return (unwrapApiResponse(resp).histories ?? []).map(toPostHistory);
+  }
+
+  async restoreHistory(
+    postId: number,
+    revision: number,
+    input: PostHistoryRestoreInput = {},
+  ): Promise<PostCreateResult> {
+    const historyPath = API_ENDPOINTS.POSTS.HISTORY.replace(
+      ':postId',
+      encodeURIComponent(String(postId)),
+    );
+    const path = `${historyPath}/${encodeURIComponent(String(revision))}/restore`;
+    const resp = await httpAuth.post<ApiResponse<components['schemas']['PostCreateResult']>>(
+      path,
+      input,
+    );
+    return toPostCreateResult(unwrapApiResponse(resp));
   }
 
   async like(postId: number): Promise<PostLikeResult> {

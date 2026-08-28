@@ -9,10 +9,14 @@ import {
   useWindowDimensions,
   FlatList,
   LayoutChangeEvent,
+  Alert,
+  Platform,
 } from 'react-native';
 import {
   ActivityIndicator,
   Button,
+  Divider,
+  List,
   Text,
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,6 +39,11 @@ import { breakpoints } from '@/src/constants/breakpoints';
 import { useExtendedTheme } from '@/src/constants/md3_theme';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
 import { CachedAvatar } from '@/src/components/cached_avatar';
+import { postsRepository } from '@/src/repositories/posts_repository';
+import { adminRepository } from '@/src/repositories/admin_repository';
+import { normalizeRoles } from '@/src/lib/auth/roles';
+import { ROLES } from '@/src/constants/app';
+import { showAlert } from '@/src/utils/alert';
 
 // 图片展示配置
 const IMAGE_CONFIG = {
@@ -45,6 +54,29 @@ const IMAGE_CONFIG = {
 
 type Props = {
   postId: number;
+};
+
+type PostActionLoading = 'delete-own' | 'take-down' | 'restore' | 'ban-author' | null;
+
+const requestConfirmation = (
+  title: string,
+  message: string,
+  confirmLabel: string,
+): Promise<boolean> => {
+  if (Platform.OS === 'web') {
+    return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+  }
+  return new Promise((resolve) => {
+    Alert.alert(
+      title,
+      message,
+      [
+        { text: '取消', style: 'cancel', onPress: () => resolve(false) },
+        { text: confirmLabel, style: 'destructive', onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
+  });
 };
 
 const PostDetailScreen: React.FC<Props> = ({ postId }) => {
@@ -100,6 +132,8 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const [error, setError] = useState<string | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageViewer, setImageViewer] = useState<{ visible: boolean; index: number }>({ visible: false, index: 0 });
+  const [postActionsVisible, setPostActionsVisible] = useState(false);
+  const [postActionLoading, setPostActionLoading] = useState<PostActionLoading>(null);
 
   // ==================== 评论 Hook ====================
   const onCommentCountChange = useCallback((delta: number) => {
@@ -302,6 +336,98 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     setImageViewer((prev) => ({ ...prev, visible: false }));
   }, []);
 
+  const closeActionsAndConfirm = useCallback(async (
+    title: string,
+    message: string,
+    confirmLabel: string,
+  ) => {
+    setPostActionsVisible(false);
+    if (Platform.OS !== 'web') {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+    }
+    return requestConfirmation(title, message, confirmLabel);
+  }, []);
+
+  const handleEditPost = useCallback(() => {
+    setPostActionsVisible(false);
+    router.push(`/post/edit/${postId}`);
+  }, [postId, router]);
+
+  const handleOpenPostHistory = useCallback(() => {
+    setPostActionsVisible(false);
+    router.push(`/post/${postId}/history`);
+  }, [postId, router]);
+
+  const handleDeleteOwnPost = useCallback(async () => {
+    const confirmed = await closeActionsAndConfirm(
+      '删除帖子',
+      '删除后帖子将不再公开显示，确定继续吗？',
+      '删除',
+    );
+    if (!confirmed) return;
+    setPostActionLoading('delete-own');
+    try {
+      await postsRepository.delete(postId);
+      handleBack();
+    } catch (actionError) {
+      showAlert('删除失败', actionError instanceof Error ? actionError.message : '请稍后重试');
+    } finally {
+      setPostActionLoading(null);
+    }
+  }, [closeActionsAndConfirm, handleBack, postId]);
+
+  const handleTakeDownPost = useCallback(async () => {
+    const confirmed = await closeActionsAndConfirm(
+      '下架帖子',
+      '下架后帖子将不再公开显示，确定继续吗？',
+      '下架',
+    );
+    if (!confirmed) return;
+    setPostActionLoading('take-down');
+    try {
+      await adminRepository.deletePost(postId);
+      handleBack();
+    } catch (actionError) {
+      showAlert('下架失败', actionError instanceof Error ? actionError.message : '请稍后重试');
+    } finally {
+      setPostActionLoading(null);
+    }
+  }, [closeActionsAndConfirm, handleBack, postId]);
+
+  const handleRestorePost = useCallback(async () => {
+    setPostActionsVisible(false);
+    setPostActionLoading('restore');
+    try {
+      await adminRepository.restorePost(postId);
+      await fetchPost('refresh');
+      showAlert('恢复成功', '帖子已恢复');
+    } catch (actionError) {
+      showAlert('恢复失败', actionError instanceof Error ? actionError.message : '请稍后重试');
+    } finally {
+      setPostActionLoading(null);
+    }
+  }, [fetchPost, postId]);
+
+  const handleBanAuthor = useCallback(async () => {
+    if (!post?.author?.id) return;
+    const authorId = post.author.id;
+    const confirmed = await closeActionsAndConfirm(
+      '封禁作者',
+      `确定封禁“${post.author.name || '该用户'}”吗？`,
+      '封禁',
+    );
+    if (!confirmed) return;
+    setPostActionLoading('ban-author');
+    try {
+      await adminRepository.updateUserStatus(authorId, { is_active: false });
+      showAlert('封禁成功', '作者账号已被封禁');
+    } catch (actionError) {
+      showAlert('封禁失败', actionError instanceof Error ? actionError.message : '请稍后重试');
+    } finally {
+      setPostActionLoading(null);
+    }
+  }, [closeActionsAndConfirm, post?.author]);
+
   // ==================== 数据派生 ====================
   const hasImages = safePostImages.length > 0;
   const tags = post?.tags ?? [];
@@ -311,6 +437,94 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const favoriteCount = post?.stats?.favorite_count ?? 0;
   const viewCount = post?.stats?.view_count ?? 0;
   const commentCount = post?.stats?.comment_count ?? comments.length;
+  const isPostOwner = !!currentUser?.id && !!post?.author?.id && currentUser.id === post.author.id;
+  const managementRoles = normalizeRoles(currentUser?.roles);
+  const canModeratePost = managementRoles.includes(ROLES.MODERATOR)
+    || managementRoles.includes(ROLES.SUPER_ADMIN);
+  const hasPostActions = isPostOwner || canModeratePost;
+  const postActionsSheetHeight = isPostOwner && canModeratePost
+    ? Math.min(windowHeight * 0.82, 500)
+    : Math.min(windowHeight * 0.72, hasPostActions ? 330 : 180);
+
+  const postActionsSheet = (
+    <BottomSheet
+      visible={postActionsVisible}
+      onClose={() => setPostActionsVisible(false)}
+      height={postActionsSheetHeight}
+    >
+      <View style={styles.postActionsSheet}>
+        <Text style={[styles.postActionsTitle, { color: theme.colors.onSurface }]}>帖子操作</Text>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {isPostOwner ? (
+            <List.Section>
+              <List.Subheader style={{ color: theme.colors.onSurfaceVariant }}>我的操作</List.Subheader>
+              <List.Item
+                title="编辑帖子"
+                left={(props) => (
+                  <List.Icon {...props} icon="pencil-outline" color={theme.colors.onSurfaceVariant} />
+                )}
+                onPress={handleEditPost}
+                disabled={postActionLoading !== null}
+              />
+              <List.Item
+                title="历史版本"
+                left={(props) => (
+                  <List.Icon {...props} icon="history" color={theme.colors.onSurfaceVariant} />
+                )}
+                onPress={handleOpenPostHistory}
+                disabled={postActionLoading !== null}
+              />
+              <List.Item
+                title="删除帖子"
+                titleStyle={{ color: theme.colors.error }}
+                left={(props) => <List.Icon {...props} icon="delete-outline" color={theme.colors.error} />}
+                onPress={() => void handleDeleteOwnPost()}
+                disabled={postActionLoading !== null}
+              />
+            </List.Section>
+          ) : null}
+
+          {isPostOwner && canModeratePost ? <Divider /> : null}
+
+          {canModeratePost ? (
+            <List.Section>
+              <List.Subheader style={{ color: theme.colors.onSurfaceVariant }}>管理操作</List.Subheader>
+              <List.Item
+                title="下架帖子"
+                titleStyle={{ color: theme.colors.error }}
+                left={(props) => <List.Icon {...props} icon="eye-off-outline" color={theme.colors.error} />}
+                onPress={() => void handleTakeDownPost()}
+                disabled={postActionLoading !== null}
+              />
+              <List.Item
+                title="恢复帖子"
+                left={(props) => (
+                  <List.Icon {...props} icon="backup-restore" color={theme.colors.onSurfaceVariant} />
+                )}
+                onPress={() => void handleRestorePost()}
+                disabled={postActionLoading !== null}
+              />
+              <List.Item
+                title="封禁作者"
+                titleStyle={{ color: theme.colors.error }}
+                left={(props) => (
+                  <List.Icon {...props} icon="account-cancel-outline" color={theme.colors.error} />
+                )}
+                onPress={() => void handleBanAuthor()}
+                disabled={postActionLoading !== null || !post?.author?.id}
+              />
+            </List.Section>
+          ) : null}
+
+          {!hasPostActions ? (
+            <View style={styles.postActionsEmpty}>
+              <Text style={{ color: theme.colors.onSurfaceVariant }}>暂无可用操作</Text>
+            </View>
+          ) : null}
+        </ScrollView>
+      </View>
+    </BottomSheet>
+  );
 
   const threadSheet = (
     <BottomSheet
@@ -905,13 +1119,21 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           <Ionicons name="arrow-back" size={22} color={theme.colors.onPrimary} />
         </Pressable>
 
-        {/* 分享按钮 */}
-        <Pressable
-          style={[styles.desktopShareBtn, { top: insets.top + 12 }]}
-          onPress={() => setShareSheetVisible(true)}
-        >
-          <Ionicons name="share-outline" size={22} color={theme.colors.onPrimary} />
-        </Pressable>
+        <View style={[styles.desktopHeaderActions, { top: insets.top + 12 }]}>
+          <Pressable
+            style={styles.desktopShareBtn}
+            onPress={() => setShareSheetVisible(true)}
+          >
+            <Ionicons name="share-outline" size={22} color={theme.colors.onPrimary} />
+          </Pressable>
+          <Pressable
+            style={styles.desktopShareBtn}
+            onPress={() => setPostActionsVisible(true)}
+            disabled={!post}
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.onPrimary} />
+          </Pressable>
+        </View>
 
         <View style={[styles.desktopContainer, { paddingTop: insets.top }]}>
           {/* 左侧图片区 */}
@@ -1031,6 +1253,8 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
           </View>
         </BottomSheet>
 
+        {postActionsSheet}
+
         <BottomSheet visible={commentSheetVisible} onClose={handleCloseCommentSheet} height={360}>
           <CommentComposer
             value={commentInput}
@@ -1064,9 +1288,18 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
         <Pressable style={[styles.headerBtn, !hasImages && styles.headerBtnLight]} onPress={handleBack}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.onPrimary} />
         </Pressable>
-        <Pressable style={[styles.headerBtn, !hasImages && styles.headerBtnLight]} onPress={() => setShareSheetVisible(true)}>
-          <Ionicons name="share-outline" size={22} color={theme.colors.onPrimary} />
-        </Pressable>
+        <View style={styles.mobileHeaderActions}>
+          <Pressable style={[styles.headerBtn, !hasImages && styles.headerBtnLight]} onPress={() => setShareSheetVisible(true)}>
+            <Ionicons name="share-outline" size={22} color={theme.colors.onPrimary} />
+          </Pressable>
+          <Pressable
+            style={[styles.headerBtn, !hasImages && styles.headerBtnLight]}
+            onPress={() => setPostActionsVisible(true)}
+            disabled={!post}
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.onPrimary} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -1130,6 +1363,8 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
         </View>
       </BottomSheet>
 
+      {postActionsSheet}
+
       <BottomSheet visible={commentSheetVisible} onClose={handleCloseCommentSheet} height={360}>
         <CommentComposer
           value={commentInput}
@@ -1176,6 +1411,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingBottom: 8,
     zIndex: 10,
+  },
+  mobileHeaderActions: {
+    flexDirection: 'row',
+    gap: 8,
   },
   headerBtn: {
     width: 40,
@@ -1520,6 +1759,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  postActionsSheet: {
+    flex: 1,
+  },
+  postActionsTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  postActionsEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+  },
 
   // ==================== Loaders ====================
   loaderWrap: {
@@ -1622,15 +1875,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   desktopShareBtn: {
-    position: 'absolute',
-    right: 16,
-    zIndex: 10,
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  desktopHeaderActions: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 10,
+    flexDirection: 'row',
+    gap: 8,
   },
 
   // ==================== No-Image Hero Header ====================
