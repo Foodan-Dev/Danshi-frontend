@@ -40,10 +40,12 @@ import { useExtendedTheme } from '@/src/constants/md3_theme';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
 import { CachedAvatar } from '@/src/components/cached_avatar';
 import { postsRepository } from '@/src/repositories/posts_repository';
-import { adminRepository } from '@/src/repositories/admin_repository';
+import { adminRepository, type AdminUserStatusInput } from '@/src/repositories/admin_repository';
+import { adminService } from '@/src/services/admin_service';
 import { normalizeRoles } from '@/src/lib/auth/roles';
 import { ROLES } from '@/src/constants/app';
 import { showAlert } from '@/src/utils/alert';
+import { BanUserSheet } from '@/src/components/admin/ban_user_sheet';
 
 // 图片展示配置
 const IMAGE_CONFIG = {
@@ -134,6 +136,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
   const [imageViewer, setImageViewer] = useState<{ visible: boolean; index: number }>({ visible: false, index: 0 });
   const [postActionsVisible, setPostActionsVisible] = useState(false);
   const [postActionLoading, setPostActionLoading] = useState<PostActionLoading>(null);
+  const [banAuthorVisible, setBanAuthorVisible] = useState(false);
 
   // ==================== 评论 Hook ====================
   const onCommentCountChange = useCallback((delta: number) => {
@@ -408,25 +411,28 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     }
   }, [fetchPost, postId]);
 
-  const handleBanAuthor = useCallback(async () => {
+  const handleOpenBanAuthor = useCallback(async () => {
     if (!post?.author?.id) return;
+    setPostActionsVisible(false);
+    if (Platform.OS !== 'web') {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+    }
+    setBanAuthorVisible(true);
+  }, [post?.author?.id]);
+
+  const handleBanAuthor = useCallback(async (input: AdminUserStatusInput) => {
+    if (!post?.author?.id) throw new Error('缺少作者 ID');
     const authorId = post.author.id;
-    const confirmed = await closeActionsAndConfirm(
-      '封禁作者',
-      `确定封禁“${post.author.name || '该用户'}”吗？`,
-      '封禁',
-    );
-    if (!confirmed) return;
     setPostActionLoading('ban-author');
     try {
-      await adminRepository.updateUserStatus(authorId, { is_active: false });
+      await adminService.updateUserStatus(authorId, input);
       showAlert('封禁成功', '作者账号已被封禁');
     } catch (actionError) {
-      showAlert('封禁失败', actionError instanceof Error ? actionError.message : '请稍后重试');
+      throw actionError instanceof Error ? actionError : new Error('封禁失败，请稍后重试');
     } finally {
       setPostActionLoading(null);
     }
-  }, [closeActionsAndConfirm, post?.author]);
+  }, [post?.author?.id]);
 
   // ==================== 数据派生 ====================
   const hasImages = safePostImages.length > 0;
@@ -447,12 +453,13 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
     : Math.min(windowHeight * 0.72, hasPostActions ? 330 : 180);
 
   const postActionsSheet = (
-    <BottomSheet
-      visible={postActionsVisible}
-      onClose={() => setPostActionsVisible(false)}
-      height={postActionsSheetHeight}
-    >
-      <View style={styles.postActionsSheet}>
+    <>
+      <BottomSheet
+        visible={postActionsVisible}
+        onClose={() => setPostActionsVisible(false)}
+        height={postActionsSheetHeight}
+      >
+        <View style={styles.postActionsSheet}>
         <Text style={[styles.postActionsTitle, { color: theme.colors.onSurface }]}>帖子操作</Text>
         <ScrollView showsVerticalScrollIndicator={false}>
           {isPostOwner ? (
@@ -510,7 +517,7 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
                 left={(props) => (
                   <List.Icon {...props} icon="account-cancel-outline" color={theme.colors.error} />
                 )}
-                onPress={() => void handleBanAuthor()}
+                onPress={() => void handleOpenBanAuthor()}
                 disabled={postActionLoading !== null || !post?.author?.id}
               />
             </List.Section>
@@ -522,8 +529,15 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
             </View>
           ) : null}
         </ScrollView>
-      </View>
-    </BottomSheet>
+        </View>
+      </BottomSheet>
+      <BanUserSheet
+        visible={banAuthorVisible}
+        userName={post?.author?.name}
+        onClose={() => setBanAuthorVisible(false)}
+        onSubmit={handleBanAuthor}
+      />
+    </>
   );
 
   const threadSheet = (

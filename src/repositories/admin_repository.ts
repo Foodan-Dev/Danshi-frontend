@@ -51,14 +51,19 @@ export type AdminPostRestoreResult = { post_id: number; moderation_record_id: nu
 export type AdminUserListParams = { page?: number; limit?: number; role?: ManagementRole; is_active?: boolean };
 export type AdminUserSummary = {
   id: number;
-  name: string;
-  email: string;
+  name: string | null;
+  email: string | null;
   avatar_url: string | null;
   role: Role;
   roles: ManagementRole[];
-  is_active: boolean;
+  is_active: boolean | null;
+  is_banned: boolean | null;
+  ban_reason: string | null;
+  banned_until: string | null;
+  ban_is_permanent: boolean | null;
+  banned_by: number | null;
   stats: { post_count: number; follower_count: number };
-  created_at: string;
+  created_at: string | null;
 };
 export type AdminUsersResponse = { users: AdminUserSummary[]; pagination: Pagination };
 export type AdminUserRoleInput = { role: ManagementRole; action: 'grant' | 'revoke' };
@@ -69,8 +74,22 @@ export type AdminUserRoleResult = {
   roles: ManagementRole[];
   changed: boolean;
 };
-export type AdminUserStatusInput = { is_active: boolean; reason?: string };
-export type AdminUserStatusResult = { user_id: number; is_active: boolean };
+export type AdminUserStatusInput = components['schemas']['adminUserStatusRequest'];
+export type AdminUserStatusResult = {
+  user_id: number;
+  is_active: boolean | null;
+  is_banned: boolean | null;
+  ban_reason: string | null;
+  banned_until: string | null;
+  ban_is_permanent: boolean | null;
+  banned_by: number | null;
+};
+
+export type AdminUserBanState =
+  | { kind: 'none' }
+  | { kind: 'timed'; bannedUntil: string }
+  | { kind: 'permanent' }
+  | { kind: 'unknown' };
 
 export type AdminCommentListParams = { page?: number; limit?: number; post_id?: number };
 export type AdminCommentSummary = {
@@ -87,6 +106,35 @@ export type AdminCommentsResponse = { comments: AdminCommentSummary[]; paginatio
 
 const isRole = (value: string | undefined): value is ManagementRole =>
   value === 'dict_reviewer' || value === 'moderator' || value === 'super_admin';
+
+const toNullableText = (value: string | null | undefined): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
+const toOptionalPositiveInteger = (value: number | null | undefined): number | null =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null;
+
+export const getAdminUserBanState = (
+  user: Pick<AdminUserSummary, 'is_banned' | 'ban_is_permanent' | 'banned_until'>,
+  now = Date.now(),
+): AdminUserBanState => {
+  if (user.ban_is_permanent === true) return { kind: 'permanent' };
+
+  if (user.banned_until) {
+    const bannedUntil = Date.parse(user.banned_until);
+    if (Number.isFinite(bannedUntil) && bannedUntil > now) {
+      return { kind: 'timed', bannedUntil: user.banned_until };
+    }
+    return { kind: 'none' };
+  }
+
+  if (user.ban_is_permanent === false || user.is_banned === false) return { kind: 'none' };
+
+  // 仅在服务端缺少封禁形态字段时，才以 is_banned 作为兼容回退。
+  return user.is_banned === true ? { kind: 'unknown' } : { kind: 'none' };
+};
 
 const toAdminPost = (post: AdminPostContract): AdminPendingPostSummary => {
   if (post.category !== 'food' && post.category !== 'recipe') {
@@ -133,20 +181,24 @@ const toAdminComment = (comment: AdminCommentContract): AdminCommentSummary => (
 
 const toAdminUser = (user: AdminUserContract): AdminUserSummary => {
   const roles = normalizeRoles(user.roles);
-  if (typeof user.is_active !== 'boolean') throw new AppError('服务端响应缺少用户状态');
   return {
     id: requireNumber(user.id, '用户 ID'),
-    name: requireString(user.name, '用户名称'),
-    email: requireString(user.email, '用户邮箱'),
+    name: toNullableText(user.name),
+    email: toNullableText(user.email),
     avatar_url: user.avatar_url ?? null,
     role: primaryRole(roles),
     roles,
-    is_active: user.is_active,
+    is_active: typeof user.is_active === 'boolean' ? user.is_active : null,
+    is_banned: typeof user.is_banned === 'boolean' ? user.is_banned : null,
+    ban_reason: toNullableText(user.ban_reason),
+    banned_until: toNullableText(user.banned_until),
+    ban_is_permanent: typeof user.ban_is_permanent === 'boolean' ? user.ban_is_permanent : null,
+    banned_by: toOptionalPositiveInteger(user.banned_by),
     stats: {
       post_count: user.stats?.post_count ?? 0,
       follower_count: user.stats?.follower_count ?? 0,
     },
-    created_at: requireString(user.created_at, '用户创建时间'),
+    created_at: toNullableText(user.created_at),
   };
 };
 
@@ -161,10 +213,18 @@ const mapPostList = (payload: AdminPostListContract): AdminPostsResponse => ({
   posts: (payload.posts ?? []).map(toAdminPost),
   pagination: toPagination(payload.pagination),
 });
-const mapUserList = (payload: AdminUserListContract): AdminUsersResponse => ({
-  users: (payload.users ?? []).map(toAdminUser),
-  pagination: toPagination(payload.pagination),
-});
+const mapUserList = (payload: AdminUserListContract): AdminUsersResponse => {
+  const users: AdminUserSummary[] = [];
+  const rows = Array.isArray(payload.users) ? payload.users : [];
+  for (const user of rows) {
+    try {
+      users.push(toAdminUser(user));
+    } catch {
+      // ID 是列表 key 与所有管理操作的依据；缺少有效 ID 的单行只能跳过，不能拖垮整页。
+    }
+  }
+  return { users, pagination: toPagination(payload.pagination) };
+};
 const mapCommentList = (payload: AdminCommentListContract): AdminCommentsResponse => ({
   comments: (payload.comments ?? []).map(toAdminComment),
   pagination: toPagination(payload.pagination),
@@ -269,8 +329,15 @@ class ApiAdminRepository implements AdminRepository {
     const path = API_ENDPOINTS.ADMIN.USER_STATUS.replace(':userId', String(userId));
     const res = await httpAuth.put<ApiResponse<components['schemas']['AdminUserStatusResult']>>(path, input);
     const result = unwrapApiResponse(res);
-    if (typeof result.is_active !== 'boolean') throw new AppError('服务端响应缺少用户状态');
-    return { user_id: requireNumber(result.user_id, '用户 ID'), is_active: result.is_active };
+    return {
+      user_id: requireNumber(result.user_id, '用户 ID'),
+      is_active: typeof result.is_active === 'boolean' ? result.is_active : null,
+      is_banned: typeof result.is_banned === 'boolean' ? result.is_banned : null,
+      ban_reason: toNullableText(result.ban_reason),
+      banned_until: toNullableText(result.banned_until),
+      ban_is_permanent: typeof result.ban_is_permanent === 'boolean' ? result.ban_is_permanent : null,
+      banned_by: toOptionalPositiveInteger(result.banned_by),
+    };
   }
 
   async listComments(params: AdminCommentListParams = {}) {

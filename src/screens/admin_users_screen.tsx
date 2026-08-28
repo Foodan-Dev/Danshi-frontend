@@ -9,7 +9,12 @@ import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { useAuth } from '@/src/context/auth_context';
 import { isSuperAdmin } from '@/src/lib/auth/roles';
 import { adminService } from '@/src/services/admin_service';
-import type { AdminUserSummary } from '@/src/repositories/admin_repository';
+import {
+  getAdminUserBanState,
+  type AdminUserStatusInput,
+  type AdminUserStatusResult,
+  type AdminUserSummary,
+} from '@/src/repositories/admin_repository';
 import type { Role } from '@/src/constants/app';
 import type { ManagementRole } from '@/src/models/User';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -17,6 +22,9 @@ import { ROLES } from '@/src/constants/app';
 import { formatDate } from '@/src/utils/time_format';
 import { UserAvatar } from '@/src/components/user_avatar';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BanUserSheet } from '@/src/components/admin/ban_user_sheet';
+
+const SCREEN_LOADED_AT = Date.now();
 
 // 身份标签组件
 type RoleBadgeProps = {
@@ -65,6 +73,9 @@ export default function AdminUsersScreen() {
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
   const [menuVisible, setMenuVisible] = useState<number | null>(null);
+  const [banTarget, setBanTarget] = useState<AdminUserSummary | null>(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
+  const [now, setNow] = useState(SCREEN_LOADED_AT);
   const requestSeqRef = useRef(0);
 
   const contentHorizontalPadding = pickByBreakpoint(current, { base: 12, sm: 16, md: 20, lg: 24, xl: 24 });
@@ -116,6 +127,13 @@ export default function AdminUsersScreen() {
     void loadUsers();
   }, [isLoading, loadUsers, user]);
 
+  useEffect(() => {
+    const refreshNow = () => setNow(Date.now());
+    refreshNow();
+    const timer = setInterval(refreshNow, 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
   const canManageRole = !!user && isSuperAdmin(user.roles);
 
   const handleUpdateRole = async (userId: number, role: ManagementRole, action: 'grant' | 'revoke') => {
@@ -128,25 +146,72 @@ export default function AdminUsersScreen() {
     }
   };
 
-  const handleUpdateStatus = async (userId: number, isActive: boolean) => {
+  const applyStatusResult = useCallback((result: AdminUserStatusResult) => {
+    setUsers((previous) => previous.map((listedUser) => listedUser.id === result.user_id
+      ? {
+          ...listedUser,
+          is_active: result.is_active,
+          is_banned: result.is_banned,
+          ban_reason: result.ban_reason,
+          banned_until: result.banned_until,
+          ban_is_permanent: result.ban_is_permanent,
+          banned_by: result.banned_by,
+        }
+      : listedUser));
+    setNow(Date.now());
+  }, []);
+
+  const handleBanUser = async (userId: number, input: AdminUserStatusInput) => {
     setActionError('');
+    const result = await adminService.updateUserStatus(userId, input);
+    applyStatusResult(result);
+  };
+
+  const handleUnbanUser = async (userId: number) => {
+    setActionError('');
+    setStatusUpdatingId(userId);
     try {
-      await adminService.updateUserStatus(userId, { is_active: isActive });
-      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, is_active: isActive } : u));
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : '修改用户状态失败，请稍后重试');
+      const result = await adminService.updateUserStatus(userId, { ban_is_permanent: false });
+      applyStatusResult(result);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : '解封失败，请稍后重试');
+    } finally {
+      setStatusUpdatingId(null);
     }
   };
 
-  const formatFullDate = (dateStr: string) => formatDate(dateStr, 'full');
+  const formatFullDate = (dateStr: string | null) => {
+    if (!dateStr) return '创建时间未知';
+    return formatDate(dateStr, 'full') || '创建时间未知';
+  };
 
-  const renderUser = ({ item: listedUser }: { item: AdminUserSummary }) => (
-    <Pressable
-      style={[styles.userTile, { backgroundColor: colors.surfaceContainer }]}
-    >
+  const formatBanDateTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return '未知时间';
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${formatDate(dateStr, 'full')} ${hours}:${minutes}`;
+  };
+
+  const renderUser = ({ item: listedUser }: { item: AdminUserSummary }) => {
+    const banState = getAdminUserBanState(listedUser, now);
+    const isCurrentlyBanned = banState.kind !== 'none';
+    const displayName = listedUser.name || '未设置昵称';
+    const banStatusText = banState.kind === 'permanent'
+      ? '永久封禁'
+      : banState.kind === 'timed'
+        ? `限时封禁至 ${formatBanDateTime(banState.bannedUntil)}`
+        : banState.kind === 'unknown'
+          ? '封禁中（期限未知）'
+          : '未封禁';
+
+    return (
+      <Pressable
+        style={[styles.userTile, { backgroundColor: colors.surfaceContainer }]}
+      >
       <UserAvatar
         userId={listedUser.id}
-        name={listedUser.name}
+        name={displayName}
         avatar_url={listedUser.avatar_url}
         size={44}
       />
@@ -154,19 +219,40 @@ export default function AdminUsersScreen() {
       <View style={styles.userInfo}>
         <View style={styles.userNameRow}>
           <Text style={[styles.userName, { color: pTheme.colors.onSurface }]} numberOfLines={1}>
-            {listedUser.name}
+            {displayName}
           </Text>
           <RoleBadge role={listedUser.role} />
-          {!listedUser.is_active && (
-            <View style={[styles.statusBadge, { backgroundColor: pTheme.colors.errorContainer }]}>
-              <Text style={[styles.statusBadgeText, { color: pTheme.colors.error }]}>已禁用</Text>
-            </View>
-          )}
         </View>
 
         <Text style={[styles.userEmail, { color: pTheme.colors.onSurfaceVariant }]} numberOfLines={1}>
-          {listedUser.email}
+          {listedUser.email || '未提供邮箱'}
         </Text>
+
+        <View
+          style={[
+            styles.banStatus,
+            { backgroundColor: isCurrentlyBanned ? pTheme.colors.errorContainer : pTheme.colors.secondaryContainer },
+          ]}
+        >
+          <Ionicons
+            name={isCurrentlyBanned ? 'ban-outline' : 'checkmark-circle-outline'}
+            size={12}
+            color={isCurrentlyBanned ? pTheme.colors.error : pTheme.colors.onSecondaryContainer}
+          />
+          <Text
+            style={[
+              styles.banStatusText,
+              { color: isCurrentlyBanned ? pTheme.colors.error : pTheme.colors.onSecondaryContainer },
+            ]}
+          >
+            {banStatusText}
+          </Text>
+        </View>
+        {isCurrentlyBanned && listedUser.ban_reason ? (
+          <Text style={[styles.banReason, { color: pTheme.colors.onSurfaceVariant }]} numberOfLines={2}>
+            理由：{listedUser.ban_reason}
+          </Text>
+        ) : null}
 
         <View style={styles.userMeta}>
           <Ionicons name="document-text-outline" size={11} color={pTheme.colors.onSurfaceVariant} />
@@ -242,15 +328,21 @@ export default function AdminUsersScreen() {
         <Menu.Item
           onPress={() => {
             setMenuVisible(null);
-            void handleUpdateStatus(listedUser.id, !listedUser.is_active);
+            if (isCurrentlyBanned) {
+              void handleUnbanUser(listedUser.id);
+            } else {
+              setBanTarget(listedUser);
+            }
           }}
-          title={listedUser.is_active ? '禁用用户' : '启用用户'}
-          leadingIcon={listedUser.is_active ? 'account-cancel' : 'account-check'}
-          titleStyle={listedUser.is_active ? { color: pTheme.colors.error } : undefined}
+          title={isCurrentlyBanned ? '解封用户' : '封禁用户'}
+          leadingIcon={isCurrentlyBanned ? 'account-check' : 'account-cancel'}
+          titleStyle={isCurrentlyBanned ? undefined : { color: pTheme.colors.error }}
+          disabled={statusUpdatingId === listedUser.id}
         />
       </Menu>
-    </Pressable>
-  );
+      </Pressable>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -301,7 +393,7 @@ export default function AdminUsersScreen() {
         data={users}
         keyExtractor={(listedUser) => String(listedUser.id)}
         renderItem={renderUser}
-        extraData={{ menuVisible, canManageRole }}
+        extraData={{ menuVisible, canManageRole, now, statusUpdatingId }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -356,6 +448,15 @@ export default function AdminUsersScreen() {
             </Card>
           )
         }
+      />
+      <BanUserSheet
+        visible={banTarget !== null}
+        userName={banTarget?.name}
+        onClose={() => setBanTarget(null)}
+        onSubmit={(input) => {
+          if (!banTarget) return Promise.reject(new Error('未选择要封禁的用户'));
+          return handleBanUser(banTarget.id, input);
+        }}
       />
     </View>
   );
@@ -415,15 +516,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // 状态标签
-  statusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  banStatus: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginTop: 2,
   },
-  statusBadgeText: {
-    fontSize: 10,
+  banStatusText: {
+    fontSize: 11,
     fontWeight: '600',
+  },
+  banReason: {
+    fontSize: 11,
+    lineHeight: 16,
   },
 
   // 更多按钮
