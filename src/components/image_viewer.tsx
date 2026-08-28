@@ -86,8 +86,21 @@ function ZoomableImage({ uri, onSingleTap }: ZoomableImageProps) {
 
   // 拖动手势
   const panGesture = Gesture.Pan()
+    .manualActivation(true)
     .minPointers(1)
     .maxPointers(2)
+    .onTouchesDown((_event, stateManager) => {
+      if (scale.value <= 1) {
+        stateManager.fail();
+      }
+    })
+    .onTouchesMove((_event, stateManager) => {
+      if (scale.value > 1) {
+        stateManager.activate();
+      } else {
+        stateManager.fail();
+      }
+    })
     .onUpdate((e) => {
       if (scale.value > 1) {
         const maxTranslateX = (SCREEN_WIDTH * (scale.value - 1)) / 2;

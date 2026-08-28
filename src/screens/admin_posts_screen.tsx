@@ -192,7 +192,13 @@ export default function AdminPostsScreen() {
   const formatShortDate = (dateStr: string) => formatDate(dateStr, 'short');
 
   const renderPost = ({ item: post }: { item: AdminPendingPostSummary }) => {
-    const safePreviewImage = post.images?.map((item) => getSafeRemoteUrl(item)).find((item): item is string => !!item);
+    const safePreviewImage = [
+      post.image_thumbs?.[0],
+      post.image_displays?.[0],
+      post.images?.[0],
+    ]
+      .map((item) => getSafeRemoteUrl(item))
+      .find((item): item is string => !!item);
     const hasImage = !!safePreviewImage;
     const statusDotColor = getStatusDotColor(post.status);
     const isPending = post.status === 'pending';

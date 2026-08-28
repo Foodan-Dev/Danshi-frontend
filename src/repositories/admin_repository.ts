@@ -30,6 +30,8 @@ export type AdminPendingPostSummary = {
   category: Category;
   post_type: PostType;
   images: string[];
+  image_thumbs?: string[];
+  image_displays?: string[];
   author?: { id: number; name: string; email?: string };
   status: 'draft' | 'pending' | 'approved' | 'rejected';
   like_count: number;
@@ -96,6 +98,10 @@ const toAdminPost = (post: AdminPostContract): AdminPendingPostSummary => {
     throw new AppError('服务端返回了无效的帖子类型');
   }
   if (!post.status) throw new AppError('服务端响应缺少帖子状态');
+  const imageVariants = post as AdminPostContract & {
+    image_thumbs?: string[];
+    image_displays?: string[];
+  };
   return {
     id: requireNumber(post.id, '帖子 ID'),
     title: requireString(post.title, '帖子标题'),
@@ -103,6 +109,8 @@ const toAdminPost = (post: AdminPostContract): AdminPendingPostSummary => {
     category: post.category,
     post_type: post.post_type,
     images: post.images ?? [],
+    image_thumbs: imageVariants.image_thumbs ?? [],
+    image_displays: imageVariants.image_displays ?? [],
     author: post.author ? {
       id: requireNumber(post.author.id, '作者 ID'),
       name: requireString(post.author.name, '作者名称'),
