@@ -51,10 +51,7 @@ export const PostCard: React.FC<PostCardProps> = ({
   const [menuVisible, setMenuVisible] = useState(false);
   const [isLiked, setIsLiked] = useState(post.is_liked ?? false);
   const [likeCount, setLikeCount] = useState(post.stats?.like_count ?? 0);
-  const [isFavorited, setIsFavorited] = useState(post.is_favorited ?? false);
-  const [favoriteCount, setFavoriteCount] = useState(post.stats?.favorite_count ?? 0);
   const likeLoadingRef = useRef(false);
-  const favoriteLoadingRef = useRef(false);
   const firstImage = useMemo(
     () => post.image_thumbs
       ?.map((item) => getSafeRemoteUrl(item))
@@ -92,8 +89,6 @@ export const PostCard: React.FC<PostCardProps> = ({
   useEffect(() => {
     setIsLiked(post.is_liked ?? false);
     setLikeCount(post.stats?.like_count ?? 0);
-    setIsFavorited(post.is_favorited ?? false);
-    setFavoriteCount(post.stats?.favorite_count ?? 0);
   }, [post.id, post.is_liked, post.is_favorited, post.stats?.like_count, post.stats?.favorite_count]);
 
   const syncLikeState = useCallback((patch: PostLikePatch) => {
@@ -137,30 +132,6 @@ export const PostCard: React.FC<PostCardProps> = ({
     }
   }, [user?.id, isLiked, likeCount, post.id, syncLikeState]);
 
-  const handleFavoritePress = useCallback(async () => {
-    if (favoriteLoadingRef.current) return;
-    if (!user?.id) {
-      showAlert('请先登录', '登录后才能收藏帖子');
-      return;
-    }
-    favoriteLoadingRef.current = true;
-    const previousFavorited = isFavorited;
-    const previousCount = favoriteCount;
-    setIsFavorited(!previousFavorited);
-    setFavoriteCount(Math.max(0, previousCount + (previousFavorited ? -1 : 1)));
-    try {
-      const result = previousFavorited
-        ? await postsService.unfavorite(post.id)
-        : await postsService.favorite(post.id);
-      setIsFavorited(result.is_favorited);
-      setFavoriteCount(result.favorite_count);
-    } catch {
-      setIsFavorited(previousFavorited);
-      setFavoriteCount(previousCount);
-    } finally {
-      favoriteLoadingRef.current = false;
-    }
-  }, [favoriteCount, isFavorited, post.id, user?.id]);
 
   // 使用伪随机比例保持瀑布流参差不齐效果
   const seed = useMemo(() => {
@@ -386,25 +357,6 @@ export const PostCard: React.FC<PostCardProps> = ({
           </View>
 
           <View style={styles.cardActions}>
-            <Pressable
-              style={({ pressed }) => [styles.likeWrap, pressed && styles.likePressed]}
-              onPress={(event) => {
-                if (Platform.OS === 'web') event.stopPropagation?.();
-                void handleFavoritePress();
-              }}
-              hitSlop={6}
-              accessibilityLabel={isFavorited ? '取消收藏' : '收藏'}
-              accessibilityRole="button"
-            >
-              <Ionicons
-                name={isFavorited ? 'star' : 'star-outline'}
-                size={14}
-                color={isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant}
-              />
-              {favoriteCount > 0 ? (
-                <Text style={[styles.likeCount, { color: theme.colors.onSurfaceVariant }]}>{favoriteCount}</Text>
-              ) : null}
-            </Pressable>
             <Pressable
               style={({ pressed }) => [styles.likeWrap, pressed && styles.likePressed]}
               onPress={(event) => {
