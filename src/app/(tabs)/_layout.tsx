@@ -9,6 +9,10 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { breakpoints } from '@/src/constants/breakpoints';
 import { CachedAvatar } from '@/src/components/cached_avatar';
+import { ExploreTabRefreshRequestProvider } from '@/src/context/explore_tab_refresh_context';
+
+// 300ms 足以覆盖常见双击节奏，同时可降低两次独立点击被合并的概率。
+const EXPLORE_TAB_DOUBLE_PRESS_INTERVAL_MS = 300;
 
 // 侧边栏导航项
 const SIDEBAR_ITEMS = [
@@ -104,6 +108,25 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const pathname = usePathname();
+  const [exploreTabRefreshRequestId, setExploreTabRefreshRequestId] = React.useState(0);
+  const lastFocusedExploreTabPressRef = React.useRef(0);
+
+  const handleExploreTabPress = React.useCallback((isFocused: boolean) => {
+    if (!isFocused) {
+      lastFocusedExploreTabPressRef.current = 0;
+      return;
+    }
+
+    const now = Date.now();
+    const elapsed = now - lastFocusedExploreTabPressRef.current;
+    if (elapsed <= EXPLORE_TAB_DOUBLE_PRESS_INTERVAL_MS) {
+      lastFocusedExploreTabPressRef.current = 0;
+      setExploreTabRefreshRequestId((current) => current + 1);
+      return;
+    }
+
+    lastFocusedExploreTabPressRef.current = now;
+  }, []);
   
   // 与评论界面底部栏保持一致: minHeight 56 + paddingBottom (Math.max(insets.bottom, 12))
   const tabBarBaseHeight = 56;
@@ -175,93 +198,103 @@ export default function TabsLayout() {
   // 宽屏布局：侧边栏 + 内容区
   if (showSidebar) {
     return (
-      <View style={styles.wideContainer}>
-        <Sidebar />
-        <View style={styles.wideContent}>
-          <Tabs initialRouteName="explore" screenOptions={screenOptions}>
-            <Tabs.Screen
-              name="explore"
-              options={{
-                title: '发现',
-                tabBarIcon: ({ color, size, focused }) => (
-                  <Ionicons name={focused ? 'compass' : 'compass-outline'} size={size} color={color} />
-                ),
-              }}
-            />
-            <Tabs.Screen
-              name="post"
-              options={{
-                title: '',
-                tabBarIcon: () => (
-                  <View style={[styles.fabContainer, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]}>
-                    <Ionicons name="add" size={28} color={theme.colors.onPrimary} />
-                  </View>
-                ),
-                tabBarLabelStyle: { display: 'none' },
-              }}
-            />
-            <Tabs.Screen
-              name="myself"
-              options={{
-                title: '我的',
-                tabBarIcon: ({ color, size, focused }) => (
-                  <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
-                ),
-              }}
-            />
-            <Tabs.Screen
-              name="search"
-              options={{
-                href: null, // 从 Tab Bar 中隐藏
-              }}
-            />
-          </Tabs>
+      <ExploreTabRefreshRequestProvider requestId={exploreTabRefreshRequestId}>
+        <View style={styles.wideContainer}>
+          <Sidebar />
+          <View style={styles.wideContent}>
+            <Tabs initialRouteName="explore" screenOptions={screenOptions}>
+              <Tabs.Screen
+                name="explore"
+                listeners={({ navigation }) => ({
+                  tabPress: () => handleExploreTabPress(navigation.isFocused()),
+                })}
+                options={{
+                  title: '发现',
+                  tabBarIcon: ({ color, size, focused }) => (
+                    <Ionicons name={focused ? 'compass' : 'compass-outline'} size={size} color={color} />
+                  ),
+                }}
+              />
+              <Tabs.Screen
+                name="post"
+                options={{
+                  title: '',
+                  tabBarIcon: () => (
+                    <View style={[styles.fabContainer, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]}>
+                      <Ionicons name="add" size={28} color={theme.colors.onPrimary} />
+                    </View>
+                  ),
+                  tabBarLabelStyle: { display: 'none' },
+                }}
+              />
+              <Tabs.Screen
+                name="myself"
+                options={{
+                  title: '我的',
+                  tabBarIcon: ({ color, size, focused }) => (
+                    <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
+                  ),
+                }}
+              />
+              <Tabs.Screen
+                name="search"
+                options={{
+                  href: null, // 从 Tab Bar 中隐藏
+                }}
+              />
+            </Tabs>
+          </View>
         </View>
-      </View>
+      </ExploreTabRefreshRequestProvider>
     );
   }
 
   // 窄屏布局：底部 Tab Bar（半透明磨砂背景）
   return (
-    <Tabs initialRouteName="explore" screenOptions={screenOptions}>
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: '发现',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'compass' : 'compass-outline'} size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="post"
-        options={{
-          title: '发布',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.addIconContainer, { backgroundColor: theme.colors.primary }]}>
-              <Ionicons name="add" size={22} color={theme.colors.onPrimary} />
-            </View>
-          ),
-          tabBarStyle: { display: 'none' },
-        }}
-      />
-      <Tabs.Screen
-        name="myself"
-        options={{
-          title: '我的',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="search"
-        options={{
-          href: null, // 从 Tab Bar 中隐藏
-          tabBarStyle: { display: 'none' },
-        }}
-      />
-    </Tabs>
+    <ExploreTabRefreshRequestProvider requestId={exploreTabRefreshRequestId}>
+      <Tabs initialRouteName="explore" screenOptions={screenOptions}>
+        <Tabs.Screen
+          name="explore"
+          listeners={({ navigation }) => ({
+            tabPress: () => handleExploreTabPress(navigation.isFocused()),
+          })}
+          options={{
+            title: '发现',
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons name={focused ? 'compass' : 'compass-outline'} size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="post"
+          options={{
+            title: '发布',
+            tabBarIcon: ({ color, focused }) => (
+              <View style={[styles.addIconContainer, { backgroundColor: theme.colors.primary }]}>
+                <Ionicons name="add" size={22} color={theme.colors.onPrimary} />
+              </View>
+            ),
+            tabBarStyle: { display: 'none' },
+          }}
+        />
+        <Tabs.Screen
+          name="myself"
+          options={{
+            title: '我的',
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="search"
+          options={{
+            href: null, // 从 Tab Bar 中隐藏
+            tabBarStyle: { display: 'none' },
+          }}
+        />
+      </Tabs>
+    </ExploreTabRefreshRequestProvider>
   );
 }
 
