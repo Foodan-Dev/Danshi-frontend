@@ -1,8 +1,6 @@
-import { AppError } from '@/src/lib/errors/app_error';
-import type { components } from '@/src/generated/openapi';
+import { AppError, type BizCode } from '@/src/lib/errors/app_error';
 
-export type BizCode = components['schemas']['BizCode'];
-export type FieldError = components['schemas']['FieldError'];
+export type { BizCode, FieldError } from '@/src/lib/errors/app_error';
 
 export type ApiResponse<T> = {
   code: number;
@@ -17,7 +15,6 @@ export function unwrapApiResponse<T>(payload: ApiResponse<T>, okCode: number | n
     const numeric = Number(payload.code);
     const status = Number.isFinite(numeric) && numeric >= 100 && numeric <= 599 ? numeric : undefined;
     throw new AppError(payload.message || '请求失败', {
-      code: String(payload.code),
       errorCode: payload.error_code,
       status,
       cause: payload,

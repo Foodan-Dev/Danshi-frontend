@@ -33,7 +33,7 @@ const computePreview = (token: string | null): Pick<User, 'name' | 'avatar_url'>
 
 const isSessionExpiredError = (error: unknown) => {
   const appError = AppError.from(error);
-  return appError.code === 'AUTH_EXPIRED' || (
+  return appError.clientCode === 'AUTH_EXPIRED' || (
     appError.status === 401 && (
       appError.errorCode === 'unauthorized' || appError.errorCode === 'session_revoked'
     )

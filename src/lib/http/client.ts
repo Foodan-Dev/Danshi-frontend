@@ -100,14 +100,14 @@ export function createHttpClient(opts: HttpOptions = {}): HttpClient {
       );
       const name = (e instanceof Error) ? e.name : undefined;
       if (name === 'AbortError') {
-        throw new AppError('请求超时', { code: 'TIMEOUT', cause: e });
+        throw new AppError('请求超时', { clientCode: 'TIMEOUT', cause: e });
       }
 
       // 原生 App 中 TypeError 通常表示网络不可达
       if (typeof e === 'object' && e instanceof TypeError) {
         throw new AppError(
           '网络连接失败，请检查网络后重试',
-          { code: 'NETWORK_ERROR', cause: e }
+          { clientCode: 'NETWORK_ERROR', cause: e }
         );
       }
 

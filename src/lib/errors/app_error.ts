@@ -1,11 +1,12 @@
 import type { components } from '@/src/generated/openapi';
 
-type BizCode = components['schemas']['BizCode'];
-type FieldCode = components['schemas']['FieldCode'];
-type FieldError = components['schemas']['FieldError'];
+export type BizCode = components['schemas']['BizCode'];
+export type FieldCode = components['schemas']['FieldCode'];
+export type FieldError = components['schemas']['FieldError'];
+export type ClientErrorCode = 'AUTH_EXPIRED' | 'NETWORK_ERROR' | 'TIMEOUT' | 'UPLOAD_TIMEOUT';
 
 type AppErrorOptions = {
-  code?: string;
+  clientCode?: ClientErrorCode;
   errorCode?: BizCode;
   status?: number;
   retryAfterSeconds?: number;
@@ -14,25 +15,70 @@ type AppErrorOptions = {
   cause?: unknown;
 };
 
-const BIZ_CODES: ReadonlySet<string> = new Set([
-  'internal_error', 'not_found', 'method_not_allowed', 'validation_failed', 'rate_limited',
-  'unauthorized', 'service_unavailable', 'email_taken', 'email_domain_not_allow',
-  'credentials_invalid', 'verify_code_invalid', 'verify_code_too_many', 'verify_code_busy',
-  'account_banned', 'account_deleted', 'session_revoked', 'session_not_found',
-  'permission_denied', 'not_owner', 'post_not_found', 'post_not_published', 'post_deleted',
-  'comment_not_found', 'comment_deleted', 'notification_not_found', 'content_under_audit',
-  'content_rejected', 'content_not_restorable', 'moderation_not_pending', 'dict_item_not_found',
-  'dict_item_in_use', 'window_not_in_canteen', 'suggestion_not_found', 'suggestion_closed',
-  'suggestion_parent_pending', 'tag_limit_exceeded', 'image_not_found', 'image_not_owned',
-  'image_purpose_wrong', 'image_not_approved', 'upload_not_found', 'upload_closed',
-  'upload_incomplete', 'upload_size_mismatch', 'moderation_callback_invalid',
-  'cannot_follow_self', 'already_exists', 'conflict',
-]);
+const BACKEND_BIZ_CODES = {
+  internal_error: true,
+  not_found: true,
+  method_not_allowed: true,
+  validation_failed: true,
+  rate_limited: true,
+  unauthorized: true,
+  service_unavailable: true,
+  email_taken: true,
+  email_domain_not_allow: true,
+  credentials_invalid: true,
+  verify_code_invalid: true,
+  verify_code_too_many: true,
+  verify_code_busy: true,
+  account_banned: true,
+  account_deleted: true,
+  session_revoked: true,
+  session_not_found: true,
+  permission_denied: true,
+  not_owner: true,
+  post_not_found: true,
+  post_not_published: true,
+  post_deleted: true,
+  comment_not_found: true,
+  comment_deleted: true,
+  notification_not_found: true,
+  content_under_audit: true,
+  content_rejected: true,
+  content_not_restorable: true,
+  moderation_not_pending: true,
+  dict_item_not_found: true,
+  dict_item_in_use: true,
+  window_not_in_canteen: true,
+  suggestion_not_found: true,
+  suggestion_closed: true,
+  suggestion_parent_pending: true,
+  tag_limit_exceeded: true,
+  tag_not_found: true,
+  tag_name_conflict: true,
+  tag_merge_target_invalid: true,
+  image_not_found: true,
+  image_not_owned: true,
+  image_purpose_wrong: true,
+  image_not_approved: true,
+  upload_not_found: true,
+  upload_closed: true,
+  upload_incomplete: true,
+  upload_size_mismatch: true,
+  moderation_callback_invalid: true,
+  cannot_follow_self: true,
+  already_exists: true,
+  conflict: true,
+} satisfies Record<BizCode, true>;
 
-const FIELD_CODES: ReadonlySet<string> = new Set([
-  'required', 'too_long', 'too_short', 'out_of_range', 'invalid_format', 'invalid_enum',
-  'invalid_domain', 'conflict',
-]);
+const BACKEND_FIELD_CODES = {
+  required: true,
+  too_long: true,
+  too_short: true,
+  out_of_range: true,
+  invalid_format: true,
+  invalid_enum: true,
+  invalid_domain: true,
+  conflict: true,
+} satisfies Record<FieldCode, true>;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null
@@ -40,10 +86,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 
 const readString = (value: unknown) => typeof value === 'string' ? value : undefined;
 const isBizCode = (value: unknown): value is BizCode => (
-  typeof value === 'string' && BIZ_CODES.has(value)
+  typeof value === 'string' && Object.prototype.hasOwnProperty.call(BACKEND_BIZ_CODES, value)
 );
 const isFieldCode = (value: unknown): value is FieldCode => (
-  typeof value === 'string' && FIELD_CODES.has(value)
+  typeof value === 'string' && Object.prototype.hasOwnProperty.call(BACKEND_FIELD_CODES, value)
 );
 
 const toFieldError = (value: unknown): FieldError | null => {
@@ -56,7 +102,7 @@ const toFieldError = (value: unknown): FieldError | null => {
 };
 
 export class AppError extends Error {
-  code?: string;
+  clientCode?: ClientErrorCode;
   errorCode?: BizCode;
   status?: number;
   retryAfterSeconds?: number;
@@ -68,7 +114,7 @@ export class AppError extends Error {
     super(message);
     this.name = 'AppError';
     if (opts) {
-      this.code = opts.code;
+      this.clientCode = opts.clientCode;
       this.errorCode = opts.errorCode;
       this.status = opts.status;
       this.retryAfterSeconds = opts.retryAfterSeconds;
