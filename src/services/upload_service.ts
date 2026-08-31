@@ -1,6 +1,6 @@
 import { File as ExpoFile } from 'expo-file-system';
 
-import { AppError } from '@/src/lib/errors/app_error';
+import { AppError, type ClientErrorCode } from '@/src/lib/errors/app_error';
 import {
   uploadsRepository,
   type UploadFilePayload,
@@ -126,7 +126,7 @@ function sourceDisplayName(source: UploadSource, index: number): string {
 }
 
 /** 会导致批量上传整体中止的错误码（网络/鉴权/超时）。 */
-const FATAL_UPLOAD_ERROR_CODES = new Set([
+const FATAL_UPLOAD_ERROR_CODES: ReadonlySet<ClientErrorCode> = new Set([
   'AUTH_EXPIRED',
   'NETWORK_ERROR',
   'TIMEOUT',
@@ -136,7 +136,7 @@ const FATAL_UPLOAD_ERROR_CODES = new Set([
 /** 判断错误是否应中止后续上传（致命），而非仅跳过当前这一张。 */
 function isFatalUploadError(error: unknown): boolean {
   if (!(error instanceof AppError)) return false;
-  if (error.code && FATAL_UPLOAD_ERROR_CODES.has(error.code)) return true;
+  if (error.clientCode && FATAL_UPLOAD_ERROR_CODES.has(error.clientCode)) return true;
   return error.status === 503;
 }
 

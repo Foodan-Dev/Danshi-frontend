@@ -76,9 +76,9 @@ class ApiUploadsRepository implements UploadsRepository {
         });
       } catch (error) {
         if (controller.signal.aborted) {
-          throw new AppError('上传超时，请重试', { code: 'UPLOAD_TIMEOUT' });
+          throw new AppError('上传超时，请重试', { clientCode: 'UPLOAD_TIMEOUT' });
         }
-        throw new AppError('网络连接失败，请检查网络后重试', { code: 'NETWORK_ERROR', cause: error });
+        throw new AppError('网络连接失败，请检查网络后重试', { clientCode: 'NETWORK_ERROR', cause: error });
       } finally {
         clearTimeout(timeoutId);
       }

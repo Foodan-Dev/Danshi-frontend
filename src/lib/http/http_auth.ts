@@ -77,7 +77,7 @@ function createAuthHttpClient(): HttpClient {
       if (isRevokedSession(error)) {
         await clearStoredCredentials();
         throw new AppError('登录已失效，请重新登录', {
-          code: 'AUTH_EXPIRED',
+          clientCode: 'AUTH_EXPIRED',
           errorCode: 'session_revoked',
           status: 401,
           cause: error,
@@ -89,7 +89,7 @@ function createAuthHttpClient(): HttpClient {
         if (refreshed) return makeRequest<T>(method, path, body, init, true);
 
         throw new AppError('登录已失效，请重新登录', {
-          code: 'AUTH_EXPIRED',
+          clientCode: 'AUTH_EXPIRED',
           errorCode: 'unauthorized',
           status: 401,
           cause: error,
