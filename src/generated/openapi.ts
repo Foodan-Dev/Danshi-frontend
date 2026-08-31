@@ -1124,6 +1124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/posts/{post_id}/history/{revision}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v2/posts/:post_id/history/:revision/restore */
+        post: operations["post_api_v2_posts_post_id_history_revision_restore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/posts/{post_id}/like": {
         parameters: {
             query?: never;
@@ -1701,6 +1718,8 @@ export interface components {
             edited_at?: components["schemas"]["Time"];
             edited_by?: number;
             id?: number;
+            is_current?: boolean;
+            moderation?: components["schemas"]["HistoryModerationView"];
             /** Format: int32 */
             revision?: number;
         };
@@ -1869,6 +1888,12 @@ export interface components {
             follower_count?: number;
             is_following?: boolean;
         };
+        HistoryModerationView: {
+            score?: components["schemas"]["Decimal"];
+            status?: string;
+            /** @enum {string|null} */
+            verdict?: "pass" | "review" | "block" | null;
+        };
         HybridMeta: {
             limit: number;
             page: number;
@@ -1966,6 +1991,7 @@ export interface components {
             image_displays?: string[];
             image_thumbs?: string[];
             images?: string[];
+            is_deleted?: boolean;
             is_edited?: boolean;
             is_favorited?: boolean;
             is_liked?: boolean;
@@ -2000,6 +2026,8 @@ export interface components {
             edited_at?: components["schemas"]["Time"];
             edited_by?: number;
             id?: number;
+            is_current?: boolean;
+            moderation?: components["schemas"]["HistoryModerationView"];
             /** Format: int32 */
             revision?: number;
             snapshot?: unknown;
@@ -2027,6 +2055,7 @@ export interface components {
             image_displays?: string[];
             image_thumbs?: string[];
             images?: string[];
+            is_deleted?: boolean;
             is_edited?: boolean;
             is_favorited?: boolean;
             is_liked?: boolean;
@@ -2106,6 +2135,9 @@ export interface components {
         ReplyToUserView: {
             id?: number;
             name?: string;
+        };
+        restorePostHistoryRequest: {
+            edit_reason?: string | null;
         };
         RuntimeStatus: {
             status?: string;
@@ -9802,6 +9834,135 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        data: Record<string, never> | null;
+                        error_code: components["schemas"]["BizCode"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        data: components["schemas"]["ErrorData"];
+                        error_code: components["schemas"]["BizCode"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        data: components["schemas"]["ErrorIDData"];
+                        error_code: components["schemas"]["BizCode"];
+                        message: string;
+                    };
+                };
+            };
+        };
+    };
+    post_api_v2_posts_post_id_history_revision_restore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: number;
+                revision: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["restorePostHistoryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        data: components["schemas"]["PostCreateResult"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        data: Record<string, never> | null;
+                        error_code: components["schemas"]["BizCode"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        data: Record<string, never> | null;
+                        error_code: components["schemas"]["BizCode"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        data: Record<string, never> | null;
+                        error_code: components["schemas"]["BizCode"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: number;
+                        data: Record<string, never> | null;
+                        error_code: components["schemas"]["BizCode"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

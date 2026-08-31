@@ -32,6 +32,7 @@ export type PostHistoryView = {
   edited_by: number;
   edited_at: string;
   edit_reason: string | null;
+  is_current: boolean;
   snapshot: PostHistorySnapshot;
 };
 
@@ -70,6 +71,7 @@ const toPostHistorySnapshot = (value: unknown): PostHistorySnapshot => {
 const toPostHistory = (history: PostHistoryContract): PostHistoryView => ({
   id: requireNumber(history.id, '历史记录 ID'),
   revision: requireNumber(history.revision, '历史版本号'),
+  is_current: history.is_current === true,
   edited_by: requireNumber(history.edited_by, '历史编辑者 ID'),
   edited_at: requireString(history.edited_at, '历史修改时间'),
   edit_reason: history.edit_reason?.trim() || null,
