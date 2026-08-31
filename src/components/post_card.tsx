@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
-import { StyleSheet, View, StyleProp, ViewStyle, Pressable, Alert, Platform } from 'react-native';
+import { StyleSheet, View, StyleProp, ViewStyle, Pressable, Platform } from 'react-native';
 import { Image } from 'expo-image';
-import { Text, useTheme as usePaperTheme, IconButton, Menu } from 'react-native-paper';
+import { Text, useTheme as usePaperTheme, IconButton } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { Post } from '@/src/models/Post';
 import { UserAvatar } from '@/src/components/user_avatar';
@@ -11,6 +11,7 @@ import { postsService } from '@/src/services/posts_service';
 import { showAlert } from '@/src/utils/alert';
 import type { PostLikePatch } from '@/src/utils/post_like';
 import { UNSET_NICKNAME } from '@/src/constants/user';
+import { usePostCardActions } from '@/src/context/post_card_actions_context';
 
 // 莫兰迪色系背景色组（低饱和、高明度）
 const POSTER_COLORS = [
@@ -48,7 +49,7 @@ export const PostCard: React.FC<PostCardProps> = ({
 }) => {
   const theme = usePaperTheme();
   const { user } = useAuth();
-  const [menuVisible, setMenuVisible] = useState(false);
+  const { openPostCardActions } = usePostCardActions();
   const [isLiked, setIsLiked] = useState(post.is_liked ?? false);
   const [likeCount, setLikeCount] = useState(post.stats?.like_count ?? 0);
   const likeLoadingRef = useRef(false);
@@ -81,10 +82,6 @@ export const PostCard: React.FC<PostCardProps> = ({
         return null;
     }
   }, [appearance, theme.colors.outlineVariant]);
-
-  useEffect(() => {
-    setMenuVisible(false);
-  }, [post.id]);
 
   useEffect(() => {
     setIsLiked(post.is_liked ?? false);
@@ -271,53 +268,15 @@ export const PostCard: React.FC<PostCardProps> = ({
             {displayTitle}
           </Text>
           {canShowActionsMenu && (
-            <Menu
-              visible={menuVisible}
-              onDismiss={() => setMenuVisible(false)}
-              anchor={
-                <IconButton
-                  icon="dots-vertical"
-                  size={16}
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    setMenuVisible(true);
-                  }}
-                  style={styles.actionBtn}
-                />
-              }
-            >
-              {onEdit ? (
-                <Menu.Item
-                  onPress={() => {
-                    setMenuVisible(false);
-                    onEdit(post.id);
-                  }}
-                  title="编辑"
-                  leadingIcon="pencil"
-                />
-              ) : null}
-              {onDelete ? (
-                <Menu.Item
-                  onPress={() => {
-                    setMenuVisible(false);
-                    const doDelete = () => onDelete(post.id);
-                    if (Platform.OS === 'web') {
-                      if (window.confirm('删除后无法恢复，确定要删除这篇帖子吗？')) {
-                        doDelete();
-                      }
-                    } else {
-                      Alert.alert('确认删除', '删除后无法恢复，确定要删除这篇帖子吗？', [
-                        { text: '取消', style: 'cancel' },
-                        { text: '删除', style: 'destructive', onPress: doDelete },
-                      ]);
-                    }
-                  }}
-                  title="删除"
-                  leadingIcon="delete"
-                  titleStyle={{ color: theme.colors.error }}
-                />
-              ) : null}
-            </Menu>
+            <IconButton
+              icon="dots-vertical"
+              size={16}
+              onPress={(event) => {
+                event.stopPropagation();
+                openPostCardActions({ postId: post.id, onEdit, onDelete });
+              }}
+              style={styles.actionBtn}
+            />
           )}
         </View>
 
