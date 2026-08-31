@@ -1,5 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, View, StyleSheet, Pressable, Animated, Easing, Platform, KeyboardAvoidingView } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Modal,
+  View,
+  StyleSheet,
+  Pressable,
+  Animated,
+  Easing,
+  Platform,
+  KeyboardAvoidingView,
+  PanResponder,
+} from 'react-native';
 import { useTheme as usePaperTheme } from 'react-native-paper';
 
 export type BottomSheetProps = {
@@ -12,6 +22,7 @@ export type BottomSheetProps = {
 export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, children, height }) => {
   const paperTheme = usePaperTheme();
   const translateY = useRef(new Animated.Value(1)).current; // 1 -> hidden, 0 -> shown
+  const dragY = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(visible);
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
   const resolvedHeight = useMemo(
@@ -22,6 +33,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, chil
   useEffect(() => {
     if (visible) {
       setMounted(true);
+      dragY.setValue(0);
     }
 
     animationRef.current?.stop();
@@ -40,7 +52,33 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, chil
     return () => {
       animationRef.current?.stop();
     };
-  }, [translateY, visible]);
+  }, [dragY, translateY, visible]);
+
+  const resetDrag = useCallback(() => {
+    Animated.spring(dragY, {
+      toValue: 0,
+      useNativeDriver: true,
+      speed: 24,
+      bounciness: 0,
+    }).start();
+  }, [dragY]);
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => visible,
+    onMoveShouldSetPanResponder: (_, gestureState) => visible && gestureState.dy > 2,
+    onPanResponderMove: (_, gestureState) => {
+      dragY.setValue(Math.max(0, gestureState.dy));
+    },
+    onPanResponderRelease: (_, gestureState) => {
+      const closeThreshold = resolvedHeight ? Math.min(96, resolvedHeight * 0.2) : 72;
+      if (gestureState.dy > closeThreshold || gestureState.vy > 0.8) {
+        onClose();
+        return;
+      }
+      resetDrag();
+    },
+    onPanResponderTerminate: resetDrag,
+  }), [dragY, onClose, resetDrag, resolvedHeight, visible]);
 
   const backdropOpacity = translateY.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0] });
   const sheetTranslate = translateY.interpolate({ inputRange: [0, 1], outputRange: [0, 40] });
@@ -66,13 +104,15 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, chil
             {
               backgroundColor: paperTheme.colors.surface,
               shadowColor: paperTheme.colors.shadow,
-              transform: [{ translateY: sheetTranslate }],
+              transform: [{ translateY: sheetTranslate }, { translateY: dragY }],
               opacity: sheetOpacity,
             },
             resolvedHeight ? { height: resolvedHeight } : undefined,
           ]}
         >
-          <View style={styles.handle} />
+          <View style={styles.handleArea} {...panResponder.panHandlers}>
+            <View style={[styles.handle, { backgroundColor: paperTheme.colors.outlineVariant }]} />
+          </View>
           {children}
         </Animated.View>
       </KeyboardAvoidingView>
@@ -100,12 +140,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -2 },
   },
   handle: {
-    alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#0000001A',
-    marginBottom: 8,
+  },
+  handleArea: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 24,
   },
 });
 

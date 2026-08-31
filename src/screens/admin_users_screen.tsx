@@ -1,13 +1,31 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, RefreshControl, Pressable } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  RefreshControl,
+  Pressable,
+  Platform,
+  ScrollView,
+  useWindowDimensions,
+} from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { ActivityIndicator, Appbar, Card, Text, useTheme as usePaperTheme, Button, Menu, IconButton, Divider } from 'react-native-paper';
+import {
+  ActivityIndicator,
+  Appbar,
+  Card,
+  Text,
+  useTheme as usePaperTheme,
+  Button,
+  IconButton,
+  Divider,
+  List,
+} from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use_responsive';
 import { pickByBreakpoint } from '@/src/constants/breakpoints';
 import { useAuth } from '@/src/context/auth_context';
-import { isSuperAdmin } from '@/src/lib/auth/roles';
+import { isSuperAdmin, normalizeRoles } from '@/src/lib/auth/roles';
 import { adminService } from '@/src/services/admin_service';
 import {
   getAdminUserBanState,
@@ -21,51 +39,77 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { ROLES } from '@/src/constants/app';
 import { formatDate } from '@/src/utils/time_format';
 import { UserAvatar } from '@/src/components/user_avatar';
-import { LinearGradient } from 'expo-linear-gradient';
 import { BanUserSheet } from '@/src/components/admin/ban_user_sheet';
+import { BottomSheet } from '@/src/components/overlays/bottom_sheet';
 import { UNSET_NICKNAME } from '@/src/constants/user';
 
 const SCREEN_LOADED_AT = Date.now();
 
-// 身份标签组件
 type RoleBadgeProps = {
   role: Role;
 };
 
 const RoleBadge: React.FC<RoleBadgeProps> = ({ role }) => {
   const pTheme = usePaperTheme();
+  const presentation = role === ROLES.SUPER_ADMIN
+    ? {
+        label: '超级管理员',
+        icon: 'shield-checkmark' as const,
+        backgroundColor: pTheme.colors.errorContainer,
+        color: pTheme.colors.onErrorContainer,
+      }
+    : role === ROLES.MODERATOR
+      ? {
+          label: '审核管理员',
+          icon: 'shield' as const,
+          backgroundColor: pTheme.colors.primaryContainer,
+          color: pTheme.colors.onPrimaryContainer,
+        }
+      : role === ROLES.DICT_REVIEWER
+        ? {
+            label: '词条管理员',
+            icon: 'book' as const,
+            backgroundColor: pTheme.colors.tertiaryContainer,
+            color: pTheme.colors.onTertiaryContainer,
+          }
+        : {
+            label: '普通用户',
+            icon: 'person' as const,
+            backgroundColor: pTheme.colors.secondaryContainer,
+            color: pTheme.colors.onSecondaryContainer,
+          };
 
-  if (role === ROLES.SUPER_ADMIN) {
-    return (
-      <LinearGradient
-        colors={[pTheme.colors.error, pTheme.colors.primary]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.roleBadge}
-      >
-        <Ionicons name="shield-checkmark" size={10} color={pTheme.colors.onError} />
-        <Text style={[styles.roleBadgeText, { color: pTheme.colors.onError }]}>超管</Text>
-      </LinearGradient>
-    );
-  }
+  return (
+    <View style={[styles.roleBadge, { backgroundColor: presentation.backgroundColor }]}>
+      <Ionicons name={presentation.icon} size={11} color={presentation.color} />
+      <Text style={[styles.roleBadgeText, { color: presentation.color }]}>{presentation.label}</Text>
+    </View>
+  );
+};
 
-  if (role === ROLES.ADMIN) {
-    return (
-      <View style={[styles.roleBadge, { backgroundColor: pTheme.colors.primaryContainer }]}>
-        <Ionicons name="shield" size={10} color={pTheme.colors.primary} />
-        <Text style={[styles.roleBadgeText, { color: pTheme.colors.primary }]}>管理</Text>
-      </View>
-    );
-  }
+type RoleBadgesProps = {
+  roles: readonly ManagementRole[];
+};
 
-  // 普通用户不显示标签
-  return null;
+const RoleBadges: React.FC<RoleBadgesProps> = ({ roles }) => {
+  const normalized = normalizeRoles(roles);
+  const displayRoles: Role[] = normalized.length > 0
+    ? [ROLES.SUPER_ADMIN, ROLES.MODERATOR, ROLES.DICT_REVIEWER]
+        .filter((role): role is ManagementRole => normalized.includes(role))
+    : [ROLES.USER];
+
+  return (
+    <View style={styles.roleBadges}>
+      {displayRoles.map((role) => <RoleBadge key={role} role={role} />)}
+    </View>
+  );
 };
 
 export default function AdminUsersScreen() {
   const pTheme = usePaperTheme();
   const insets = useSafeAreaInsets();
   const { current } = useResponsive();
+  const { height: windowHeight } = useWindowDimensions();
   const { user, isLoading } = useAuth();
 
   const [users, setUsers] = useState<AdminUserSummary[]>([]);
@@ -73,7 +117,8 @@ export default function AdminUsersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
-  const [menuVisible, setMenuVisible] = useState<number | null>(null);
+  const [actionTarget, setActionTarget] = useState<AdminUserSummary | null>(null);
+  const [actionSheetVisible, setActionSheetVisible] = useState(false);
   const [banTarget, setBanTarget] = useState<AdminUserSummary | null>(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState<number | null>(null);
   const [now, setNow] = useState(SCREEN_LOADED_AT);
@@ -135,8 +180,6 @@ export default function AdminUsersScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const canManageRole = !!user && isSuperAdmin(user.roles);
-
   const handleUpdateRole = async (userId: number, role: ManagementRole, action: 'grant' | 'revoke') => {
     setActionError('');
     try {
@@ -194,6 +237,33 @@ export default function AdminUsersScreen() {
     return `${formatDate(dateStr, 'full')} ${hours}:${minutes}`;
   };
 
+  const openActionSheet = (target: AdminUserSummary) => {
+    setActionTarget(target);
+    setActionSheetVisible(true);
+  };
+
+  const runRoleAction = (target: AdminUserSummary, role: ManagementRole) => {
+    setActionSheetVisible(false);
+    void handleUpdateRole(
+      target.id,
+      role,
+      target.roles.includes(role) ? 'revoke' : 'grant',
+    );
+  };
+
+  const openBanSheet = async (target: AdminUserSummary) => {
+    setActionSheetVisible(false);
+    if (Platform.OS !== 'web') {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+    }
+    setBanTarget(target);
+  };
+
+  const runUnbanAction = (target: AdminUserSummary) => {
+    setActionSheetVisible(false);
+    void handleUnbanUser(target.id);
+  };
+
   const renderUser = ({ item: listedUser }: { item: AdminUserSummary }) => {
     const banState = getAdminUserBanState(listedUser, now);
     const isCurrentlyBanned = banState.kind !== 'none';
@@ -222,8 +292,9 @@ export default function AdminUsersScreen() {
           <Text style={[styles.userName, { color: pTheme.colors.onSurface }]} numberOfLines={1}>
             {displayName}
           </Text>
-          <RoleBadge role={listedUser.role} />
         </View>
+
+        <RoleBadges roles={listedUser.roles} />
 
         <Text style={[styles.userEmail, { color: pTheme.colors.onSurfaceVariant }]} numberOfLines={1}>
           {listedUser.email || '未提供邮箱'}
@@ -273,77 +344,26 @@ export default function AdminUsersScreen() {
         </View>
       </View>
 
-      <Menu
-        visible={menuVisible === listedUser.id}
-        onDismiss={() => setMenuVisible(null)}
-        anchor={
-          <IconButton
-            icon="dots-vertical"
-            size={18}
-            onPress={() => setMenuVisible(listedUser.id)}
-            style={styles.moreBtn}
-          />
-        }
-      >
-        {canManageRole && (
-          <>
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(null);
-                void handleUpdateRole(
-                  listedUser.id,
-                  ROLES.DICT_REVIEWER,
-                  listedUser.roles.includes(ROLES.DICT_REVIEWER) ? 'revoke' : 'grant',
-                );
-              }}
-              title={listedUser.roles.includes(ROLES.DICT_REVIEWER) ? '移除词条审核员' : '授予词条审核员'}
-              leadingIcon="book-check"
-            />
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(null);
-                void handleUpdateRole(
-                  listedUser.id,
-                  ROLES.MODERATOR,
-                  listedUser.roles.includes(ROLES.MODERATOR) ? 'revoke' : 'grant',
-                );
-              }}
-              title={listedUser.roles.includes(ROLES.MODERATOR) ? '移除内容管理员' : '授予内容管理员'}
-              leadingIcon="shield-account"
-            />
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(null);
-                void handleUpdateRole(
-                  listedUser.id,
-                  ROLES.SUPER_ADMIN,
-                  listedUser.roles.includes(ROLES.SUPER_ADMIN) ? 'revoke' : 'grant',
-                );
-              }}
-              title={listedUser.roles.includes(ROLES.SUPER_ADMIN) ? '移除超级管理员' : '授予超级管理员'}
-              leadingIcon="shield-crown"
-            />
-            <Divider />
-          </>
-        )}
-        <Menu.Item
-          onPress={() => {
-            setMenuVisible(null);
-            if (isCurrentlyBanned) {
-              void handleUnbanUser(listedUser.id);
-            } else {
-              setBanTarget(listedUser);
-            }
-          }}
-          title={isCurrentlyBanned ? '解封用户' : '封禁用户'}
-          leadingIcon={isCurrentlyBanned ? 'account-check' : 'account-cancel'}
-          titleStyle={isCurrentlyBanned ? undefined : { color: pTheme.colors.error }}
-          disabled={statusUpdatingId === listedUser.id}
-        />
-      </Menu>
+      <IconButton
+        icon="dots-vertical"
+        size={18}
+        onPress={() => openActionSheet(listedUser)}
+        style={styles.moreBtn}
+        accessibilityLabel={`管理${displayName}`}
+      />
       </Pressable>
     );
   };
+
+  const actionTargetBanState = actionTarget ? getAdminUserBanState(actionTarget, now) : null;
+  const actionTargetIsBanned = actionTargetBanState !== null && actionTargetBanState.kind !== 'none';
+  const actionTargetBanStatusText = actionTargetBanState?.kind === 'permanent'
+    ? '永久封禁'
+    : actionTargetBanState?.kind === 'timed'
+      ? `限时封禁至 ${formatBanDateTime(actionTargetBanState.bannedUntil)}`
+      : actionTargetBanState?.kind === 'unknown'
+        ? '封禁中（期限未知）'
+        : '未封禁';
 
   if (isLoading) {
     return (
@@ -369,7 +389,7 @@ export default function AdminUsersScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: pTheme.colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }}>
         <Text style={{ color: pTheme.colors.onSurface, marginBottom: 8 }}>当前账号没有用户管理权限</Text>
-        <Text style={{ color: pTheme.colors.onSurfaceVariant, marginBottom: 12 }}>请返回管理中心或切换为管理员账号</Text>
+        <Text style={{ color: pTheme.colors.onSurfaceVariant, marginBottom: 12 }}>用户管理仅向超级管理员开放，请返回管理中心</Text>
         <Button mode="contained-tonal" onPress={handleBack} style={{ borderRadius: 10 }}>
           返回
         </Button>
@@ -394,7 +414,7 @@ export default function AdminUsersScreen() {
         data={users}
         keyExtractor={(listedUser) => String(listedUser.id)}
         renderItem={renderUser}
-        extraData={{ menuVisible, canManageRole, now, statusUpdatingId }}
+        extraData={{ now }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -450,6 +470,121 @@ export default function AdminUsersScreen() {
           )
         }
       />
+      <BottomSheet
+        visible={actionSheetVisible && actionTarget !== null}
+        onClose={() => setActionSheetVisible(false)}
+        height={Math.min(windowHeight * 0.86, 620)}
+      >
+        {actionTarget ? (
+          <View style={styles.actionSheet}>
+            <View style={styles.actionSheetHeader}>
+              <UserAvatar
+                userId={actionTarget.id}
+                name={actionTarget.name || UNSET_NICKNAME}
+                avatar_url={actionTarget.avatar_url}
+                size={48}
+              />
+              <View style={styles.actionSheetIdentity}>
+                <Text
+                  variant="titleMedium"
+                  style={{ color: pTheme.colors.onSurface, fontWeight: '700' }}
+                  numberOfLines={1}
+                >
+                  {actionTarget.name || UNSET_NICKNAME}
+                </Text>
+                <Text style={{ color: pTheme.colors.onSurfaceVariant }} numberOfLines={1}>
+                  {actionTarget.email || '未提供邮箱'}
+                </Text>
+              </View>
+              <IconButton
+                icon="close"
+                size={20}
+                onPress={() => setActionSheetVisible(false)}
+                accessibilityLabel="关闭用户操作"
+              />
+            </View>
+
+            <RoleBadges roles={actionTarget.roles} />
+            <View
+              style={[
+                styles.sheetBanStatus,
+                {
+                  backgroundColor: actionTargetIsBanned
+                    ? pTheme.colors.errorContainer
+                    : pTheme.colors.secondaryContainer,
+                },
+              ]}
+            >
+              <Ionicons
+                name={actionTargetIsBanned ? 'ban-outline' : 'checkmark-circle-outline'}
+                size={14}
+                color={actionTargetIsBanned ? pTheme.colors.error : pTheme.colors.onSecondaryContainer}
+              />
+              <Text
+                style={{
+                  color: actionTargetIsBanned ? pTheme.colors.error : pTheme.colors.onSecondaryContainer,
+                  fontWeight: '600',
+                }}
+              >
+                {actionTargetBanStatusText}
+              </Text>
+            </View>
+
+            <Divider style={styles.actionSheetDivider} />
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <List.Section>
+                <List.Subheader style={{ color: pTheme.colors.onSurfaceVariant }}>身份管理</List.Subheader>
+                {([
+                  { role: ROLES.DICT_REVIEWER, label: '词条管理员', icon: 'book-check' },
+                  { role: ROLES.MODERATOR, label: '审核管理员', icon: 'shield-account' },
+                  { role: ROLES.SUPER_ADMIN, label: '超级管理员', icon: 'shield-crown' },
+                ] as const).map(({ role, label, icon }) => {
+                  const isRemoving = actionTarget.roles.includes(role);
+                  return (
+                    <List.Item
+                      key={role}
+                      title={`${isRemoving ? '移除' : '授予'}${label}`}
+                      titleStyle={isRemoving ? { color: pTheme.colors.error } : undefined}
+                      left={(props) => (
+                        <List.Icon
+                          {...props}
+                          icon={icon}
+                          color={isRemoving ? pTheme.colors.error : pTheme.colors.onSurfaceVariant}
+                        />
+                      )}
+                      onPress={() => runRoleAction(actionTarget, role)}
+                    />
+                  );
+                })}
+              </List.Section>
+
+              <Divider />
+              <List.Section>
+                <List.Subheader style={{ color: pTheme.colors.onSurfaceVariant }}>账号状态</List.Subheader>
+                <List.Item
+                  title={actionTargetIsBanned ? '解封用户' : '封禁用户'}
+                  titleStyle={actionTargetIsBanned ? undefined : { color: pTheme.colors.error }}
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon={actionTargetIsBanned ? 'account-check' : 'account-cancel'}
+                      color={actionTargetIsBanned ? pTheme.colors.onSurfaceVariant : pTheme.colors.error}
+                    />
+                  )}
+                  onPress={() => {
+                    if (actionTargetIsBanned) {
+                      runUnbanAction(actionTarget);
+                    } else {
+                      void openBanSheet(actionTarget);
+                    }
+                  }}
+                  disabled={statusUpdatingId === actionTarget.id}
+                />
+              </List.Section>
+            </ScrollView>
+          </View>
+        ) : null}
+      </BottomSheet>
       <BanUserSheet
         visible={banTarget !== null}
         userName={banTarget?.name}
@@ -513,8 +648,14 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   roleBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
+  },
+  roleBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 5,
   },
 
   banStatus: {
@@ -539,5 +680,31 @@ const styles = StyleSheet.create({
   // 更多按钮
   moreBtn: {
     margin: 0,
+  },
+  actionSheet: {
+    flex: 1,
+    paddingHorizontal: 8,
+  },
+  actionSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  actionSheetIdentity: {
+    flex: 1,
+    gap: 2,
+  },
+  sheetBanStatus: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginTop: 8,
+  },
+  actionSheetDivider: {
+    marginTop: 12,
   },
 });
