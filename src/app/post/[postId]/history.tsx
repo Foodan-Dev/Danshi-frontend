@@ -20,10 +20,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   postsRepository,
-  type PostHistorySnapshot,
   type PostHistoryView,
 } from '@/src/repositories/posts_repository';
-import type { Post } from '@/src/models/Post';
 import { showAlert } from '@/src/utils/alert';
 import { usePostChanges } from '@/src/context/post_changes_context';
 
@@ -59,33 +57,11 @@ const formatHistoryTime = (value: string) => {
   });
 };
 
-// 帖子主表保存的是「当前版本」内容的完整副本，切指针不会追加新的历史记录，
-// 后端也没有在历史 / 详情接口里直接给出 current_revision 字段。
-// 因此这里用“快照内容是否与当前帖子完全一致”来反推哪一条历史是当前生效版本：
-// 只有唯一匹配时才认为可信，出现零个或多个匹配都视为无法判定，不做误导性展示。
-const sameStringList = (a?: string[], b?: string[]): boolean => {
-  const left = a ?? [];
-  const right = b ?? [];
-  if (left.length !== right.length) return false;
-  return left.every((value, index) => value === right[index]);
-};
-
-const snapshotMatchesPost = (snapshot: PostHistorySnapshot, post: Post): boolean => {
-  if (snapshot.title !== post.title) return false;
-  if (snapshot.content !== post.content) return false;
-  if (snapshot.category !== post.category) return false;
-  if (!sameStringList(snapshot.tags, post.tags)) return false;
-  if (!sameStringList(snapshot.images, post.images)) return false;
-  const postFlavors = post.post_type === 'share' ? post.flavors : undefined;
-  if (!sameStringList(snapshot.flavors, postFlavors)) return false;
-  return true;
-};
-
-const findCurrentRevision = (post: Post | null, histories: PostHistoryView[]): number | null => {
-  if (!post) return null;
-  const matches = histories.filter((item) => snapshotMatchesPost(item.snapshot, post));
-  return matches.length === 1 ? matches[0].revision : null;
-};
+// 后端在历史列表里直接给出 is_current，标明指针当前指向哪一版。
+// 不要靠比对快照内容来反推：同一份内容可能存在于多个 revision
+// （旧模型遗留的回退会产生重复），比对会命中多条而无法判定。
+const findCurrentRevision = (histories: PostHistoryView[]): number | null =>
+  histories.find((item) => item.is_current)?.revision ?? null;
 
 export default function PostHistoryRoute() {
   const router = useRouter();
@@ -99,7 +75,6 @@ export default function PostHistoryRoute() {
   const validPostId = Number.isSafeInteger(postId) && postId > 0;
 
   const [histories, setHistories] = useState<PostHistoryView[]>([]);
-  const [currentPost, setCurrentPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -128,16 +103,8 @@ export default function PostHistoryRoute() {
     else setLoading(true);
     setError('');
     try {
-      const [historiesResult, postResult] = await Promise.allSettled([
-        postsRepository.history(postId),
-        postsRepository.get(postId),
-      ]);
-      if (historiesResult.status === 'rejected') {
-        throw historiesResult.reason;
-      }
-      setHistories(historiesResult.value);
-      // 帖子详情只是用来推断“当前是哪一版”，拿不到也不影响历史列表本身的展示。
-      setCurrentPost(postResult.status === 'fulfilled' ? postResult.value : null);
+      // is_current 由历史接口直接给出，不需要再拉一次帖子详情来推断。
+      setHistories(await postsRepository.history(postId));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '读取历史版本失败，请稍后重试');
     } finally {
@@ -151,8 +118,8 @@ export default function PostHistoryRoute() {
   }, [loadHistories]);
 
   const currentRevision = useMemo(
-    () => findCurrentRevision(currentPost, histories),
-    [currentPost, histories],
+    () => findCurrentRevision(histories),
+    [histories],
   );
 
   const currentHistory = useMemo(
