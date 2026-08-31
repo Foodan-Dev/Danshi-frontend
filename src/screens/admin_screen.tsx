@@ -127,9 +127,9 @@ export default function AdminScreen() {
     );
   }
 
-  const userIsSuperAdmin = isSuperAdmin(user.roles);
-  const roleText = userIsSuperAdmin ? '超级管理员' : '管理员';
-  const roleTextEn = userIsSuperAdmin ? 'Super Admin' : 'Admin';
+  const showUserManagement = isSuperAdmin(user.roles);
+  const roleText = showUserManagement ? '超级管理员' : '管理员';
+  const roleTextEn = showUserManagement ? 'Super Admin' : 'Admin';
 
   // 背景渐变色
   const gradientColors = [
@@ -201,8 +201,8 @@ export default function AdminScreen() {
           </LinearGradient>
 
           {/* 组件 B: 功能入口区 */}
-          {isThreeCol && userIsSuperAdmin ? (
-            // 三列布局（md 及以上 + 超级管理员）
+          {isThreeCol ? (
+            // 宽屏布局：隐藏用户管理后，其余两张卡片自动平分整行
             <View style={styles.gridRowThree}>
               {/* 帖子管理 */}
               <Pressable
@@ -244,28 +244,30 @@ export default function AdminScreen() {
                 </LinearGradient>
               </Pressable>
 
-              {/* 用户管理（三列时提上来） */}
-              <Pressable
-                style={styles.gridCardWrapperThree}
-                onPress={() => router.push('/myself/admin/users' as Href)}
-              >
-                <LinearGradient
-                  colors={cardGradientColors.users}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.gridCard, { height: gridCardHeight, aspectRatio: undefined }]}
+              {/* 用户管理（三列时提上来，仅超级管理员可见） */}
+              {showUserManagement && (
+                <Pressable
+                  style={styles.gridCardWrapperThree}
+                  onPress={() => router.push('/myself/admin/users' as Href)}
                 >
-                  <View style={[styles.gridCardIconBg, { backgroundColor: `${pTheme.colors.secondary}1A` }]}>
-                    <Ionicons name="people" size={32} color={pTheme.colors.secondary} style={{ opacity: 0.9 }} />
-                  </View>
-                  <View style={styles.gridCardBottom}>
-                    <Text style={[styles.gridCardTitle, { color: pTheme.colors.onSecondaryContainer }]}>用户管理</Text>
-                  </View>
-                </LinearGradient>
-              </Pressable>
+                  <LinearGradient
+                    colors={cardGradientColors.users}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[styles.gridCard, { height: gridCardHeight, aspectRatio: undefined }]}
+                  >
+                    <View style={[styles.gridCardIconBg, { backgroundColor: `${pTheme.colors.secondary}1A` }]}>
+                      <Ionicons name="people" size={32} color={pTheme.colors.secondary} style={{ opacity: 0.9 }} />
+                    </View>
+                    <View style={styles.gridCardBottom}>
+                      <Text style={[styles.gridCardTitle, { color: pTheme.colors.onSecondaryContainer }]}>用户管理</Text>
+                    </View>
+                  </LinearGradient>
+                </Pressable>
+              )}
             </View>
           ) : (
-            // 两列布局（窄屏 或 非超级管理员）
+            // 窄屏两列布局
             <>
               <View style={styles.gridRow}>
                 {/* 帖子管理 */}
@@ -310,7 +312,7 @@ export default function AdminScreen() {
               </View>
 
               {/* 用户管理通栏（仅超级管理员 + 窄屏） */}
-              {userIsSuperAdmin && (
+              {showUserManagement && (
                 <Pressable
                   onPress={() => router.push('/myself/admin/users' as Href)}
                 >
