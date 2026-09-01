@@ -15,14 +15,16 @@ import { useTheme as usePaperTheme } from 'react-native-paper';
 export type BottomSheetProps = {
   visible: boolean;
   onClose: () => void;
+  onClosed?: () => void;
   children: React.ReactNode;
   height?: number; // default auto, otherwise fixed height
 };
 
-export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, children, height }) => {
+export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, onClosed, children, height }) => {
   const paperTheme = usePaperTheme();
   const translateY = useRef(new Animated.Value(1)).current; // 1 -> hidden, 0 -> shown
   const dragY = useRef(new Animated.Value(0)).current;
+  const wasVisibleRef = useRef(visible);
   const [mounted, setMounted] = useState(visible);
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
   const resolvedHeight = useMemo(
@@ -31,6 +33,9 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, chil
   );
 
   useEffect(() => {
+    const wasVisible = wasVisibleRef.current;
+    wasVisibleRef.current = visible;
+
     if (visible) {
       setMounted(true);
       dragY.setValue(0);
@@ -46,13 +51,14 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, chil
     animationRef.current.start(({ finished }) => {
       if (finished && !visible) {
         setMounted(false);
+        if (wasVisible) onClosed?.();
       }
     });
 
     return () => {
       animationRef.current?.stop();
     };
-  }, [dragY, translateY, visible]);
+  }, [dragY, onClosed, translateY, visible]);
 
   const resetDrag = useCallback(() => {
     Animated.spring(dragY, {
@@ -65,13 +71,23 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, chil
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => visible,
-    onMoveShouldSetPanResponder: (_, gestureState) => visible && gestureState.dy > 2,
+    // 同时要求纵向位移大于横向，避免抢走 sheet 内部的横向手势
+    onMoveShouldSetPanResponder: (_, gestureState) => (
+      visible && gestureState.dy > 2 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx)
+    ),
     onPanResponderMove: (_, gestureState) => {
       dragY.setValue(Math.max(0, gestureState.dy));
     },
     onPanResponderRelease: (_, gestureState) => {
+      // 阈值随 sheet 高度自适应：矮 sheet 用固定值会过于敏感
       const closeThreshold = resolvedHeight ? Math.min(96, resolvedHeight * 0.2) : 72;
       if (gestureState.dy > closeThreshold || gestureState.vy > 0.8) {
+        Animated.timing(dragY, {
+          toValue: Math.max(80, gestureState.dy),
+          duration: 110,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }).start(() => dragY.setValue(0));
         onClose();
         return;
       }
@@ -110,7 +126,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, chil
             resolvedHeight ? { height: resolvedHeight } : undefined,
           ]}
         >
-          <View style={styles.handleArea} {...panResponder.panHandlers}>
+          <View style={styles.dragHandle} {...panResponder.panHandlers}>
             <View style={[styles.handle, { backgroundColor: paperTheme.colors.outlineVariant }]} />
           </View>
           {children}
@@ -139,15 +155,16 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: -2 },
   },
+  dragHandle: {
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
   handle: {
+    alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: 2,
-  },
-  handleArea: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 24,
   },
 });
 

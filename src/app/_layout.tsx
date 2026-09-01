@@ -8,6 +8,7 @@ import { AuthProvider } from '@/src/context/auth_context';
 import { WaterfallSettingsProvider } from '@/src/context/waterfall_context';
 import { NotificationsProvider } from '@/src/context/notifications_context';
 import { PostChangesProvider } from '@/src/context/post_changes_context';
+import { PostCardActionsProvider } from '@/src/context/post_card_actions_context';
 import { PaperProvider } from 'react-native-paper';
 import { getMD3Theme } from '@/src/constants/md3_theme';
 
@@ -20,7 +21,9 @@ export default function RootLayout() {
             <PostChangesProvider>
               <NotificationsProvider>
                 <WaterfallSettingsProvider>
-                  <RootStack />
+                  <PostCardActionsProvider>
+                    <RootStack />
+                  </PostCardActionsProvider>
                 </WaterfallSettingsProvider>
               </NotificationsProvider>
             </PostChangesProvider>

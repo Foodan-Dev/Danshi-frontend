@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, Image, RefreshControl, Pressable, Alert } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { ActivityIndicator, Appbar, Card, Text, useTheme as usePaperTheme, Button, Menu } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Card, Text, useTheme as usePaperTheme, Button } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use_responsive';
@@ -15,6 +15,7 @@ import { formatDate } from '@/src/utils/time_format';
 import { getSafeRemoteUrl } from '@/src/lib/security/url';
 import { usePostChanges } from '@/src/context/post_changes_context';
 import { UNSET_NICKNAME } from '@/src/constants/user';
+import { ActionSheet, type ActionSheetItem } from '@/src/components/overlays/action_sheet';
 
 export default function AdminPostsScreen() {
   const pTheme = usePaperTheme();
@@ -28,7 +29,7 @@ export default function AdminPostsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
-  const [menuVisible, setMenuVisible] = useState<number | null>(null);
+  const [selectedPost, setSelectedPost] = useState<AdminPendingPostSummary | null>(null);
   const requestSeqRef = useRef(0);
 
   const contentHorizontalPadding = pickByBreakpoint(current, { base: 12, sm: 16, md: 20, lg: 24, xl: 24 });
@@ -205,7 +206,6 @@ export default function AdminPostsScreen() {
       .find((item): item is string => !!item);
     const hasImage = !!safePreviewImage;
     const statusDotColor = getStatusDotColor(post.status);
-    const isPending = post.status === 'pending';
 
     return (
       <Pressable
@@ -217,60 +217,16 @@ export default function AdminPostsScreen() {
           <Text style={dynamicStyles.titleText} numberOfLines={1}>
             {post.title}
           </Text>
-          <Menu
-            visible={menuVisible === post.id}
-            onDismiss={() => setMenuVisible(null)}
-            anchor={
-              <Pressable
-                style={styles.moreBtn}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  setMenuVisible(post.id);
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="ellipsis-vertical" size={18} color={pTheme.colors.onSurfaceVariant} />
-              </Pressable>
-            }
+          <Pressable
+            style={styles.moreBtn}
+            onPress={(event) => {
+              event.stopPropagation();
+              setSelectedPost(post);
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            {isPending && (
-              <>
-                <Menu.Item
-                  onPress={() => {
-                    setMenuVisible(null);
-                    confirmReview(post.id, 'approve', post.title);
-                  }}
-                  title="通过"
-                  leadingIcon="check-circle"
-                />
-                <Menu.Item
-                  onPress={() => {
-                    setMenuVisible(null);
-                    confirmReview(post.id, 'reject', post.title);
-                  }}
-                  title="拒绝"
-                  leadingIcon="close-circle"
-                />
-              </>
-            )}
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(null);
-                router.push(`/post/${post.id}`);
-              }}
-              title="查看详情"
-              leadingIcon="eye"
-            />
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(null);
-                confirmDelete(post.id, post.title);
-              }}
-              title="删除"
-              leadingIcon="delete"
-              titleStyle={{ color: pTheme.colors.error }}
-            />
-          </Menu>
+            <Ionicons name="ellipsis-vertical" size={18} color={pTheme.colors.onSurfaceVariant} />
+          </Pressable>
         </View>
 
         <View style={styles.contentRow}>
@@ -351,6 +307,37 @@ export default function AdminPostsScreen() {
     );
   }
 
+  const selectedPostActions: ActionSheetItem[] = selectedPost ? [
+    ...(selectedPost.status === 'pending' ? [
+      {
+        key: 'approve',
+        title: '通过',
+        icon: 'check-circle',
+        onPress: () => confirmReview(selectedPost.id, 'approve', selectedPost.title),
+      },
+      {
+        key: 'reject',
+        title: '拒绝',
+        icon: 'close-circle',
+        destructive: true,
+        onPress: () => confirmReview(selectedPost.id, 'reject', selectedPost.title),
+      },
+    ] satisfies ActionSheetItem[] : []),
+    {
+      key: 'view',
+      title: '查看详情',
+      icon: 'eye',
+      onPress: () => router.push(`/post/${selectedPost.id}`),
+    },
+    {
+      key: 'delete',
+      title: '删除',
+      icon: 'delete',
+      destructive: true,
+      onPress: () => confirmDelete(selectedPost.id, selectedPost.title),
+    },
+  ] : [];
+
   return (
     <View style={{ flex: 1, backgroundColor: pTheme.colors.background }}>
       <Appbar.Header mode="center-aligned" statusBarHeight={insets.top}>
@@ -368,7 +355,6 @@ export default function AdminPostsScreen() {
         data={posts}
         keyExtractor={(post) => String(post.id)}
         renderItem={renderPost}
-        extraData={menuVisible}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -423,6 +409,12 @@ export default function AdminPostsScreen() {
             </Card>
           )
         }
+      />
+      <ActionSheet
+        visible={selectedPost !== null}
+        title="帖子操作"
+        items={selectedPostActions}
+        onClose={() => setSelectedPost(null)}
       />
     </View>
   );

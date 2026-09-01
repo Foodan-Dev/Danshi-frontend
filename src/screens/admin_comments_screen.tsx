@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, StyleSheet, RefreshControl, Alert, Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { ActivityIndicator, Appbar, Text, useTheme as usePaperTheme, Button, Card, Menu } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Text, useTheme as usePaperTheme, Button, Card } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '@/src/hooks/use_responsive';
@@ -13,6 +13,7 @@ import type { AdminCommentSummary } from '@/src/repositories/admin_repository';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { CachedAvatar } from '@/src/components/cached_avatar';
 import { UNSET_NICKNAME } from '@/src/constants/user';
+import { ActionSheet, type ActionSheetItem } from '@/src/components/overlays/action_sheet';
 
 // 格式化时间：显示为 MM-DD HH:mm
 const formatTime = (dateStr: string) => {
@@ -35,7 +36,7 @@ export default function AdminCommentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
-  const [menuVisible, setMenuVisible] = useState<number | null>(null);
+  const [selectedComment, setSelectedComment] = useState<AdminCommentSummary | null>(null);
   const requestSeqRef = useRef(0);
 
   const contentHorizontalPadding = pickByBreakpoint(current, { base: 12, sm: 16, md: 20, lg: 24, xl: 24 });
@@ -183,37 +184,13 @@ export default function AdminCommentsScreen() {
 
         <View style={styles.headerRight}>
           <Text style={dynamicStyles.timeText}>{formatTime(comment.created_at)}</Text>
-          <Menu
-            visible={menuVisible === comment.id}
-            onDismiss={() => setMenuVisible(null)}
-            anchor={
-              <Pressable
-                style={styles.menuBtn}
-                onPress={() => setMenuVisible(comment.id)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="ellipsis-vertical" size={16} color={pTheme.colors.onSurfaceVariant} />
-              </Pressable>
-            }
+          <Pressable
+            style={styles.menuBtn}
+            onPress={() => setSelectedComment(comment)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(null);
-                router.push(`/post/${comment.post_id}`);
-              }}
-              title="查看帖子"
-              leadingIcon="eye"
-            />
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(null);
-                confirmDelete(comment.id);
-              }}
-              title="删除"
-              leadingIcon="delete"
-              titleStyle={{ color: pTheme.colors.error }}
-            />
-          </Menu>
+            <Ionicons name="ellipsis-vertical" size={16} color={pTheme.colors.onSurfaceVariant} />
+          </Pressable>
         </View>
       </View>
 
@@ -275,6 +252,22 @@ export default function AdminCommentsScreen() {
     );
   }
 
+  const selectedCommentActions: ActionSheetItem[] = selectedComment ? [
+    {
+      key: 'view-post',
+      title: '查看帖子',
+      icon: 'eye',
+      onPress: () => router.push(`/post/${selectedComment.post_id}`),
+    },
+    {
+      key: 'delete',
+      title: '删除',
+      icon: 'delete',
+      destructive: true,
+      onPress: () => confirmDelete(selectedComment.id),
+    },
+  ] : [];
+
   return (
     <View style={{ flex: 1, backgroundColor: pTheme.colors.background }}>
       <Appbar.Header mode="center-aligned" statusBarHeight={insets.top}>
@@ -292,7 +285,6 @@ export default function AdminCommentsScreen() {
         data={comments}
         keyExtractor={(comment) => String(comment.id)}
         renderItem={renderComment}
-        extraData={menuVisible}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -347,6 +339,12 @@ export default function AdminCommentsScreen() {
             </Card>
           )
         }
+      />
+      <ActionSheet
+        visible={selectedComment !== null}
+        title="评论操作"
+        items={selectedCommentActions}
+        onClose={() => setSelectedComment(null)}
       />
     </View>
   );
