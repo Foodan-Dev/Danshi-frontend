@@ -58,12 +58,15 @@ jobs:
         id: params
         run: |
           PLATFORM="${{ github.event.inputs.platform || 'all' }}"
-          PROFILE="${{ github.event.inputs.profile || 'preview' }}"
           VERSION=$(jq -r '.expo.version' app.json)
 
           if [ "${{ github.ref_type }}" = "tag" ]; then
+            # 打 tag 即正式发版，默认出 testflight 包并自动提交；
+            # 手动触发时才默认 preview，用于不进 TestFlight 的内测分发。
+            PROFILE="${{ github.event.inputs.profile || 'testflight' }}"
             TAG="${{ github.ref_name }}"
           else
+            PROFILE="${{ github.event.inputs.profile || 'preview' }}"
             TAG="v${VERSION}-${PROFILE}.${{ github.run_number }}"
           fi
 
@@ -78,6 +81,28 @@ jobs:
             --platform ${{ steps.params.outputs.platform }} \
             --profile ${{ steps.params.outputs.profile }} \
             --non-interactive --wait
+
+      # 只有 iOS 的 testflight / production 构建才提交 App Store Connect。
+      # preview 是内测分发包，提交 TestFlight 没有意义。
+      - name: Submit to TestFlight
+        if: |
+          (steps.params.outputs.platform == 'ios' || steps.params.outputs.platform == 'all') &&
+          (steps.params.outputs.profile == 'testflight' || steps.params.outputs.profile == 'production')
+        run: |
+          set -euo pipefail
+          # 用具体 build id 而不是 --latest：--latest 在并发构建时可能指向别人的构建。
+          BUILD_ID=$(eas build:list --platform ios \
+            --profile "${{ steps.params.outputs.profile }}" \
+            --status finished --limit 1 --json --non-interactive \
+            | jq -r '.[0].id // empty')
+          if [ -z "$BUILD_ID" ]; then
+            echo "找不到已完成的 iOS 构建，无法提交" >&2
+            exit 1
+          fi
+          echo "提交 build $BUILD_ID 到 App Store Connect"
+          # 提交失败必须让 workflow 失败：此前发生过 Apple 协议过期导致提交被拒，
+          # 静默跳过会让人以为已经发出去了。
+          eas submit --platform ios --id "$BUILD_ID" --non-interactive
 
       - name: Download artifacts
         run: |

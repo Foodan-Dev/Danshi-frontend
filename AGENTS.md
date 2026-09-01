@@ -53,6 +53,22 @@ eas fingerprint:compare --update-id <旧更新ID> --update-id <新更新ID>
 改动如果碰了 `package.json`、`app.json`、`eas.json`、依赖或原生目录，
 在推 OTA 之前先确认指纹没变；变了就要重出原生包，光推 OTA 是无效的。
 
+## 发版流程
+
+发版走 CI，不要手工 `eas build`：
+
+1. 改 `app.json` 的 `expo.version`，合入 `main`
+2. 打并推送 `vX.Y.Z` tag
+
+`.github/workflows/eas-build.yml` 会接手：校验生成的 API 契约（`npm run api:check`）、
+用 **testflight** profile 构建、提交 App Store Connect、建 GitHub Release。
+Apple 处理完发邮件后，在 TestFlight 后台推给内测同学。
+
+手动触发（`workflow_dispatch`）默认用 **preview** profile，产内测分发包，
+不会提交 TestFlight；需要时可在触发界面显式选 profile。
+
+手工跑 `eas build` 会绕过契约校验和 Release 记录，只在 CI 不可用时才这么做。
+
 ## 版本号
 
 App 展示的版本取自 `app.json` 的 `expo.version`；`package.json` 的 `version`
