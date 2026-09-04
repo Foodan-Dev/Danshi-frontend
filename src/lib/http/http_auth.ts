@@ -8,7 +8,12 @@ import type { components } from '@/src/generated/openapi';
 const baseHttpAuth = createHttpClient({ getAuthToken: AuthStorage.getToken });
 const httpForRefresh = createHttpClient();
 
-let refreshPromise: Promise<boolean> | null = null;
+type RefreshOutcome =
+  | { outcome: 'refreshed' }
+  | { outcome: 'rejected'; error?: unknown }
+  | { outcome: 'unavailable'; error: unknown };
+
+let refreshPromise: Promise<RefreshOutcome> | null = null;
 
 const clearStoredCredentials = async () => {
   await Promise.all([
@@ -27,40 +32,49 @@ const isRevokedSession = (error: unknown): boolean => {
   return appError.status === 401 && appError.errorCode === 'session_revoked';
 };
 
-async function refreshAccessToken(): Promise<boolean> {
+async function refreshAccessToken(): Promise<RefreshOutcome> {
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
     try {
       const refreshToken = await AuthStorage.getRefreshToken();
-      if (!refreshToken) return false;
+      if (!refreshToken) return { outcome: 'rejected' };
 
       const res = await httpForRefresh.post<ApiResponse<components['schemas']['TokenResult']>>(
         API_ENDPOINTS.AUTH.REFRESH,
         { refresh_token: refreshToken } satisfies components['schemas']['refreshRequest'],
       );
       const payload = unwrapApiResponse(res);
-      if (!payload.token) return false;
+      if (!payload.token) {
+        throw new AppError('刷新登录状态的响应缺少访问令牌');
+      }
 
       await AuthStorage.setToken(payload.token);
       if (payload.refresh_token) await AuthStorage.setRefreshToken(payload.refresh_token);
-      return true;
+      return { outcome: 'refreshed' };
     } catch (error) {
+      const appError = AppError.from(error);
       if (__DEV__) {
         console.warn(
           '[httpAuth] Refresh failed:',
-          error instanceof Error ? error.message : error,
+          appError.message,
         );
       }
-      return false;
+      if (
+        appError.status === 401
+        && (appError.errorCode === 'unauthorized' || appError.errorCode === 'session_revoked')
+      ) {
+        return { outcome: 'rejected', error };
+      }
+      return { outcome: 'unavailable', error };
     } finally {
       refreshPromise = null;
     }
   })();
 
-  const refreshed = await refreshPromise;
-  if (!refreshed) await clearStoredCredentials();
-  return refreshed;
+  const result = await refreshPromise;
+  if (result.outcome === 'rejected') await clearStoredCredentials();
+  return result;
 }
 
 function createAuthHttpClient(): HttpClient {
@@ -85,14 +99,23 @@ function createAuthHttpClient(): HttpClient {
       }
 
       if (isRefreshableUnauthorized(error) && !isRetry) {
-        const refreshed = await refreshAccessToken();
-        if (refreshed) return makeRequest<T>(method, path, body, init, true);
+        const refreshResult = await refreshAccessToken();
+        if (refreshResult.outcome === 'refreshed') {
+          return makeRequest<T>(method, path, body, init, true);
+        }
+        if (refreshResult.outcome === 'unavailable') {
+          throw refreshResult.error;
+        }
+
+        const rejection = refreshResult.error
+          ? AppError.from(refreshResult.error)
+          : undefined;
 
         throw new AppError('登录已失效，请重新登录', {
           clientCode: 'AUTH_EXPIRED',
-          errorCode: 'unauthorized',
+          errorCode: rejection?.errorCode ?? 'unauthorized',
           status: 401,
-          cause: error,
+          cause: refreshResult.error ?? error,
         });
       }
 
