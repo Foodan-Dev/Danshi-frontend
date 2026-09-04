@@ -453,7 +453,14 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
 
   // ==================== 数据派生 ====================
   const hasImages = safePostImages.length > 0;
-  const tags = post?.tags ?? [];
+  const validTags = useMemo(
+    () => (post?.tags ?? [])
+      .filter((tag): tag is string => typeof tag === 'string')
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+    [post?.tags],
+  );
+  const postContent = (post?.content ?? '').trimEnd();
   const sharePostData = post?.post_type === 'share' ? (post as SharePost) : null;
   const seekingPostData = post?.post_type === 'seeking' ? (post as SeekingPost) : null;
   const likeCount = post?.stats?.like_count ?? 0;
@@ -805,8 +812,15 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
         </Text>
       ) : null}
 
-      {/* 正文 */}
-      <Text style={styles.contentText}>{post?.content}</Text>
+      {/* 正文与话题标签 */}
+      <Text style={styles.contentText}>
+        {postContent}
+        {validTags.map((tag, index) => (
+          <Text key={`${tag}-${index}`} style={[styles.topicTag, { color: theme.colors.primary }]}>
+            {postContent || index > 0 ? ' ' : ''}#{tag}
+          </Text>
+        ))}
+      </Text>
 
       {/* 结构化信息卡片 */}
       {sharePostData && (sharePostData.cuisine || sharePostData.price || (sharePostData.flavors && sharePostData.flavors.length > 0)) ? (
@@ -921,12 +935,6 @@ const PostDetailScreen: React.FC<Props> = ({ postId }) => {
             </Text>
           </View>
         )}
-        {/* 话题标签 */}
-        {tags.filter(tag => tag && tag.trim()).map((tag, index) => (
-          <Text key={index} style={[styles.topicTag, { color: theme.colors.primary }]}>
-            #{tag}
-          </Text>
-        ))}
       </View>
 
       {/* 浏览量和时间 */}
@@ -1546,7 +1554,7 @@ const styles = StyleSheet.create({
   },
   contentText: {
     fontSize: 15,
-    lineHeight: 26,
+    lineHeight: 24,
   },
 
   // ==================== Info Card ====================
@@ -1616,7 +1624,7 @@ const styles = StyleSheet.create({
   },
   // 类型徽章颜色已改为动态使用主题语义颜色 (recommend/warning/seeking)
   topicTag: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '500',
   },
 
