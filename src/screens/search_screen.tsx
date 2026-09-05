@@ -76,10 +76,9 @@ export default function SearchScreen() {
   // 判断是否宽屏
   const isWideScreen = windowWidth >= WIDE_BREAKPOINT;
 
-  const horizontalPadding = pickByBreakpoint(bp, { base: 16, sm: 18, md: 20, lg: 24, xl: 24 });
-  const spacing = pickByBreakpoint(bp, { base: 14, sm: 16, md: 18, lg: 20, xl: 24 });
-  const gridGap = pickByBreakpoint(bp, { base: 6, sm: 8, md: 10, lg: 14, xl: 18 });
-  const gridVerticalGap = gridGap + 8;
+  const horizontalPadding = pickByBreakpoint(bp, { base: 4, sm: 6, md: 12, lg: 16, xl: 20 });
+  const gridGap = pickByBreakpoint(bp, { base: 2.5, sm: 6, md: 10, lg: 14, xl: 16 });
+  const gridVerticalGap = pickByBreakpoint(bp, { base: 4, sm: 6, md: 10, lg: 14, xl: 16 });
   const numColumns = pickByBreakpoint(bp, { base: 2, md: 2, lg: 3, xl: 4 });
 
   const { user: currentUser } = useAuth();
@@ -247,17 +246,16 @@ export default function SearchScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* 宽屏时使用居中容器 */}
+      {/* 搜索内容容器 */}
       <View style={[
         styles.contentWrapper,
-        isWideScreen && styles.wideContentWrapper,
       ]}>
         {/* ==================== 顶部导航栏 ==================== */}
         <View
           style={[
             styles.topBar,
             {
-              paddingTop: isWideScreen ? 24 : insets.top,
+              paddingTop: insets.top + 8,
               backgroundColor: theme.colors.background,
             },
           ]}
@@ -402,9 +400,9 @@ export default function SearchScreen() {
             style={styles.resultsList}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
-              paddingHorizontal: isWideScreen ? 0 : horizontalPadding,
-              paddingBottom: insets.bottom + spacing * 2,
-              paddingTop: spacing,
+              paddingHorizontal: horizontalPadding,
+              paddingBottom: insets.bottom + 24,
+              paddingTop: 4,
             }}
             data={posts}
             masonry
@@ -418,9 +416,9 @@ export default function SearchScreen() {
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
-              paddingHorizontal: isWideScreen ? 0 : horizontalPadding,
-              paddingBottom: insets.bottom + spacing * 2,
-              paddingTop: spacing,
+              paddingHorizontal: horizontalPadding,
+              paddingBottom: insets.bottom + 24,
+              paddingTop: 4,
             }}
           >
           {/* 错误提示 */}
@@ -568,13 +566,6 @@ const styles = StyleSheet.create({
   resultsList: {
     flex: 1,
   },
-  wideContentWrapper: {
-    maxWidth: 680,
-    width: '100%',
-    alignSelf: 'center',
-    paddingHorizontal: 24,
-  },
-
   // ==================== 顶部导航栏 ====================
   topBar: {
     borderBottomWidth: 0,
@@ -582,14 +573,14 @@ const styles = StyleSheet.create({
   topBarContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 10,
   },
   wideTopBarContent: {
-    paddingHorizontal: 0,
-    paddingVertical: 16,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
   },
   backBtn: {
     padding: 4,
@@ -603,8 +594,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   wideSearchInputWrapper: {
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
   searchInput: {
     flex: 1,
@@ -643,7 +634,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   wideTabItem: {
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 32,
   },
   tabText: {
