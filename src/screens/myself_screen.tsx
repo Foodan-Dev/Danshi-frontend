@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
+import { LucideStar } from '@/src/components/lucide_star';
 import { router, type Href } from 'expo-router';
 import { ActivityIndicator, Button, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -521,10 +521,9 @@ export default function MyselfScreen() {
               style={[styles.tabItem, activeTab === 'favorites' && [styles.tabItemActive, { borderBottomColor: theme.colors.primary }]]}
               onPress={() => setActiveTab('favorites')}
             >
-              <FontAwesome5
-                name="star"
-                solid={activeTab === 'favorites'}
-                size={20}
+              <LucideStar
+                filled={activeTab === 'favorites'}
+                size={23}
                 color={activeTab === 'favorites' ? theme.colors.primary : theme.colors.onSurfaceVariant}
               />
               <Text style={[styles.tabText, { color: activeTab === 'favorites' ? theme.colors.primary : theme.colors.onSurfaceVariant }]}>
@@ -575,7 +574,7 @@ export default function MyselfScreen() {
               {activeTab === 'posts' ? (
                 <Ionicons name="document-text-outline" size={48} color={theme.colors.outlineVariant} />
               ) : (
-                <FontAwesome5 name="star" size={48} color={theme.colors.outlineVariant} />
+                <LucideStar size={48} color={theme.colors.outlineVariant} />
               )}
               <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
                 {activeTab === 'posts' ? '还没有发布帖子' : '还没有收藏内容'}
