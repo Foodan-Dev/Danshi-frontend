@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View, ScrollView, Pressable, TextInput as RNTextInput, TextStyle, type StyleProp, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, View, ScrollView, Pressable, TextInput as RNTextInput, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { Image } from 'expo-image';
 import {
   ActivityIndicator,
   Text,
@@ -20,7 +19,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WEB_NO_OUTLINE } from '@/src/utils';
 import { CachedAvatar } from '@/src/components/cached_avatar';
-import { getSafeRemoteUrl } from '@/src/lib/security/url';
+import { PostCard } from '@/src/components/post_card';
 import { usePostChangeSync } from '@/src/hooks/use_post_change_sync';
 import type { Post } from '@/src/models/Post';
 import { UNSET_NICKNAME } from '@/src/constants/user';
@@ -50,76 +49,22 @@ const mapChangedSearchPost = (post: Post, existing: SearchPost | undefined): Sea
   created_at: post.created_at ?? existing?.created_at ?? new Date().toISOString(),
 });
 
+// 搜索接口返回的是精简帖子模型，补齐 PostCard 需要的默认类型字段。
+const toPostCardModel = (post: SearchPost): Post => ({
+  id: post.id,
+  post_type: 'share',
+  share_type: 'recommend',
+  title: post.title,
+  content: post.content,
+  category: post.category,
+  images: post.images,
+  image_thumbs: post.image_thumbs,
+  author: post.author,
+  stats: post.stats,
+  created_at: post.created_at,
+});
+
 type TabValue = 'posts' | 'users';
-
-// ==================== 高亮文本组件（仅加粗，不变色）====================
-const HIGHLIGHT_OPEN = '<em>';
-const HIGHLIGHT_CLOSE = '</em>';
-
-type HighlightedTextProps = {
-  value: string;
-  style?: StyleProp<TextStyle>;
-  numberOfLines?: number;
-};
-
-const HighlightedText: React.FC<HighlightedTextProps> = ({ value, style, numberOfLines = 2 }) => {
-  const segments = useMemo(() => {
-    const rawParts = value.split(/(<em>|<\/em>)/i);
-    const nodes: { text: string; bold: boolean }[] = [];
-    let active = false;
-    for (const part of rawParts) {
-      if (!part) continue;
-      if (part.toLowerCase() === HIGHLIGHT_OPEN) {
-        active = true;
-        continue;
-      }
-      if (part.toLowerCase() === HIGHLIGHT_CLOSE) {
-        active = false;
-        continue;
-      }
-      nodes.push({ text: part, bold: active });
-    }
-    return nodes;
-  }, [value]);
-
-  return (
-    <Text style={style} numberOfLines={numberOfLines} ellipsizeMode="tail">
-      {segments.map((segment, index) => (
-        <Text key={`seg-${index}`} style={segment.bold ? { fontWeight: '700' } : undefined}>
-          {segment.text}
-        </Text>
-      ))}
-    </Text>
-  );
-};
-
-// ==================== 智能摘要：截取包含关键词的片段 ====================
-function extractMatchSnippet(highlightedContent: string | undefined, maxLength: number = 80): string | null {
-  if (!highlightedContent) return null;
-  
-  // 查找 <em> 标签的位置
-  const emStart = highlightedContent.toLowerCase().indexOf('<em>');
-  if (emStart === -1) return null;
-  
-  // 计算截取的起始位置（关键词前后各留一些上下文）
-  const contextBefore = 20;
-  const start = Math.max(0, emStart - contextBefore);
-  
-  // 截取片段
-  let snippet = highlightedContent.slice(start, start + maxLength);
-  
-  // 如果不是从开头截取，添加省略号
-  if (start > 0) {
-    snippet = '...' + snippet;
-  }
-  
-  // 如果不是到结尾，添加省略号
-  if (start + maxLength < highlightedContent.length) {
-    snippet = snippet + '...';
-  }
-  
-  return snippet;
-}
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
@@ -131,10 +76,9 @@ export default function SearchScreen() {
   // 判断是否宽屏
   const isWideScreen = windowWidth >= WIDE_BREAKPOINT;
 
-  const horizontalPadding = pickByBreakpoint(bp, { base: 16, sm: 18, md: 20, lg: 24, xl: 24 });
-  const spacing = pickByBreakpoint(bp, { base: 14, sm: 16, md: 18, lg: 20, xl: 24 });
-  const gridGap = pickByBreakpoint(bp, { base: 6, sm: 8, md: 10, lg: 14, xl: 18 });
-  const gridVerticalGap = gridGap + 8;
+  const horizontalPadding = pickByBreakpoint(bp, { base: 4, sm: 6, md: 12, lg: 16, xl: 20 });
+  const gridGap = pickByBreakpoint(bp, { base: 2.5, sm: 6, md: 10, lg: 14, xl: 16 });
+  const gridVerticalGap = pickByBreakpoint(bp, { base: 4, sm: 6, md: 10, lg: 14, xl: 16 });
   const numColumns = pickByBreakpoint(bp, { base: 2, md: 2, lg: 3, xl: 4 });
 
   const { user: currentUser } = useAuth();
@@ -291,79 +235,27 @@ export default function SearchScreen() {
 
   const renderPost = useCallback(
     ({ item }: { item: SearchPost }) => {
-      const snippet = extractMatchSnippet(item.highlight?.content);
-      const showSnippet = snippet && !item.highlight?.title;
-      const previewImage = item.image_thumbs
-        .map((image) => getSafeRemoteUrl(image))
-        .find((image): image is string => !!image)
-        ?? item.images.map((image) => getSafeRemoteUrl(image)).find((image): image is string => !!image);
-
       return (
         <View style={{ marginHorizontal: gridGap / 2, marginBottom: gridVerticalGap }}>
-          <Pressable
-            style={[styles.searchPostCard, { backgroundColor: theme.colors.surface }]}
-            onPress={() => handlePostPress(item.id)}
-          >
-            {previewImage ? (
-              <Image
-                source={{ uri: previewImage }}
-                style={styles.searchPostImage}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                recyclingKey={`${item.id}:${previewImage}`}
-              />
-            ) : null}
-            <View style={styles.searchPostBody}>
-              {item.highlight?.title ? (
-                <HighlightedText
-                  value={item.highlight.title}
-                  style={[styles.searchPostTitle, { color: theme.colors.onSurface }]}
-                  numberOfLines={2}
-                />
-              ) : (
-                <Text style={[styles.searchPostTitle, { color: theme.colors.onSurface }]} numberOfLines={2}>
-                  {item.title}
-                </Text>
-              )}
-              <Text style={[styles.searchPostMeta, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
-                {item.author
-                  ? item.author.name || UNSET_NICKNAME
-                  : '未知作者'} · {item.category === 'food' ? '美食' : '食谱'}
-              </Text>
-              {showSnippet ? (
-                <View style={[styles.snippetContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
-                  <HighlightedText
-                    value={snippet}
-                    style={[styles.snippetText, { color: theme.colors.onSurfaceVariant }]}
-                    numberOfLines={2}
-                  />
-                </View>
-              ) : null}
-              <View style={styles.searchPostStats}>
-                <Text style={{ color: theme.colors.onSurfaceVariant }}>♡ {item.stats.like_count}</Text>
-                <Text style={{ color: theme.colors.onSurfaceVariant }}>评论 {item.stats.comment_count}</Text>
-              </View>
-            </View>
-          </Pressable>
+          <PostCard post={toPostCardModel(item)} onPress={handlePostPress} />
         </View>
       );
     },
-    [gridGap, gridVerticalGap, handlePostPress, theme]
+    [gridGap, gridVerticalGap, handlePostPress]
   );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* 宽屏时使用居中容器 */}
+      {/* 搜索内容容器 */}
       <View style={[
         styles.contentWrapper,
-        isWideScreen && styles.wideContentWrapper,
       ]}>
         {/* ==================== 顶部导航栏 ==================== */}
         <View
           style={[
             styles.topBar,
             {
-              paddingTop: isWideScreen ? 24 : insets.top,
+              paddingTop: insets.top + 8,
               backgroundColor: theme.colors.background,
             },
           ]}
@@ -508,9 +400,9 @@ export default function SearchScreen() {
             style={styles.resultsList}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
-              paddingHorizontal: isWideScreen ? 0 : horizontalPadding,
-              paddingBottom: insets.bottom + spacing * 2,
-              paddingTop: spacing,
+              paddingHorizontal: horizontalPadding,
+              paddingBottom: insets.bottom + 24,
+              paddingTop: 4,
             }}
             data={posts}
             masonry
@@ -524,9 +416,9 @@ export default function SearchScreen() {
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
-              paddingHorizontal: isWideScreen ? 0 : horizontalPadding,
-              paddingBottom: insets.bottom + spacing * 2,
-              paddingTop: spacing,
+              paddingHorizontal: horizontalPadding,
+              paddingBottom: insets.bottom + 24,
+              paddingTop: 4,
             }}
           >
           {/* 错误提示 */}
@@ -674,13 +566,6 @@ const styles = StyleSheet.create({
   resultsList: {
     flex: 1,
   },
-  wideContentWrapper: {
-    maxWidth: 680,
-    width: '100%',
-    alignSelf: 'center',
-    paddingHorizontal: 24,
-  },
-
   // ==================== 顶部导航栏 ====================
   topBar: {
     borderBottomWidth: 0,
@@ -688,14 +573,14 @@ const styles = StyleSheet.create({
   topBarContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 10,
   },
   wideTopBarContent: {
-    paddingHorizontal: 0,
-    paddingVertical: 16,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
   },
   backBtn: {
     padding: 4,
@@ -709,8 +594,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   wideSearchInputWrapper: {
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
   searchInput: {
     flex: 1,
@@ -749,7 +634,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   wideTabItem: {
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 32,
   },
   tabText: {
@@ -866,40 +751,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // ==================== 搜索摘要 ====================
-  searchPostCard: {
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  searchPostImage: {
-    width: '100%',
-    aspectRatio: 1.2,
-  },
-  searchPostBody: {
-    padding: 12,
-    gap: 7,
-  },
-  searchPostTitle: {
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: '600',
-  },
-  searchPostMeta: {
-    fontSize: 12,
-  },
-  searchPostStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  snippetContainer: {
-    marginTop: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  snippetText: {
-    fontSize: 12,
-    lineHeight: 18,
-  },
 });
